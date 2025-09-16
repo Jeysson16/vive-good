@@ -4,12 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../domain/entities/habit.dart';
 import '../../../domain/entities/user_habit.dart';
+import '../../blocs/category_scroll/category_scroll_bloc.dart';
+import '../../blocs/category_scroll/category_scroll_event.dart';
 import '../../blocs/habit/habit_bloc.dart';
 import '../../blocs/habit/habit_event.dart';
 import '../../blocs/habit/habit_state.dart';
-import '../../blocs/category_scroll/category_scroll_bloc.dart';
-import '../../blocs/category_scroll/category_scroll_event.dart';
-import '../../blocs/category_scroll/category_scroll_state.dart';
 import '../../widgets/habits/animated_category_tabs.dart';
 import '../../widgets/habits/synchronized_habits_list.dart';
 import 'new_habit_screen.dart';
@@ -158,7 +157,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => CategoryScrollBloc()..add(InitializeCategoryScroll()),
+      create: (context) =>
+          CategoryScrollBloc()..add(InitializeCategoryScroll()),
       child: Container(
         color: Colors.transparent,
         child: SingleChildScrollView(
@@ -181,7 +181,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
       color: Colors.transparent,
       child: Row(
         children: [
@@ -239,7 +239,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
           }
 
           return Container(
-            margin: const EdgeInsets.fromLTRB(20, 10, 20, 6),
+            margin: const EdgeInsets.fromLTRB(20, 10, 20, 20),
             decoration: BoxDecoration(
               color: const Color(0xFFF5F5F5),
               borderRadius: BorderRadius.circular(16),
@@ -287,7 +287,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                                   color: Color(0xFF111827),
                                   letterSpacing: -0.2,
                                 ),
-                              )
+                              ),
                             ],
                           ),
                         ),
@@ -344,19 +344,19 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                             color: Color(0xFF374151),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 12),
-                        
+
                         // Sugerencia destacada única
                         _buildFeaturedSuggestion(),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         // Indicadores de puntos (slider)
                         _buildDotIndicators(),
-                        
+
                         const SizedBox(height: 16),
-                        
+
                         // Texto antes de los botones
                         const Text(
                           '¿Quieres agregarlo a tus hábitos?',
@@ -366,12 +366,11 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                             color: Color(0xFF374151),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 12),
-                        
+
                         // Botones de acción
                         _buildActionButtons(),
-
                       ],
                     ),
                   ),
@@ -494,10 +493,6 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     );
   }
 
-
-
-
-
   Widget _buildSuggestionItem(Habit habit) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -557,7 +552,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
           ),
           const SizedBox(width: 12),
           ElevatedButton(
-            onPressed: () => _addHabitFromSuggestion(_habitToSuggestionMap(habit)),
+            onPressed: () =>
+                _addHabitFromSuggestion(_habitToSuggestionMap(habit)),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF219540),
               foregroundColor: Colors.white,
@@ -796,14 +792,10 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     );
   }
 
-
-
   void _navigateToAddHabit() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const NewHabitScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const NewHabitScreen()),
     );
   }
 
@@ -1153,9 +1145,10 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         },
       ],
     };
-    
-    final currentSuggestions = suggestions[selectedSuggestionCategory] ?? suggestions['Alimentación']!;
-    
+
+    final currentSuggestions =
+        suggestions[selectedSuggestionCategory] ?? suggestions['Alimentación']!;
+
     return Container(
       height: 100,
       child: PageView.builder(
@@ -1222,17 +1215,14 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       ),
     );
   }
-  
+
   Widget _buildDotIndicators() {
     // Obtener el número de sugerencias para la categoría actual
-    final suggestions = {
-      'Alimentación': 3,
-      'Actividad física': 3,
-      'Sueño': 3,
-    };
-    
-    final currentSuggestionsCount = suggestions[selectedSuggestionCategory] ?? 3;
-    
+    final suggestions = {'Alimentación': 3, 'Actividad física': 3, 'Sueño': 3};
+
+    final currentSuggestionsCount =
+        suggestions[selectedSuggestionCategory] ?? 3;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(currentSuggestionsCount, (index) {
@@ -1249,7 +1239,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       }),
     );
   }
-  
+
   Map<String, dynamic>? _getCurrentSuggestion() {
     final suggestions = {
       'Alimentación': [
@@ -1322,9 +1312,10 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         },
       ],
     };
-    
+
     final currentSuggestions = suggestions[selectedSuggestionCategory];
-    if (currentSuggestions != null && _currentSuggestionIndex < currentSuggestions.length) {
+    if (currentSuggestions != null &&
+        _currentSuggestionIndex < currentSuggestions.length) {
       return currentSuggestions[_currentSuggestionIndex];
     }
     return null;
@@ -1332,14 +1323,20 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
 
   void _navigateToNewHabit({bool prefillData = false}) {
     final currentSuggestion = _getCurrentSuggestion();
-    
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => NewHabitScreen(
-          prefilledHabitName: prefillData && currentSuggestion != null ? currentSuggestion['title'] as String : null,
-          prefilledDescription: prefillData && currentSuggestion != null ? currentSuggestion['description'] as String : null,
-          prefilledCategoryId: prefillData && currentSuggestion != null ? _getCategoryIdByName(currentSuggestion['category'] as String) : null,
+          prefilledHabitName: prefillData && currentSuggestion != null
+              ? currentSuggestion['title'] as String
+              : null,
+          prefilledDescription: prefillData && currentSuggestion != null
+              ? currentSuggestion['description'] as String
+              : null,
+          prefilledCategoryId: prefillData && currentSuggestion != null
+              ? _getCategoryIdByName(currentSuggestion['category'] as String)
+              : null,
         ),
       ),
     ).then((_) {
@@ -1367,7 +1364,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     return {
       'title': habit.name,
       'description': habit.description ?? '',
-      'category': 'General', // Default category since Habit entity doesn't have category name
+      'category':
+          'General', // Default category since Habit entity doesn't have category name
     };
   }
 
@@ -1395,7 +1393,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         'notification_time': '09:00:00',
         'start_date': DateTime.now().toIso8601String().split('T')[0],
         'is_active': true,
-        'is_public': false, // Los hábitos desde sugerencias son privados por defecto
+        'is_public':
+            false, // Los hábitos desde sugerencias son privados por defecto
         'estimated_duration': 15, // Duración por defecto
         'difficulty_level': 'Fácil', // Dificultad por defecto
         'custom_name': suggestion['title'] as String,
@@ -1403,9 +1402,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         'category_id': _getCategoryIdByName(suggestion['category'] as String),
       };
 
-      await Supabase.instance.client
-          .from('user_habits')
-          .insert(userHabitData);
+      await Supabase.instance.client.from('user_habits').insert(userHabitData);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1414,7 +1411,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
             backgroundColor: Color(0xFF219540),
           ),
         );
-        
+
         // Cerrar las sugerencias y recargar datos
         setState(() {
           isSuggestionsExpanded = false;
@@ -1523,7 +1520,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
 
   Widget _buildSuggestionCategoryTabs() {
     final categories = ['Alimentación', 'Actividad física', 'Sueño'];
-    
+
     return Container(
       height: 40,
       child: Row(
@@ -1548,8 +1545,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: isSelected 
-                          ? const Color(0xFF219540) 
+                      color: isSelected
+                          ? const Color(0xFF219540)
                           : Colors.transparent,
                       width: 2,
                     ),
@@ -1560,9 +1557,11 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                     category,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                      color: isSelected 
-                          ? const Color(0xFF219540) 
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: isSelected
+                          ? const Color(0xFF219540)
                           : const Color(0xFF6B7280),
                     ),
                   ),

@@ -34,11 +34,7 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
     _initializeBounceAnimations();
     
     // Inicializar el BLoC
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CategoryScrollBloc>().add(
-        InitializeCategoryScroll(),
-      );
-    });
+    context.read<CategoryScrollBloc>().add(InitializeCategoryScroll());
   }
 
   void _initializeBounceAnimations() {

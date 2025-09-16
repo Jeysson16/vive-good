@@ -38,7 +38,7 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    _scrollController.addListener(_onScrollChanged);
+    // Ya no necesitamos el listener del scroll interno
     _initializeCategoryKeys();
   }
 
@@ -52,43 +52,13 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
 
   @override
   void dispose() {
-    _scrollController.removeListener(_onScrollChanged);
     _scrollController.dispose();
     super.dispose();
   }
 
   void _onScrollChanged() {
-    if (!_scrollController.hasClients) return;
-
-    final scrollOffset = _scrollController.offset;
-    final viewportHeight = _scrollController.position.viewportDimension;
-    final visibleCategory = _findVisibleCategory(scrollOffset, viewportHeight);
-
-    if (visibleCategory != _lastVisibleCategory) {
-      _lastVisibleCategory = visibleCategory;
-
-      // Actualizar el BLoC con la nueva categoría visible
-      context.read<CategoryScrollBloc>().add(
-        UpdateScrollPosition(
-          scrollOffset: scrollOffset,
-          visibleCategoryId: visibleCategory,
-        ),
-      );
-
-      // Notificar al widget padre sobre el cambio de categoría
-      widget.onCategoryChanged(visibleCategory);
-
-      // Trigger bounce animation for the new visible category
-      if (visibleCategory != null) {
-        final categoryIndex = _getCategoryIndex(visibleCategory);
-        context.read<CategoryScrollBloc>().add(
-          TriggerCategoryBounce(
-            categoryId: visibleCategory,
-            bounceLeft: categoryIndex % 2 == 0,
-          ),
-        );
-      }
-    }
+    // El scroll ahora es manejado por el SingleChildScrollView padre
+    // Esta función se mantiene para compatibilidad pero no hace nada
   }
 
   String? _findVisibleCategory(double scrollOffset, double viewportHeight) {
@@ -158,14 +128,13 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
       }
     }
 
-    return Expanded(
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: groupedHabits.length,
-        itemBuilder: (context, index) {
-          final categoryId = groupedHabits.keys.elementAt(index);
-          final habits = groupedHabits[categoryId]!;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: groupedHabits.entries.map((entry) {
+          final categoryId = entry.key;
+          final habits = entry.value;
           final categoryName = categoryId == null
               ? 'Todos los hábitos'
               : widget.categories.firstWhere((c) => c.id == categoryId).name;
@@ -208,7 +177,7 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
               ],
             ),
           );
-        },
+        }).toList(),
       ),
     );
   }
