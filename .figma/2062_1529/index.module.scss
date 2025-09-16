@@ -1,0 +1,32 @@
+* {
+  box-sizing: border-box;
+}
+
+.frame13 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  column-gap: 32px;
+  border-radius: 16px;
+  box-shadow: var(--depth-3, 0px 40px 32px -24px #0f0f0f1f);
+  background: var(--Neutrals-8, #fcfcfd);
+  padding: 20px;
+  width: 154px;
+  height: 64px;
+
+  .iconsArrowLeft2Line {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    overflow: hidden;
+  }
+
+  .frame14 {
+    flex-shrink: 0;
+    border-radius: 2px;
+    background: var(--Neutrals-6, #e6e8ec);
+    width: 2px;
+    height: 24px;
+    overflow: hidden;
+  }
+}

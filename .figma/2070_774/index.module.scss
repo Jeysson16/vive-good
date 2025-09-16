@@ -1,0 +1,41 @@
+* {
+  box-sizing: border-box;
+}
+
+.frame6 {
+  display: flex;
+  align-items: center;
+  border-radius: 16px;
+  background: #daf5e9;
+  padding: 10px 0px 10px 49px;
+  width: 92px;
+  height: 64px;
+
+  .group2 {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    align-items: center;
+    margin-right: -11px;
+
+    .evita {
+      width: 54px;
+      line-height: 22px;
+      letter-spacing: 0;
+      color: #090d3a;
+      font-family: Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .desp {
+      width: 53px;
+      line-height: 22px;
+      letter-spacing: 0;
+      color: #090d3a;
+      font-family: Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+    }
+  }
+}

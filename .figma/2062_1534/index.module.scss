@@ -1,0 +1,146 @@
+* {
+  box-sizing: border-box;
+}
+
+.onBoarding02 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border-radius: 18px;
+  background: #f7f8fa;
+  padding: 41px 38px 32px;
+  width: 414px;
+  height: 896px;
+  overflow: hidden;
+
+  .saltar {
+    margin: 0px 0px 0px 273px;
+    width: 58px;
+    height: 31px;
+    letter-spacing: 0;
+    color: #d7d7d7;
+    font-family: Poppins, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .imageRemovebgPreview {
+    margin-top: 125px;
+    margin-left: 31px;
+    width: 276px;
+    height: 282px;
+  }
+
+  .autoWrapper {
+    position: relative;
+    margin-top: 91px;
+    margin-left: 144px;
+    width: 68px;
+    height: 10px;
+
+    .slider {
+      display: flex;
+      position: absolute;
+      top: 0;
+      left: 0;
+      align-items: center;
+      padding-top: 1px;
+      padding-right: 1px;
+      width: 68px;
+      height: 10px;
+
+      .ellipse19 {
+        background: #23262f80;
+        width: 10px;
+        height: 10px;
+      }
+
+      .ellipse20 {
+        margin-left: 48px;
+        background: #23262f80;
+        width: 10px;
+        height: 10px;
+      }
+    }
+
+    .vector2 {
+      display: flex;
+      position: absolute;
+      bottom: -4px;
+      left: 26px;
+      align-items: center;
+      border: 1px solid #cbf4e6;
+      width: 18px;
+      height: 18px;
+
+      .vector {
+        display: flex;
+        flex-grow: 1;
+        align-items: center;
+        margin-right: -1px;
+        padding: 2px;
+
+        .ellipse18 {
+          border: 1px solid #73c9a0;
+          background: #233f78;
+          width: 13px;
+          height: 13px;
+        }
+      }
+    }
+  }
+
+  .detectaSintomas {
+    margin: 25px 0px 0px 40px;
+    width: 267px;
+    text-align: center;
+    line-height: 51px;
+    letter-spacing: -0.68px;
+    color: #23262f;
+    font-family: Poppins, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+    font-size: 34px;
+    font-weight: 700;
+  }
+
+  .identificaLosSignosT {
+    margin: 3px 0px 0px;
+    width: 338px;
+    height: 61px;
+    text-align: center;
+    line-height: 29px;
+    letter-spacing: 0;
+    color: #8e9295;
+    font-family: Poppins, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+    font-size: 16px;
+    font-weight: 300;
+  }
+
+  .frame13 {
+    display: inline-flex;
+    align-items: center;
+    align-self: stretch;
+    justify-content: center;
+    column-gap: 32px;
+    margin: 29px 93px 0px 91px;
+    border-radius: 16px;
+    box-shadow: var(--depth-3, 0px 40px 32px -24px #0f0f0f1f);
+    background: var(--Neutrals-8, #fcfcfd);
+    padding: 20px;
+
+    .iconsArrowLeft2Line {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      overflow: hidden;
+    }
+
+    .frame14 {
+      flex-shrink: 0;
+      border-radius: 2px;
+      background: var(--Neutrals-6, #e6e8ec);
+      width: 2px;
+      height: 24px;
+      overflow: hidden;
+    }
+  }
+}

@@ -1,0 +1,44 @@
+* {
+  box-sizing: border-box;
+}
+
+.searchFilter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 344px;
+  height: 44px;
+
+  .searchBox {
+    position: relative;
+    width: 291px;
+    height: 44px;
+
+    .bg {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 291px;
+      height: 44px;
+    }
+
+    .buscar {
+      position: absolute;
+      top: 13px;
+      right: 216px;
+      width: 61px;
+      height: 11px;
+      line-height: 16px;
+      letter-spacing: -0.28px;
+      color: var(--Dark-Grey, #acadb9);
+      font-family: Poppins, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+    }
+  }
+
+  .filter {
+    width: 48px;
+    height: 44px;
+  }
+}

@@ -1,0 +1,35 @@
+* {
+  box-sizing: border-box;
+}
+
+.frame6 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 16px;
+  background: #daf5e9;
+  padding: 7px 19px 7px 13px;
+  width: 244px;
+  height: 64px;
+
+  .a64PxDoutone021Stoma {
+    width: 50px;
+    height: 50px;
+    overflow: hidden;
+  }
+
+  .group2 {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+
+    .evitarCenasPesadas {
+      line-height: 22px;
+      letter-spacing: 0;
+      color: #090d3a;
+      font-family: Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+    }
+  }
+}

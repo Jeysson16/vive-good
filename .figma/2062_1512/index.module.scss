@@ -1,0 +1,191 @@
+* {
+  box-sizing: border-box;
+}
+
+.onBoarding01 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border-radius: 18px;
+  background: #f7f8fa;
+  padding: 41px 33px 32px 43px;
+  width: 414px;
+  height: 896px;
+  overflow: hidden;
+
+  .saltar {
+    margin: 0px 0px 0px 268px;
+    width: 58px;
+    height: 31px;
+    letter-spacing: 0;
+    color: #d7d7d7;
+    font-family: Poppins, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .imageRemovebgPreview {
+    margin-top: 107px;
+    margin-left: 12px;
+    width: 303px;
+    height: 312px;
+  }
+
+  .slider2 {
+    position: relative;
+    margin-top: 76px;
+    margin-left: 134px;
+    width: 62px;
+    height: 18px;
+
+    .ellipse20 {
+      position: absolute;
+      top: 4px;
+      left: 52px;
+      border: 1px solid #cbf4e6;
+      background: #23262f80;
+      width: 9px;
+      height: 9px;
+    }
+
+    .slider {
+      display: flex;
+      position: absolute;
+      top: 0;
+      left: 0;
+      align-items: center;
+      width: 62px;
+      height: 18px;
+
+      .ellipse21 {
+        display: flex;
+        align-items: center;
+        border: 1px solid #cbf4e6;
+        height: 18px;
+
+        .vector3 {
+          display: flex;
+          align-items: center;
+          border: 1px solid #cbf4e6;
+          height: 18px;
+
+          .vector2 {
+            display: flex;
+            flex-grow: 1;
+            align-items: center;
+            margin-right: -1px;
+
+            .vector {
+              display: flex;
+              flex-grow: 1;
+              align-items: center;
+              padding: 2px;
+
+              .ellipse182 {
+                display: flex;
+                align-items: center;
+                border: 1px solid #73c9a0;
+                background: #233f78;
+                height: 13px;
+
+                .ellipse18 {
+                  border: 1px solid #73c9a0;
+                  background: #233f78;
+                  width: 13px;
+                  height: 13px;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      .ellipse192 {
+        display: flex;
+        align-items: center;
+        margin-left: 12px;
+        border: 1px solid #cbf4e6;
+        background: #23262f80;
+        height: 9px;
+
+        .ellipse19 {
+          border: 1px solid #cbf4e6;
+          background: #23262f80;
+          width: 9px;
+          height: 9px;
+        }
+      }
+
+      .ellipse202 {
+        margin-left: 14px;
+        border: 1px solid #cbf4e6;
+        background: #23262f80;
+        width: 9px;
+        height: 9px;
+      }
+    }
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    align-self: stretch;
+    margin-top: 14px;
+    padding-bottom: 1px;
+
+    .gestionaElEstrS {
+      margin: 0px 0px 0px 70px;
+      width: 189px;
+      text-align: center;
+      line-height: 51px;
+      letter-spacing: -0.68px;
+      color: #23262f;
+      font-family: Poppins, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+      font-size: 34px;
+      font-weight: 700;
+    }
+
+    .unaMentePositivaYRes {
+      margin: 7px 0px 0px;
+      width: 338px;
+      height: 61px;
+      text-align: center;
+      line-height: 29px;
+      letter-spacing: 0;
+      color: #8e9295;
+      font-family: Poppins, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+      font-size: 16px;
+      font-weight: 300;
+    }
+  }
+
+  .frame13 {
+    display: inline-flex;
+    align-items: center;
+    align-self: stretch;
+    justify-content: center;
+    column-gap: 32px;
+    margin: 30px 98px 0px 86px;
+    border-radius: 16px;
+    box-shadow: var(--depth-3, 0px 40px 32px -24px #0f0f0f1f);
+    background: var(--Neutrals-8, #fcfcfd);
+    padding: 20px;
+
+    .iconsArrowLeft2Line {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      overflow: hidden;
+    }
+
+    .frame14 {
+      flex-shrink: 0;
+      border-radius: 2px;
+      background: var(--Neutrals-6, #e6e8ec);
+      width: 2px;
+      height: 24px;
+      overflow: hidden;
+    }
+  }
+}
