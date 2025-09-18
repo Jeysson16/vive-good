@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/routes/app_routes.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/habit_model.dart';
 import '../../../domain/entities/category.dart' as entities;
@@ -55,21 +57,25 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
   bool _isPublic = false; // Siempre privado por defecto
   DateTime? _startDate;
   DateTime? _endDate;
-  List<bool> _selectedDays = List.generate(7, (index) => true); // Días de la semana seleccionados
+  List<bool> _selectedDays = List.generate(
+    7,
+    (index) => true,
+  ); // Días de la semana seleccionados
   final TextEditingController _customDurationController =
       TextEditingController();
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _endDateController = TextEditingController();
   bool _isLoading = false;
   bool _isDescriptionEditable = true;
-  
+
   // Gemini AI variables
   late final GeminiAIDataSource _geminiDataSource;
   late final AIAdviceRemoteDataSource _aiAdviceDataSource;
   Map<String, dynamic>? _geminiSuggestionData;
   bool _isLoadingGeminiSuggestions = false;
+  bool _isGeneratingSuggestions = false;
   String? _geminiError;
-  
+
   // Calendar integration with notifications
   CalendarService? _calendarService;
 
@@ -96,16 +102,16 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
     _setupPrefilledData();
     _habitNameController.addListener(_onHabitNameChanged);
   }
-  
+
   Future<void> _initializeCalendarService() async {
     final calendarDataSource = CalendarRemoteDataSourceImpl();
     final notificationService = NotificationServiceImpl();
-    
+
     _calendarService = CalendarServiceImpl(
       calendarDataSource: calendarDataSource,
       notificationService: notificationService,
     );
-    
+
     await _calendarService!.initialize();
   }
 
@@ -208,78 +214,170 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
     }
   }
 
+  Future<String> _getOptimizedCalendarData() async {
+    try {
+      if (_calendarService == null) {
+        return 'Calendario no disponible.';
+      }
+
+      final now = DateTime.now();
+      final endDate = now.add(const Duration(days: 7)); // Próximos 7 días
+
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        return 'Usuario no autenticado.';
+      }
+
+      final events = await _calendarService!.getCalendarEvents(
+        user.id,
+        startDate: now,
+        endDate: endDate,
+      );
+
+      if (events.isEmpty) {
+        return 'Calendario disponible: Sin eventos programados en los próximos 7 días.';
+      }
+
+      // Agrupar eventos por día y crear resumen
+      final Map<String, List<String>> dailyBusyTimes = {};
+
+      for (final event in events) {
+        // Solo procesar eventos que tengan horario definido
+        if (event.startTime == null) continue;
+
+        final dayKey = '${event.startTime!.day}/${event.startTime!.month}';
+        String timeSlot;
+
+        if (event.endTime != null) {
+          timeSlot =
+              '${event.startTime!.hour.toString().padLeft(2, '0')}:${event.startTime!.minute.toString().padLeft(2, '0')}-${event.endTime!.hour.toString().padLeft(2, '0')}:${event.endTime!.minute.toString().padLeft(2, '0')}';
+        } else {
+          timeSlot =
+              '${event.startTime!.hour.toString().padLeft(2, '0')}:${event.startTime!.minute.toString().padLeft(2, '0')}';
+        }
+
+        if (!dailyBusyTimes.containsKey(dayKey)) {
+          dailyBusyTimes[dayKey] = [];
+        }
+        dailyBusyTimes[dayKey]!.add(timeSlot);
+      }
+
+      // Crear resumen optimizado
+      final summary = StringBuffer('Horarios ocupados: ');
+      dailyBusyTimes.forEach((day, times) {
+        summary.write('$day: ${times.join(", ")}; ');
+      });
+
+      // Limitar longitud del resumen
+      final result = summary.toString();
+      return result.length > 200 ? '${result.substring(0, 200)}...' : result;
+    } catch (e) {
+      return 'Calendario no disponible.';
+    }
+  }
+
   Future<void> _generateGeminiSuggestions() async {
     if (_habitNameController.text.isEmpty) return;
 
     setState(() {
       _isLoadingGeminiSuggestions = true;
+      _isGeneratingSuggestions = true;
       _geminiError = null;
     });
 
     try {
       final categoryName = _selectedCategoryId != null
           ? _categories.where((c) => c.id == _selectedCategoryId).isNotEmpty
-              ? _categories.firstWhere((c) => c.id == _selectedCategoryId).name
-              : null
+                ? _categories
+                      .firstWhere((c) => c.id == _selectedCategoryId)
+                      .name
+                : null
           : null;
+
+      // Obtener datos optimizados del calendario
+      final calendarData = await _getOptimizedCalendarData();
+
+      // Incluir información del calendario en la descripción para la IA
+      final enhancedDescription = _descriptionController.text.isNotEmpty
+          ? '${_descriptionController.text}. $calendarData'
+          : calendarData;
 
       final suggestions = await _geminiDataSource.generateHabitSuggestions(
         habitName: _habitNameController.text,
         category: categoryName,
-        description: _descriptionController.text.isNotEmpty
-            ? _descriptionController.text
-            : null,
-        userGoals: 'Mejorar bienestar y crear hábitos saludables',
+        description: enhancedDescription,
+        userGoals:
+            'Mejorar bienestar y crear hábitos saludables considerando horarios disponibles',
       );
+
+      // Validar que la respuesta sea un Map válido
+      if (suggestions == null || suggestions is! Map<String, dynamic>) {
+        throw Exception('Respuesta inválida de la IA: formato no reconocido');
+      }
 
       setState(() {
         _geminiSuggestionData = suggestions;
         _isLoadingGeminiSuggestions = false;
-        
+        _isGeneratingSuggestions = false;
+
         // Aplicar sugerencias automáticamente a los campos del formulario
-        
+
         // 1. Nombre optimizado del hábito
-        if (suggestions['optimizedName'] != null && suggestions['optimizedName'].toString().isNotEmpty) {
+        if (suggestions['optimizedName'] != null &&
+            suggestions['optimizedName'].toString().isNotEmpty) {
           _habitNameController.text = suggestions['optimizedName'].toString();
         }
-        
+
         // 2. Duración sugerida
         if (suggestions['suggestedDuration'] != null) {
-          final duration = int.tryParse(suggestions['suggestedDuration'].toString());
+          final duration = int.tryParse(
+            suggestions['suggestedDuration'].toString(),
+          );
           if (duration != null) {
             _estimatedDuration = duration;
             _customDurationController.text = duration.toString();
           }
         }
-        
+
         // 3. Dificultad
         if (suggestions['difficulty'] != null) {
           final difficulty = suggestions['difficulty'].toString();
-          if (['fácil', 'medio', 'difícil'].contains(difficulty.toLowerCase())) {
-            _selectedDifficulty = difficulty.toLowerCase() == 'fácil' ? 'Fácil' :
-                                 difficulty.toLowerCase() == 'medio' ? 'Medio' : 'Difícil';
+          if ([
+            'fácil',
+            'medio',
+            'difícil',
+          ].contains(difficulty.toLowerCase())) {
+            _selectedDifficulty = difficulty.toLowerCase() == 'fácil'
+                ? 'Fácil'
+                : difficulty.toLowerCase() == 'medio'
+                ? 'Medio'
+                : 'Difícil';
           }
         }
-        
+
         // 4. Frecuencia (si está disponible)
         if (suggestions['frequency'] != null) {
           final frequency = suggestions['frequency'].toString().toLowerCase();
           if (frequency.contains('diario') || frequency.contains('daily')) {
             // Activar todos los días de la semana
             _selectedDays = List.generate(7, (index) => true);
-          } else if (frequency.contains('semanal') || frequency.contains('weekly')) {
+          } else if (frequency.contains('semanal') ||
+              frequency.contains('weekly')) {
             // Activar solo algunos días
             _selectedDays = [true, false, true, false, true, false, false];
           }
         }
-        
+
         // 5. Horario sugerido (si está disponible)
-        if (suggestions['bestTimes'] != null && suggestions['bestTimes'] is List) {
+        if (suggestions['bestTimes'] != null &&
+            suggestions['bestTimes'] is List) {
           final bestTimes = suggestions['bestTimes'] as List;
           if (bestTimes.isNotEmpty) {
             final timeString = bestTimes.first.toString();
             // Intentar parsear el horario (formato HH:MM)
-            final timeMatch = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(timeString);
+            final timeMatch = RegExp(
+              r'(\d{1,2}):(\d{2})',
+            ).firstMatch(timeString);
             if (timeMatch != null) {
               final hour = int.tryParse(timeMatch.group(1)!);
               final minute = int.tryParse(timeMatch.group(2)!);
@@ -289,21 +387,45 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
             }
           }
         }
-        
+
         // 6. Mensaje motivacional como descripción (si no hay descripción)
-        if (_descriptionController.text.isEmpty && suggestions['motivation'] != null) {
+        if (_descriptionController.text.isEmpty &&
+            suggestions['motivation'] != null) {
           _descriptionController.text = suggestions['motivation'].toString();
         }
       });
 
       // Guardar el consejo en la base de datos
       await _saveAdviceToDatabase(suggestions);
-      
     } catch (e) {
       setState(() {
-        _geminiError = e.toString();
+        // Formatear el error de manera más amigable para el usuario
+        String errorMessage = 'Error al generar sugerencias';
+
+        if (e.toString().contains('GenerativeAIException')) {
+          errorMessage = 'Servicio de IA temporalmente no disponible';
+        } else if (e.toString().contains('Server Error [503]')) {
+          errorMessage =
+              'El modelo de IA está sobrecargado. Intenta de nuevo en unos minutos';
+        } else if (e.toString().contains('UNAVAILABLE')) {
+          errorMessage = 'Servicio de IA no disponible temporalmente';
+        } else if (e.toString().contains('overloaded')) {
+          errorMessage =
+              'El servicio está ocupado. Por favor intenta más tarde';
+        } else if (e.toString().contains('JSON')) {
+          errorMessage = 'Error al procesar la respuesta de la IA';
+        } else {
+          errorMessage =
+              'Error de conexión. Verifica tu internet e intenta de nuevo';
+        }
+
+        _geminiError = errorMessage;
         _isLoadingGeminiSuggestions = false;
+        _isGeneratingSuggestions = false;
       });
+
+      // Log del error completo para debugging (solo en desarrollo)
+      print('Error completo de Gemini: $e');
     }
   }
 
@@ -364,7 +486,35 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       if (existingHabit != null) {
         // Usar hábito existente
         habitId = existingHabit.id;
+        
+        // Verificar si el usuario ya tiene este hábito
+        final existingUserHabit = await Supabase.instance.client
+            .from('user_habits')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('habit_id', habitId)
+            .eq('is_active', true)
+            .maybeSingle();
+            
+        if (existingUserHabit != null) {
+          _showErrorSnackBar('Ya tienes este hábito en tu lista. No puedes agregar hábitos duplicados.');
+          return;
+        }
       } else {
+        // Verificar si el usuario ya tiene un hábito con el mismo nombre
+        final existingUserHabitByName = await Supabase.instance.client
+            .from('user_habits')
+            .select('id, habit_id, habits!inner(name)')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .eq('habits.name', _habitNameController.text)
+            .maybeSingle();
+            
+        if (existingUserHabitByName != null) {
+          _showErrorSnackBar('Ya tienes un hábito con este nombre. Elige un nombre diferente.');
+          return;
+        }
+        
         // Crear nuevo hábito custom en la tabla habits
         final habitData = {
           'name': _habitNameController.text,
@@ -432,7 +582,15 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         Navigator.of(context).pop(true); // Retorna true para indicar éxito
       }
     } catch (e) {
-      _showErrorSnackBar('Error al guardar hábito: $e');
+      // Manejo específico para errores de duplicación
+      if (e.toString().contains('duplicate key value violates unique constraint') ||
+          e.toString().contains('user_habits_user_id_habit_id_key')) {
+        _showErrorSnackBar('Ya tienes este hábito en tu lista. No puedes agregar hábitos duplicados.');
+      } else if (e.toString().contains('PostgrestException')) {
+        _showErrorSnackBar('Error de base de datos. Por favor, intenta nuevamente.');
+      } else {
+        _showErrorSnackBar('Error al guardar hábito. Por favor, verifica tu conexión e intenta nuevamente.');
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -453,21 +611,34 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
     }
   }
 
-  Future<void> _createCalendarEvents(String habitId, String userHabitId, String userId) async {
+  Future<void> _createCalendarEvents(
+    String habitId,
+    String userHabitId,
+    String userId,
+  ) async {
     if (_startDate == null) return;
 
     try {
-      final endDate = _endDate ?? _startDate!.add(const Duration(days: 30)); // Default 30 days if no end date
-      final currentDate = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+      final endDate =
+          _endDate ??
+          _startDate!.add(
+            const Duration(days: 30),
+          ); // Default 30 days if no end date
+      final currentDate = DateTime(
+        _startDate!.year,
+        _startDate!.month,
+        _startDate!.day,
+      );
       final finalDate = DateTime(endDate.year, endDate.month, endDate.day);
-      
+
       final events = <Map<String, dynamic>>[];
-      
+
       // Generate events based on frequency
       DateTime iterDate = currentDate;
-      while (iterDate.isBefore(finalDate) || iterDate.isAtSameMomentAs(finalDate)) {
+      while (iterDate.isBefore(finalDate) ||
+          iterDate.isAtSameMomentAs(finalDate)) {
         bool shouldCreateEvent = false;
-        
+
         switch (_selectedFrequency.toLowerCase()) {
           case 'diario':
             shouldCreateEvent = true;
@@ -483,69 +654,96 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
           default:
             shouldCreateEvent = true;
         }
-        
+
         if (shouldCreateEvent) {
           final eventData = {
             'user_id': userId,
             'habit_id': habitId,
             'title': _habitNameController.text,
-            'description': _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
+            'description': _descriptionController.text.isNotEmpty
+                ? _descriptionController.text
+                : null,
             'start_date': iterDate.toIso8601String().split('T')[0],
-            'start_time': _selectedTime != null 
+            'start_time': _selectedTime != null
                 ? '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}:00'
                 : '09:00:00',
-            'end_time': _selectedTime != null 
+            'end_time': _selectedTime != null
                 ? _calculateEndTime(_selectedTime!, _estimatedDuration)
-                : _calculateEndTime(const TimeOfDay(hour: 9, minute: 0), _estimatedDuration),
-            'recurrence_type': _selectedFrequency.toLowerCase(),
+                : _calculateEndTime(
+                    const TimeOfDay(hour: 9, minute: 0),
+                    _estimatedDuration,
+                  ),
+            'recurrence_type': _mapFrequencyToRecurrenceType(
+              _selectedFrequency,
+            ),
             'notification_enabled': true,
             'notification_minutes': 15, // 15 minutes before
             'is_completed': false,
           };
-          
+
           events.add(eventData);
         }
-        
+
         // Move to next date based on frequency
         switch (_selectedFrequency.toLowerCase()) {
           case 'diario':
             iterDate = iterDate.add(const Duration(days: 1));
             break;
           case 'semanal':
-            iterDate = iterDate.add(const Duration(days: 1));
+            iterDate = iterDate.add(const Duration(days: 7));
             break;
           case 'mensual':
-            iterDate = DateTime(iterDate.year, iterDate.month + 1, iterDate.day);
+            iterDate = DateTime(
+              iterDate.year,
+              iterDate.month + 1,
+              iterDate.day,
+            );
             break;
           default:
             iterDate = iterDate.add(const Duration(days: 1));
         }
       }
-      
+
       // Create events with notifications using the calendar service
       if (events.isNotEmpty && _calendarService != null) {
         for (final eventData in events) {
           try {
-            await _calendarService!.createCalendarEventWithNotification(eventData);
+            await _calendarService!.createCalendarEventWithNotification(
+              eventData,
+            );
           } catch (e) {
             print('Error creating calendar event: $e');
             // Continue with other events even if one fails
           }
         }
       }
-      
     } catch (e) {
       print('Error creating calendar events: $e');
       // Don't throw error to avoid breaking the habit creation
     }
   }
-  
+
   String _calculateEndTime(TimeOfDay startTime, int durationMinutes) {
     final startMinutes = startTime.hour * 60 + startTime.minute;
     final endMinutes = startMinutes + durationMinutes;
     final endHour = (endMinutes ~/ 60) % 24;
     final endMinute = endMinutes % 60;
     return '${endHour.toString().padLeft(2, '0')}:${endMinute.toString().padLeft(2, '0')}:00';
+  }
+
+  String _mapFrequencyToRecurrenceType(String frequency) {
+    switch (frequency.toLowerCase()) {
+      case 'diario':
+        return 'daily';
+      case 'semanal':
+        return 'weekly';
+      case 'mensual':
+        return 'monthly';
+      case 'anual':
+        return 'yearly';
+      default:
+        return 'none';
+    }
   }
 
   void _showErrorSnackBar(String message) {
@@ -644,6 +842,14 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
           style: AppTextStyles.headingMedium.copyWith(color: Colors.black),
         ),
         centerTitle: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.calendar_today, color: Colors.black),
+            onPressed: () {
+              context.go(AppRoutes.calendar);
+            },
+          ),
+        ],
       ),
       body: Form(
         key: _formKey,
@@ -658,7 +864,9 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
               const SizedBox(height: 24),
               _buildDescriptionField(),
               const SizedBox(height: 20),
-              _buildFrequencySection(),
+              if (!_suggestedSchedule) _buildFrequencySection(),
+              if (!_suggestedSchedule) const SizedBox(height: 24),
+              _buildCalendarButton(),
               const SizedBox(height: 24),
               _buildScheduleToggle(),
               const SizedBox(height: 24),
@@ -671,8 +879,6 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
               _buildDifficultySection(),
               const SizedBox(height: 20),
               _buildCustomReminderField(),
-              const SizedBox(height: 20),
-              _buildCalendarButton(),
               const SizedBox(height: 28),
               _buildSaveButton(),
             ],
@@ -946,6 +1152,8 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
   }
 
   Widget _buildScheduleToggle() {
+    final bool canEnableAI = _startDate != null;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -956,33 +1164,37 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
               Text(
                 'Horario sugerido por IA',
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: Colors.grey[600],
+                  color: canEnableAI ? Colors.grey[600] : Colors.grey[400],
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
-                'La IA sugerirá horarios y duración automáticamente',
+                canEnableAI
+                    ? 'La IA sugerirá horarios y duración automáticamente'
+                    : 'Selecciona una fecha de inicio para habilitar la IA',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: Colors.grey[500],
+                  color: canEnableAI ? Colors.grey[500] : Colors.grey[400],
                 ),
               ),
             ],
           ),
         ),
         Switch(
-          value: _suggestedSchedule,
-          onChanged: (value) {
-            setState(() {
-              _suggestedSchedule = value;
-              if (value) {
-                // Si se activa horario sugerido, también activar sugerencias IA
-                _geminiSuggestions = true;
-                // Generar sugerencias automáticamente
-                _generateGeminiSuggestions();
-              }
-            });
-          },
+          value: _suggestedSchedule && canEnableAI,
+          onChanged: canEnableAI
+              ? (value) {
+                  setState(() {
+                    _suggestedSchedule = value;
+                    if (value) {
+                      // Si se activa horario sugerido, también activar sugerencias IA
+                      _geminiSuggestions = true;
+                      // Generar sugerencias automáticamente
+                      _generateGeminiSuggestions();
+                    }
+                  });
+                }
+              : null,
           activeColor: AppColors.primary,
         ),
       ],
@@ -1067,7 +1279,9 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primary,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1215,11 +1429,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.auto_awesome,
-                color: AppColors.primary,
-                size: 20,
-              ),
+              Icon(Icons.auto_awesome, color: AppColors.primary, size: 20),
               const SizedBox(width: 8),
               Text(
                 'Sugerencias',
@@ -1239,7 +1449,9 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.primary,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1307,9 +1519,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
           else
             Text(
               'Activa el horario sugerido para obtener recomendaciones personalizadas',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: Colors.grey[600],
-              ),
+              style: AppTextStyles.bodySmall.copyWith(color: Colors.grey[600]),
             ),
         ],
       ),
@@ -1322,11 +1532,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: AppColors.primary,
-          ),
+          Icon(icon, size: 16, color: AppColors.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -1605,11 +1811,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       children: [
         Row(
           children: [
-            Icon(
-              Icons.event,
-              color: AppColors.primary,
-              size: 20,
-            ),
+            Icon(Icons.event, color: AppColors.primary, size: 20),
             const SizedBox(width: 8),
             Text(
               'Período del hábito',
@@ -1635,49 +1837,71 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _startDateController,
-                    decoration: InputDecoration(
-                      hintText: 'DD/MM/AAAA',
-                      prefixIcon: Icon(Icons.calendar_today, color: AppColors.primary),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.primary),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Ingresa la fecha de inicio';
-                      }
-                      final date = _parseDate(value);
-                      if (date == null) {
-                        return 'Formato inválido (DD/MM/AAAA)';
-                      }
-                      if (date.isBefore(DateTime.now().subtract(const Duration(days: 1)))) {
-                        return 'La fecha no puede ser anterior a hoy';
-                      }
-                      return null;
-                    },
-                    onChanged: (value) {
-                      final date = _parseDate(value);
-                      if (date != null) {
+                  GestureDetector(
+                    onTap: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: _startDate ?? DateTime.now(),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: Theme.of(context).colorScheme
+                                  .copyWith(primary: AppColors.primary),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (picked != null) {
                         setState(() {
-                          _startDate = date;
+                          _startDate = picked;
+                          _startDateController.text =
+                              '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
                         });
                       }
                     },
+                    child: AbsorbPointer(
+                      child: TextFormField(
+                        controller: _startDateController,
+                        decoration: InputDecoration(
+                          hintText: 'Seleccionar fecha',
+                          prefixIcon: Icon(
+                            Icons.calendar_today,
+                            color: AppColors.primary,
+                          ),
+                          suffixIcon: Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.grey[600],
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (_startDate == null) {
+                            return 'Selecciona la fecha de inicio';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1695,54 +1919,89 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _endDateController,
-                    decoration: InputDecoration(
-                      hintText: 'DD/MM/AAAA',
-                      prefixIcon: Icon(Icons.event, color: AppColors.primary),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.primary),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value != null && value.isNotEmpty) {
-                        final date = _parseDate(value);
-                        if (date == null) {
-                          return 'Formato inválido (DD/MM/AAAA)';
-                        }
-                        if (_startDate != null && date.isBefore(_startDate!)) {
-                          return 'Debe ser posterior a la fecha de inicio';
-                        }
-                      }
-                      return null;
-                    },
-                    onChanged: (value) {
-                      if (value.isNotEmpty) {
-                        final date = _parseDate(value);
-                        if (date != null) {
-                          setState(() {
-                            _endDate = date;
-                          });
-                        }
-                      } else {
+                  GestureDetector(
+                    onTap: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate:
+                            _endDate ??
+                            (_startDate?.add(const Duration(days: 30)) ??
+                                DateTime.now().add(const Duration(days: 30))),
+                        firstDate: _startDate ?? DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                        builder: (context, child) {
+                          return Theme(
+                            data: Theme.of(context).copyWith(
+                              colorScheme: Theme.of(context).colorScheme
+                                  .copyWith(primary: AppColors.primary),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (picked != null) {
                         setState(() {
-                          _endDate = null;
+                          _endDate = picked;
+                          _endDateController.text =
+                              '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
                         });
                       }
                     },
+                    child: AbsorbPointer(
+                      child: TextFormField(
+                        controller: _endDateController,
+                        decoration: InputDecoration(
+                          hintText: 'Seleccionar fecha (opcional)',
+                          prefixIcon: Icon(
+                            Icons.event,
+                            color: AppColors.primary,
+                          ),
+                          suffixIcon: _endDate != null
+                              ? IconButton(
+                                  icon: Icon(
+                                    Icons.clear,
+                                    color: Colors.grey[600],
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _endDate = null;
+                                      _endDateController.clear();
+                                    });
+                                  },
+                                )
+                              : Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Colors.grey[600],
+                                ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        validator: (value) {
+                          if (_endDate != null &&
+                              _startDate != null &&
+                              _endDate!.isBefore(_startDate!)) {
+                            return 'Debe ser posterior a la fecha de inicio';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1762,12 +2021,14 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
   }
 
   Widget _buildSaveButton() {
+    final bool isDisabled = _isLoading || _isGeneratingSuggestions;
+
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _saveHabit,
+        onPressed: isDisabled ? null : _saveHabit,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: isDisabled ? Colors.grey[400] : AppColors.primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -1783,6 +2044,28 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
                   strokeWidth: 2,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
+              )
+            : _isGeneratingSuggestions
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Generando sugerencias...',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               )
             : Text(
                 'Guardar hábito',

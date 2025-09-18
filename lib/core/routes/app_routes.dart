@@ -8,6 +8,8 @@ import '../../presentation/pages/auth/register_page.dart';
 import '../../presentation/pages/auth/forgot_password_page.dart';
 import '../../presentation/pages/main/main_page.dart';
 import '../../presentation/pages/calendar/calendar_view_page.dart';
+import '../../views/profile/edit_profile_view.dart';
+import '../../models/user_profile.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -18,6 +20,7 @@ class AppRoutes {
   static const String forgotPassword = '/forgot-password';
   static const String main = '/main';
   static const String calendar = '/calendar';
+  static const String editProfile = '/edit-profile';
 
   static final GoRouter router = GoRouter(
     initialLocation: splash,
@@ -41,6 +44,13 @@ class AppRoutes {
       GoRoute(
         path: calendar,
         builder: (context, state) => const CalendarViewPage(),
+      ),
+      GoRoute(
+        path: editProfile,
+        builder: (context, state) {
+          final profile = state.extra as UserProfile;
+          return EditProfileView(profile: profile);
+        },
       ),
     ],
     errorBuilder: (context, state) =>

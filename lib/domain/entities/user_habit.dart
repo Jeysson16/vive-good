@@ -3,7 +3,7 @@ import 'package:vive_good_app/domain/entities/habit.dart';
 class UserHabit {
   final String id;
   final String userId;
-  final String habitId;
+  final String? habitId; // Can be null for custom habits
   final String frequency; // daily, weekly, monthly
   final String? scheduledTime;
   final bool notificationsEnabled;
@@ -12,6 +12,8 @@ class UserHabit {
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? customName; // For custom habits when habitId is null
+  final String? customDescription; // For custom habits when habitId is null
 
   // Dashboard specific fields from stored procedure
   final bool isCompletedToday;
@@ -24,7 +26,7 @@ class UserHabit {
   const UserHabit({
     required this.id,
     required this.userId,
-    required this.habitId,
+    this.habitId, // Can be null for custom habits
     required this.frequency,
     this.scheduledTime,
     required this.notificationsEnabled,
@@ -33,6 +35,8 @@ class UserHabit {
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
+    this.customName,
+    this.customDescription,
     this.isCompletedToday = false,
     this.completionCountToday = 0,
     this.lastCompletedAt,

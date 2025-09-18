@@ -4,6 +4,7 @@ import '../../domain/entities/user_habit.dart';
 import '../blocs/habit/habit_bloc.dart';
 import 'particle_celebration.dart';
 import '../blocs/habit/habit_state.dart';
+import 'common/responsive_dimensions.dart';
 
 class AnimatedHabitCard extends StatefulWidget {
   final UserHabit userHabit;
@@ -229,17 +230,28 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
                       animation: _colorAnimation,
                       builder: (context, child) {
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
+                          margin: ResponsiveDimensions.getCardMargin(context),
+                          constraints: BoxConstraints(
+                            minHeight: ResponsiveDimensions.getCardMinHeight(
+                              context,
+                            ),
+                          ),
                           child: Material(
                             elevation: _isCompleted ? 8 : 2,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(
+                              ResponsiveDimensions.getBorderRadius(context),
+                            ),
                             shadowColor: Colors.black.withOpacity(0.1),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 300),
-                              padding: const EdgeInsets.all(20),
+                              padding: EdgeInsets.all(
+                                ResponsiveDimensions.getCardPadding(context),
+                              ),
                               decoration: BoxDecoration(
                                 color: _colorAnimation.value,
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(
+                                  ResponsiveDimensions.getBorderRadius(context),
+                                ),
                                 border: Border.all(
                                   color: _isCompleted
                                       ? const Color(0xFF22C55E).withOpacity(0.3)
@@ -259,11 +271,18 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
                               ),
                               child: InkWell(
                                 onTap: _handleTap,
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(
+                                  ResponsiveDimensions.getBorderRadius(context),
+                                ),
                                 child: Row(
                                   children: [
                                     _buildHabitIcon(),
-                                    const SizedBox(width: 16),
+                                    SizedBox(
+                                      width:
+                                          ResponsiveDimensions.getHorizontalSpacing(
+                                            context,
+                                          ),
+                                    ),
                                     Expanded(child: _buildHabitInfo()),
                                     _buildCompletionButton(),
                                   ],
@@ -294,38 +313,144 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
   }
 
   Widget _buildHabitIcon() {
+    final iconContainerSize = ResponsiveDimensions.getIconContainerSize(
+      context,
+    );
+    final iconSize = ResponsiveDimensions.getIconSize(context);
+    final borderRadius = ResponsiveDimensions.getBorderRadius(context);
+    final iconColor = _getIconColor();
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      width: 56,
-      height: 56,
+      width: iconContainerSize,
+      height: iconContainerSize,
       decoration: BoxDecoration(
         color: _isCompleted
-            ? const Color(0xFF22C55E).withOpacity(0.2)
-            : const Color(0xFF3B82F6).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
+            ? iconColor.withOpacity(0.2)
+            : iconColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         child: Icon(
-          _isCompleted ? Icons.check_circle : Icons.track_changes,
+          _isCompleted ? Icons.check_circle : _getCategoryIcon(),
           key: ValueKey(_isCompleted),
-          color: _isCompleted
-              ? const Color(0xFF22C55E)
-              : const Color(0xFF3B82F6),
-          size: 28,
+          color: _isCompleted ? iconColor : iconColor,
+          size: iconSize,
         ),
       ),
     );
   }
 
+  Color _getIconColor() {
+    if (widget.userHabit.habit?.iconColor != null) {
+      try {
+        // Convertir string hexadecimal a int
+        String colorString = widget.userHabit.habit!.iconColor!;
+        // Si no tiene el prefijo 0x, agregarlo
+        if (!colorString.startsWith('0x')) {
+          colorString = '0x$colorString';
+        }
+        return Color(int.parse(colorString));
+      } catch (e) {
+        // Si hay error en la conversión, usar color por defecto
+        return const Color(0xFF6B7280);
+      }
+    }
+    return const Color(0xFF6B7280);
+  }
+
+  IconData _getCategoryIcon() {
+    if (widget.userHabit.habit?.iconName == null) return Icons.star;
+
+    // Map icon names to Flutter icons
+    switch (widget.userHabit.habit!.iconName!.toLowerCase()) {
+      // Iconos de las categorías de la base de datos
+      case 'utensils':
+      case 'restaurant':
+      case 'food':
+        return Icons.restaurant;
+      case 'activity':
+      case 'fitness_center':
+      case 'exercise':
+        return Icons.fitness_center;
+      case 'moon':
+      case 'bed':
+      case 'sleep':
+        return Icons.bedtime;
+      case 'droplet':
+      case 'water_drop':
+      case 'water':
+        return Icons.water_drop;
+      case 'brain':
+      case 'psychology':
+      case 'mental':
+        return Icons.psychology;
+      case 'target':
+      case 'track_changes':
+      case 'productivity':
+        return Icons.track_changes;
+      // Iconos adicionales
+      case 'favorite':
+      case 'heart':
+        return Icons.favorite;
+      case 'work':
+      case 'business':
+        return Icons.work;
+      case 'school':
+      case 'education':
+        return Icons.school;
+      case 'person':
+      case 'personal':
+        return Icons.person;
+      case 'home':
+      case 'house':
+        return Icons.home;
+      case 'people':
+      case 'social':
+        return Icons.people;
+      case 'palette':
+      case 'creative':
+        return Icons.palette;
+      case 'self_improvement':
+      case 'spiritual':
+        return Icons.self_improvement;
+      case 'movie':
+      case 'entertainment':
+        return Icons.movie;
+      case 'attach_money':
+      case 'money':
+      case 'finance':
+        return Icons.attach_money;
+      case 'general':
+        return Icons.track_changes;
+      default:
+        return Icons.star;
+    }
+  }
+
   Widget _buildHabitInfo() {
+    final titleFontSize = ResponsiveDimensions.getFontSize(
+      context,
+      type: 'title',
+    );
+    final subtitleFontSize = ResponsiveDimensions.getFontSize(
+      context,
+      type: 'subtitle',
+    );
+    final captionFontSize = ResponsiveDimensions.getFontSize(
+      context,
+      type: 'caption',
+    );
+    final verticalSpacing = ResponsiveDimensions.getVerticalSpacing(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 300),
           style: TextStyle(
-            fontSize: 16,
+            fontSize: titleFontSize,
             fontWeight: FontWeight.w600,
             color: _isCompleted
                 ? const Color(0xFF059669)
@@ -336,22 +461,22 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
           ),
           child: Text('Hábito ${widget.userHabit.habitId}'),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: verticalSpacing),
         Text(
           'Frecuencia: ${widget.userHabit.frequency}',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: subtitleFontSize,
             color: _isCompleted
                 ? const Color(0xFF059669).withOpacity(0.7)
                 : const Color(0xFF6B7280),
           ),
         ),
         if (widget.userHabit.scheduledTime != null) ...[
-          const SizedBox(height: 2),
+          SizedBox(height: verticalSpacing / 2),
           Text(
             'Hora: ${widget.userHabit.scheduledTime}',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: captionFontSize,
               color: _isCompleted
                   ? const Color(0xFF059669).withOpacity(0.6)
                   : const Color(0xFF9CA3AF),
@@ -363,6 +488,19 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
   }
 
   Widget _buildCompletionButton() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final buttonSize = screenWidth < 360
+        ? 28.0
+        : screenWidth < 600
+        ? 32.0
+        : 36.0;
+    final iconSize = screenWidth < 360
+        ? 16.0
+        : screenWidth < 600
+        ? 20.0
+        : 24.0;
+    final borderRadius = ResponsiveDimensions.getBorderRadius(context) / 2;
+
     return AnimatedBuilder(
       animation: _bounceAnimation,
       builder: (context, child) {
@@ -370,8 +508,8 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
           scale: _bounceAnimation.value,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
-            width: 32,
-            height: 32,
+            width: buttonSize,
+            height: buttonSize,
             decoration: BoxDecoration(
               color: _isCompleted
                   ? const Color(0xFF22C55E)
@@ -382,7 +520,7 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
                     : Colors.grey.shade400,
                 width: 2,
               ),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(borderRadius),
               boxShadow: _isCompleted
                   ? [
                       BoxShadow(
@@ -394,7 +532,7 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
                   : null,
             ),
             child: _isCompleted
-                ? const Icon(Icons.check, color: Colors.white, size: 20)
+                ? Icon(Icons.check, color: Colors.white, size: iconSize)
                 : null,
           ),
         );

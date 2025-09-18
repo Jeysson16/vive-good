@@ -11,7 +11,7 @@ const Component = () => {
           <p className={styles.holaAnastacia2}>Hola, Jeysson!</p>
         </div>
         <div className={styles.ellipse452}>
-          <img src="../image/mfkb95ce-nivslcx.png" className={styles.ellipse45} />
+          <img src="../image/mfosabu9-3we83kb.png" className={styles.ellipse45} />
         </div>
       </div>
       <div className={styles.frame416}>
@@ -31,7 +31,7 @@ const Component = () => {
         <div className={styles.tab}>
           <p className={styles.verProgreso}>Ver progreso</p>
           <img
-            src="../image/mfkb95c9-52o9l93.svg"
+            src="../image/mfosabu2-w91ddl3.svg"
             className={styles.arrowCaretRightSm}
           />
         </div>
@@ -50,12 +50,12 @@ const Component = () => {
             <div className={styles.frame12}>
               <div className={styles.uilWifiRouter}>
                 <img
-                  src="../image/mfkb95c9-2y9medu.svg"
+                  src="../image/mfosabu2-v69ru9m.svg"
                   className={styles.bloodDrop11}
                 />
               </div>
             </div>
-            <img src="../image/mfkb95ce-m8grfg6.png" className={styles.image4} />
+            <img src="../image/mfosabu9-kkp9kcp.png" className={styles.image4} />
           </div>
           <div className={styles.group1}>
             <p className={styles.beber}>Beber&nbsp;</p>
@@ -69,7 +69,7 @@ const Component = () => {
           <div className={styles.frame122}>
             <div className={styles.ellipse3} />
             <img
-              src="../image/mfkb95c9-o8jy7ky.svg"
+              src="../image/mfosabu2-eqm4lk2.svg"
               className={styles.a24PxCalendar}
             />
           </div>
@@ -88,11 +88,11 @@ const Component = () => {
             <div className={styles.frame123}>
               <div className={styles.ellipse3} />
               <img
-                src="../image/mfkb95c9-2y9medu.svg"
+                src="../image/mfosabu2-v69ru9m.svg"
                 className={styles.bloodDrop112}
               />
             </div>
-            <img src="../image/mfkb95ce-m8grfg6.png" className={styles.image4} />
+            <img src="../image/mfosabu9-kkp9kcp.png" className={styles.image4} />
           </div>
           <div className={styles.group13}>
             <p className={styles.almuerzo}>Comer</p>
@@ -107,11 +107,11 @@ const Component = () => {
             <div className={styles.frame123}>
               <div className={styles.ellipse3} />
               <img
-                src="../image/mfkb95c9-te7mn0w.svg"
+                src="../image/mfosabu2-mps7r9v.svg"
                 className={styles.bloodDrop112}
               />
             </div>
-            <img src="../image/mfkb95ce-m8grfg6.png" className={styles.image4} />
+            <img src="../image/mfosabu9-kkp9kcp.png" className={styles.image4} />
           </div>
           <div className={styles.group14}>
             <p className={styles.almuerzo}>Beber&nbsp;</p>
@@ -128,7 +128,7 @@ const Component = () => {
             <div className={styles.frame124}>
               <div className={styles.ellipse32} />
               <img
-                src="../image/mfkb95c9-9ugidje.svg"
+                src="../image/mfosabu2-vi1282f.svg"
                 className={styles.bloodDrop112}
               />
             </div>
@@ -144,7 +144,7 @@ const Component = () => {
           <div className={styles.autoWrapper6}>
             <div className={styles.frame125}>
               <div className={styles.ellipse32} />
-              <img src="../image/mfkb95c9-5z10tiv.svg" className={styles.frame} />
+              <img src="../image/mfosabu2-dg8h56v.svg" className={styles.frame} />
             </div>
             <div className={styles.group15}>
               <p className={styles.airConditioner}>Lights</p>
@@ -162,8 +162,8 @@ const Component = () => {
           </div>
           <div className={styles.subtract}>
             <div className={styles.autoWrapper7}>
-              <img src="../image/mfkb95ce-93a3yc0.png" className={styles.image7} />
-              <img src="../image/mfkb95c9-eqhnrbc.svg" className={styles.virus} />
+              <img src="../image/mfosabu9-erqni0z.png" className={styles.image7} />
+              <img src="../image/mfosabu2-oey7nji.svg" className={styles.virus} />
             </div>
             <div className={styles.autoWrapper8}>
               <p className={styles.almuerzo}>Marcar como hecho</p>

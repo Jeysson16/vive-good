@@ -1587,19 +1587,20 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildHabitItem('Ejercicio', 0.85, const Color(0xFF4CAF50)),
+          _buildHabitItem('Ejercicio', 0.85),
           const SizedBox(height: 12),
-          _buildHabitItem('Alimentación', 0.72, const Color(0xFF2196F3)),
+          _buildHabitItem('Alimentación', 0.72),
           const SizedBox(height: 12),
-          _buildHabitItem('Hidratación', 0.68, const Color(0xFFFF9800)),
+          _buildHabitItem('Hidratación', 0.68),
           const SizedBox(height: 12),
-          _buildHabitItem('Descanso', 0.91, const Color(0xFF9C27B0)),
+          _buildHabitItem('Descanso', 0.91),
         ],
       ),
     );
   }
 
-  Widget _buildHabitItem(String name, double progress, Color color) {
+  Widget _buildHabitItem(String name, double progress) {
+    final color = _getCategoryColor(name);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1646,8 +1647,47 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     );
   }
 
-
-}
+  Color _getCategoryColor(String categoryName) {
+    switch (categoryName.toLowerCase()) {
+      case 'ejercicio':
+      case 'fitness':
+      case 'deporte':
+        return const Color(0xFFE91E63); // Rosa
+      case 'meditación':
+      case 'mindfulness':
+      case 'relajación':
+        return const Color(0xFF9C27B0); // Púrpura
+      case 'lectura':
+      case 'estudio':
+      case 'aprendizaje':
+        return const Color(0xFF3F51B5); // Índigo
+      case 'agua':
+      case 'hidratación':
+        return const Color(0xFF2196F3); // Azul
+      case 'alimentación':
+      case 'nutrición':
+      case 'comida':
+        return const Color(0xFF4CAF50); // Verde
+      case 'sueño':
+      case 'descanso':
+        return const Color(0xFF673AB7); // Púrpura profundo
+      case 'trabajo':
+      case 'productividad':
+        return const Color(0xFF795548); // Marrón
+      case 'social':
+      case 'familia':
+      case 'amigos':
+        return const Color(0xFFFF9800); // Naranja
+      case 'creatividad':
+      case 'arte':
+        return const Color(0xFFFF5722); // Naranja profundo
+      case 'finanzas':
+      case 'dinero':
+        return const Color(0xFF607D8B); // Azul gris
+      default:
+        return const Color(0xFF4CAF50); // Verde por defecto
+    }
+  }
 
   Widget _buildTipItem(String tip) {
     return Padding(
@@ -1679,3 +1719,4 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       ),
     );
   }
+}

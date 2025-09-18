@@ -1,9 +1,9 @@
-import 'package:vive_good_app/data/models/user_habit_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vive_good_app/core/error/failures.dart';
-import 'package:vive_good_app/data/models/habit_model.dart';
 import 'package:vive_good_app/data/models/category_model.dart';
 import 'package:vive_good_app/data/models/habit_breakdown_model.dart';
+import 'package:vive_good_app/data/models/habit_model.dart';
+import 'package:vive_good_app/data/models/user_habit_model.dart';
 
 abstract class HabitRemoteDataSource {
   Future<List<UserHabitModel>> getUserHabits(String userId);
@@ -36,10 +36,14 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
   @override
   Future<List<UserHabitModel>> getUserHabits(String userId) async {
     try {
-      final response = await supabaseClient
-          .from('user_habits')
-          .select('*, habits(*)')
-          .eq('user_id', userId);
+      // Usar el stored procedure get_user_habits_with_details
+      final response = await supabaseClient.rpc(
+        'get_user_habits_with_details',
+        params: {
+          'p_user_id': userId,
+          'p_category_id': null, // null para obtener todos los hábitos
+        },
+      );
 
       if (response == null) {
         throw ServerFailure('No data received from Supabase');
@@ -47,8 +51,41 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
 
       final List<UserHabitModel> userHabits = [];
       for (var item in response) {
-        userHabits.add(UserHabitModel.fromJson(item));
+        // Mapear los datos del stored procedure al formato esperado por UserHabitModel
+        final mappedItem = {
+          'id': item['user_habit_id'],
+          'user_id': userId,
+          'habit_id': item['habit_id'],
+          'frequency': item['frequency'],
+          'scheduled_time': item['scheduled_time'],
+          'notifications_enabled': item['notifications_enabled'],
+          'start_date': item['start_date'],
+          'end_date': item['end_date'],
+          'is_active': item['is_active'],
+          'created_at': item['created_at'],
+          'updated_at': item['updated_at'],
+          'custom_name':
+              item['habit_name'], // Ahora incluye nombres personalizados
+          'custom_description': item['habit_description'],
+          'is_completed_today': item['is_completed_today'],
+          'completion_count_today': item['completion_count_today'],
+          'last_completed_at': item['last_completed_at'],
+          'streak_count': item['streak_count'],
+          'total_completions': item['total_completions'],
+          'habits': {
+            'id': item['habit_id'],
+            'name': item['habit_name'],
+            'description': item['habit_description'],
+            'category_id': item['category_id'],
+            'icon_name': item['habit_icon_name'],
+            'icon_color': item['habit_icon_color'],
+            'created_at': item['created_at'],
+            'updated_at': item['updated_at'],
+          },
+        };
+        userHabits.add(UserHabitModel.fromJson(mappedItem));
       }
+
       return userHabits;
     } catch (e) {
       throw ServerFailure(e.toString());
@@ -138,15 +175,19 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
     bool includeCompletionStatus,
   ) async {
     try {
-      var query = supabaseClient
-          .from('user_habits')
-          .select('*, habits(*)')
-          .eq('user_id', userId)
-          .limit(limit);
-
-      // TODO: Implement logic for includeCompletionStatus if needed, e.g., joining with habit_logs
-
-      final response = await query;
+      // Usar el stored procedure get_dashboard_habits para obtener información completa
+      print('🔍 DATASOURCE DEBUG: Calling get_dashboard_habits with userId: $userId');
+      final response = await supabaseClient.rpc(
+        'get_dashboard_habits',
+        params: {
+          'p_user_id': userId,
+          'p_date': DateTime.now().toIso8601String().split('T')[0], // Solo la fecha
+        },
+      );
+      
+      print('🔍 DATASOURCE DEBUG: Raw response from get_dashboard_habits: $response');
+      print('🔍 DATASOURCE DEBUG: Response type: ${response.runtimeType}');
+      print('🔍 DATASOURCE DEBUG: Response length: ${response?.length ?? 0}');
 
       if (response == null) {
         throw ServerFailure('No data received from Supabase');
@@ -154,8 +195,47 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
 
       final List<UserHabitModel> userHabits = [];
       for (var item in response) {
-        userHabits.add(UserHabitModel.fromJson(item));
+        // Mapear los datos del stored procedure al formato esperado por UserHabitModel
+        final mappedItem = {
+          'id': item['user_habit_id'],
+          'user_id': userId,
+          'habit_id': item['habit_id'],
+          'frequency': item['frequency'],
+          'frequency_details': item['frequency_details'],
+          'scheduled_time': item['scheduled_time'],
+          'notification_time': item['notification_time'],
+          'notifications_enabled': item['notifications_enabled'],
+          'start_date': item['start_date'],
+          'end_date': item['end_date'],
+          'is_active': item['is_active'],
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+          'custom_name': item['habit_name'],
+          'custom_description': item['habit_description'],
+          'is_completed_today': item['is_completed_today'],
+          'completion_count_today': item['completion_count_today'],
+          'last_completed_at': item['last_completed_at'],
+          'streak_count': item['streak_count'],
+          'total_completions': item['total_completions'],
+          'habits': {
+            'id': item['habit_id'],
+            'name': item['habit_name'],
+            'description': item['habit_description'],
+            'category_id': item['category_id'],
+            'icon_name': item['category_icon'],
+            'icon_color': item['category_color'],
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+        };
+        userHabits.add(UserHabitModel.fromJson(mappedItem));
       }
+      
+      // Aplicar límite si se especifica
+      if (limit > 0 && userHabits.length > limit) {
+        return userHabits.take(limit).toList();
+      }
+      
       return userHabits;
     } catch (e) {
       throw ServerFailure(e.toString());
@@ -172,11 +252,7 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
       // Llamar al stored procedure get_monthly_habits_breakdown
       final response = await supabaseClient.rpc(
         'get_monthly_habits_breakdown',
-        params: {
-          'p_user_id': userId,
-          'p_year': year,
-          'p_month': month,
-        },
+        params: {'p_user_id': userId, 'p_year': year, 'p_month': month},
       );
 
       if (response == null) {

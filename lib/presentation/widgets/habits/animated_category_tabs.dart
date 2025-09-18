@@ -41,9 +41,6 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
     _bounceControllers = {};
     _bounceAnimations = {};
     
-    // Crear animaciones para "Todos"
-    _createBounceAnimation('all');
-    
     // Crear animaciones para cada categoría
     for (final category in widget.categories) {
       _createBounceAnimation(category.id);
@@ -134,18 +131,9 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
           controller: _scrollController,
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          itemCount: widget.categories.length + 1,
+          itemCount: widget.categories.length,
           itemBuilder: (context, index) {
-            if (index == 0) {
-              return _buildAnimatedCategoryTab(
-                'Todos',
-                'all',
-                widget.selectedCategoryId == null,
-                index,
-              );
-            }
-            
-            final category = widget.categories[index - 1];
+            final category = widget.categories[index];
             return _buildAnimatedCategoryTab(
               category.name,
               category.id,

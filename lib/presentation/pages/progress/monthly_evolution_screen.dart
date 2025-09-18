@@ -441,6 +441,7 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen> {
   }
 
   Widget _buildHabitItem(String name, double progress, IconData icon) {
+    final iconColor = _getCategoryColor(name);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -448,12 +449,12 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF4CAF50).withOpacity(0.1),
+              color: iconColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               icon,
-              color: const Color(0xFF4CAF50),
+              color: iconColor,
               size: 20,
             ),
           ),
@@ -474,7 +475,7 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen> {
                 LinearProgressIndicator(
                   value: progress,
                   backgroundColor: Colors.grey[200],
-                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+                  valueColor: AlwaysStoppedAnimation<Color>(iconColor),
                 ),
               ],
             ),
@@ -482,10 +483,10 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen> {
           const SizedBox(width: 12),
           Text(
             '${((progress * 100).isFinite ? (progress * 100).toInt() : 0)}%',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF4CAF50),
+              color: iconColor,
             ),
           ),
         ],
@@ -532,6 +533,48 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen> {
         return Icons.attach_money;
       default:
         return Icons.track_changes;
+    }
+  }
+
+  Color _getCategoryColor(String categoryName) {
+    switch (categoryName.toLowerCase()) {
+      case 'ejercicio':
+      case 'fitness':
+      case 'deporte':
+        return const Color(0xFFE91E63); // Rosa
+      case 'meditación':
+      case 'mindfulness':
+      case 'relajación':
+        return const Color(0xFF9C27B0); // Púrpura
+      case 'lectura':
+      case 'estudio':
+      case 'aprendizaje':
+        return const Color(0xFF3F51B5); // Índigo
+      case 'agua':
+      case 'hidratación':
+        return const Color(0xFF2196F3); // Azul
+      case 'alimentación':
+      case 'nutrición':
+      case 'comida':
+        return const Color(0xFF4CAF50); // Verde
+      case 'sueño':
+      case 'descanso':
+        return const Color(0xFF673AB7); // Púrpura profundo
+      case 'trabajo':
+      case 'productividad':
+        return const Color(0xFF795548); // Marrón
+      case 'social':
+      case 'familia':
+      case 'amigos':
+        return const Color(0xFFFF9800); // Naranja
+      case 'creatividad':
+      case 'arte':
+        return const Color(0xFFFF5722); // Naranja profundo
+      case 'finanzas':
+      case 'dinero':
+        return const Color(0xFF607D8B); // Azul gris
+      default:
+        return const Color(0xFF4CAF50); // Verde por defecto
     }
   }
 }

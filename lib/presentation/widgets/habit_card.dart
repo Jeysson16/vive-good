@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:vive_good_app/domain/entities/habit.dart';
 import 'package:vive_good_app/domain/entities/user_habit.dart';
+import 'common/responsive_dimensions.dart';
 
 class HabitCard extends StatelessWidget {
   final UserHabit habit;
@@ -20,36 +21,80 @@ class HabitCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardPadding = ResponsiveDimensions.getCardPadding(context);
+    final borderRadius = ResponsiveDimensions.getBorderRadius(context);
+    final iconSize =
+        ResponsiveDimensions.getIconSize(context) *
+        1.5; // Slightly larger for main icon
+    final horizontalSpacing = ResponsiveDimensions.getHorizontalSpacing(
+      context,
+    );
+    final titleFontSize = ResponsiveDimensions.getFontSize(
+      context,
+      type: 'title',
+    );
+    final subtitleFontSize = ResponsiveDimensions.getFontSize(
+      context,
+      type: 'subtitle',
+    );
+    final minHeight = ResponsiveDimensions.getCardMinHeight(context);
+
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+      margin: EdgeInsets.symmetric(
+        horizontal: cardPadding,
+        vertical: ResponsiveDimensions.getVerticalSpacing(context),
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(borderRadius),
+      ),
       elevation: 2.0,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
+      child: Container(
+        constraints: BoxConstraints(minHeight: minHeight),
+        padding: EdgeInsets.all(cardPadding),
         child: Row(
           children: [
-            Icon(iconData, color: iconColor, size: 40.0),
-            const SizedBox(width: 16.0),
+            Icon(iconData, color: iconColor, size: iconSize),
+            SizedBox(width: horizontalSpacing),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     habit.habit?.name ?? 'No Name',
-                    style: const TextStyle(
-                      fontSize: 18.0,
+                    style: TextStyle(
+                      fontSize: titleFontSize,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  SizedBox(
+                    height:
+                        ResponsiveDimensions.getVerticalSpacing(context) / 2,
+                  ),
                   Text(
                     habit.habit?.description ?? 'No Description',
-                    style: const TextStyle(fontSize: 14.0, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: subtitleFontSize,
+                      color: Colors.grey,
+                    ),
                   ),
                 ],
               ),
             ),
-            IconButton(icon: const Icon(Icons.edit), onPressed: onEdit),
-            IconButton(icon: const Icon(Icons.delete), onPressed: onDelete),
+            IconButton(
+              icon: Icon(
+                Icons.edit,
+                size: ResponsiveDimensions.getIconSize(context),
+              ),
+              onPressed: onEdit,
+            ),
+            IconButton(
+              icon: Icon(
+                Icons.delete,
+                size: ResponsiveDimensions.getIconSize(context),
+              ),
+              onPressed: onDelete,
+            ),
           ],
         ),
       ),

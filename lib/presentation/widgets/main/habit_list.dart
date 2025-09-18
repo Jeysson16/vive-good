@@ -2,72 +2,167 @@ import 'package:flutter/material.dart';
 import '../../../domain/entities/user_habit.dart';
 import '../../../domain/entities/habit.dart';
 import '../../../domain/entities/habit_log.dart';
+import '../../../domain/entities/category.dart';
 import 'habit_item.dart';
 
 class HabitList extends StatelessWidget {
   final List<UserHabit> userHabits;
   final List<Habit> habits;
+  final List<Category> categories;
   final Map<String, List<HabitLog>> habitLogs;
   final Function(String, bool) onHabitToggle;
+  final Set<String> selectedHabits;
+  final Function(String, bool) onHabitSelected;
+  final String? selectedCategoryId;
 
   const HabitList({
     super.key,
     required this.userHabits,
     required this.habits,
+    required this.categories,
     required this.habitLogs,
     required this.onHabitToggle,
+    required this.selectedHabits,
+    required this.onHabitSelected,
+    this.selectedCategoryId,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Debug: Print received data
+    print('🔍 HABIT_LIST DEBUG: userHabits.length = ${userHabits.length}');
+    print('🔍 HABIT_LIST DEBUG: habits.length = ${habits.length}');
+    print('🔍 HABIT_LIST DEBUG: categories.length = ${categories.length}');
+    print('🔍 HABIT_LIST DEBUG: habitLogs.length = ${habitLogs.length}');
+    print('🔍 HABIT_LIST DEBUG: selectedCategoryId = $selectedCategoryId');
+    
     // Filter habits to show only today's incomplete habits
     final todayIncompleteHabits = _getTodayIncompleteHabits();
+    print('🔍 HABIT_LIST DEBUG: todayIncompleteHabits.length = ${todayIncompleteHabits.length}');
     
     if (userHabits.isEmpty) {
-      return _buildEmptyState(context);
+      print('🔍 HABIT_LIST DEBUG: Showing empty state - no userHabits');
+      return SliverFillRemaining(child: _buildEmptyState(context));
     }
     
     if (todayIncompleteHabits.isEmpty) {
-      return _buildAllCompletedState(context);
+      print('🔍 HABIT_LIST DEBUG: Showing all completed state - no incomplete habits');
+      return SliverFillRemaining(child: _buildAllCompletedState(context));
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      itemCount: todayIncompleteHabits.length,
-      itemBuilder: (context, index) {
-        final userHabit = todayIncompleteHabits[index];
-        
-        // Find the corresponding habit
-        final habit = habits.firstWhere(
-          (h) => h.id == userHabit.habitId,
-          orElse: () => _createMockHabit(userHabit.habitId, index),
-        );
-        
-        return HabitItem(
-          userHabit: userHabit,
-          habit: habit,
-          isCompleted: false, // Always false since we're showing incomplete habits
-          onToggle: (isCompleted) {
-            onHabitToggle(userHabit.id, isCompleted);
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 1.0, // Ratio más equilibrado para evitar overflow
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final userHabit = todayIncompleteHabits[index];
+            
+            // Find the corresponding habit
+            final habit = habits.firstWhere(
+              (h) => h.id == userHabit.habitId,
+            );
+            
+            // Find the corresponding category with better fallback
+            Category? category;
+            try {
+              category = categories.firstWhere(
+                (c) => c.id == habit.categoryId,
+              );
+            } catch (e) {
+              // Create a default category if not found
+              category = Category(
+                id: 'default',
+                name: 'General',
+                iconName: 'star',
+                color: '6B7280',
+              );
+            }
+            
+            return HabitItem(
+              userHabit: userHabit,
+              habit: habit,
+              category: category,
+              isCompleted: false, // Always false since we're showing incomplete habits
+              isSelected: selectedHabits.contains(userHabit.id),
+              onTap: () {
+                onHabitToggle(userHabit.id, true);
+              },
+              onSelectionChanged: onHabitSelected,
+            );
           },
-        );
-      },
+          childCount: todayIncompleteHabits.length,
+        ),
+      ),
     );
   }
   
   List<UserHabit> _getTodayIncompleteHabits() {
     final today = DateTime.now();
+    print('🔍 HABIT_LIST DEBUG: Filtering habits for today: $today');
     
     return userHabits.where((userHabit) {
-      final logs = habitLogs[userHabit.id] ?? [];
-      final isCompletedToday = logs.any((log) {
-        final logDate = log.completedAt;
-        return logDate.year == today.year &&
-               logDate.month == today.month &&
-               logDate.day == today.day;
-      });
-      return !isCompletedToday; // Only return habits not completed today
+      print('🔍 HABIT_LIST DEBUG: Checking userHabit ${userHabit.id}');
+      
+      // Check if the habit is active for today based on frequency
+      final isActiveToday = _isHabitActiveToday(userHabit, today);
+      print('🔍 HABIT_LIST DEBUG: isActiveToday = $isActiveToday');
+      if (!isActiveToday) {
+        return false;
+      }
+      
+      // Filter by category if selectedCategoryId is not null
+      if (selectedCategoryId != null) {
+        final habit = habits.firstWhere((h) => h.id == userHabit.habitId);
+        print('🔍 HABIT_LIST DEBUG: Filtering by category. habit.categoryId = ${habit.categoryId}, selectedCategoryId = $selectedCategoryId');
+        if (habit.categoryId != selectedCategoryId) {
+          return false;
+        }
+      }
+      
+      // Use UserHabit's isCompletedToday property instead of habitLogs
+      final isCompletedToday = userHabit.isCompletedToday;
+      print('🔍 HABIT_LIST DEBUG: isCompletedToday from UserHabit = $isCompletedToday');
+      final shouldInclude = !isCompletedToday;
+      print('🔍 HABIT_LIST DEBUG: shouldInclude = $shouldInclude');
+      return shouldInclude; // Only return habits not completed today
     }).toList();
+  }
+  
+  bool _isHabitActiveToday(UserHabit userHabit, DateTime today) {
+    final startDate = userHabit.startDate;
+    print('🔍 HABIT_LIST DEBUG: userHabit.frequency = "${userHabit.frequency}"');
+    print('🔍 HABIT_LIST DEBUG: userHabit.startDate = $startDate');
+    print('🔍 HABIT_LIST DEBUG: today = $today');
+    
+    // Check if today is after or equal to start date
+    if (today.isBefore(DateTime(startDate.year, startDate.month, startDate.day))) {
+      print('🔍 HABIT_LIST DEBUG: Today is before start date, returning false');
+      return false;
+    }
+    
+    // For daily habits, always active
+    if (userHabit.frequency == 'daily') {
+      print('🔍 HABIT_LIST DEBUG: Daily habit, returning true');
+      return true;
+    }
+    
+    // For weekly habits, assume they are active every day for now
+    // TODO: Implement proper weekly schedule logic with habit_schedules table
+    if (userHabit.frequency == 'weekly') {
+      print('🔍 HABIT_LIST DEBUG: Weekly habit, returning true');
+      return true; // Temporarily allow all weekly habits to be active
+    }
+    
+    // For now, let's make all habits active regardless of frequency
+    // This is a temporary fix to show the habits
+    print('🔍 HABIT_LIST DEBUG: Unknown frequency "${userHabit.frequency}", returning true (temporary fix)');
+    return true;
   }
 
   Widget _buildEmptyState(BuildContext context) {
@@ -202,46 +297,4 @@ class HabitList extends StatelessWidget {
     );
   }
 
-  // Mock habit data for demonstration
-  Habit _createMockHabit(String habitId, int index) {
-    final mockHabits = [
-      {
-        'name': 'Beber agua',
-        'description': '250 ml de agua',
-        'icon': Icons.local_drink,
-        'color': '0xFF4FC3F7',
-      },
-      {
-        'name': 'Almuerzo',
-        'description': '12 pm',
-        'icon': Icons.restaurant,
-        'color': '0xFF66BB6A',
-      },
-      {
-        'name': 'Comer frutas',
-        'description': 'en la mañana',
-        'icon': Icons.apple,
-        'color': '0xFFFF7043',
-      },
-      {
-        'name': 'Ejercicio',
-        'description': '30 minutos',
-        'icon': Icons.fitness_center,
-        'color': '0xFF42A5F5',
-      },
-    ];
-    
-    final mockData = mockHabits[index % mockHabits.length];
-    
-    return Habit(
-      id: habitId,
-      name: mockData['name'] as String,
-      description: mockData['description'] as String,
-      categoryId: '1',
-      iconName: (mockData['icon'] as IconData).codePoint.toString(),
-      iconColor: mockData['color'] as String,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
 }

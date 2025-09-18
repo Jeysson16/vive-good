@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../blocs/splash/splash_bloc.dart';
+import '../../blocs/habit/habit_bloc.dart';
+import '../../blocs/auth/auth_bloc.dart';
 import '../../../core/di/injection_container.dart' as di;
 import '../../../core/routes/app_routes.dart';
 
@@ -16,6 +18,8 @@ class SplashPage extends StatelessWidget {
         hasCompletedOnboarding: di.sl(),
         getCurrentUser: di.sl(),
         saveUser: di.sl(),
+        habitBloc: context.read<HabitBloc>(),
+        authBloc: context.read<AuthBloc>(),
       ),
       child: const SplashView(),
     );

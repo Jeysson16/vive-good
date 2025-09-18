@@ -1,0 +1,189 @@
+* {
+  box-sizing: border-box;
+}
+
+.profile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: #ffffff;
+  padding-top: 32px;
+  width: 375px;
+  height: 812px;
+  overflow: hidden;
+
+  .ellipse46 {
+    margin-left: 120px;
+    border-radius: 50%;
+    width: 153px;
+    height: 153px;
+  }
+
+  .jeyssonSNchezR {
+    margin: 11px 0px 0px 12px;
+    width: 343px;
+    text-align: center;
+    letter-spacing: 0.4px;
+    color: #090d3a;
+    font-family: Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+    font-size: 20px;
+    font-weight: 500;
+  }
+
+  .image2 {
+    margin-top: 7px;
+    margin-left: 21px;
+    width: 333px;
+    height: 458px;
+  }
+
+  .taskbar {
+    position: relative;
+    margin-top: 31px;
+    width: 376px;
+    height: 97px;
+
+    .homeIndicator2 {
+      display: flex;
+      position: absolute;
+      top: 76px;
+      left: 0;
+      align-items: center;
+      padding: 8px 118px;
+      width: 375px;
+      height: 21px;
+
+      .homeIndicator {
+        border-radius: 100px;
+        background: #ffffff;
+        width: 139px;
+        height: 5px;
+        rotate: -180deg;
+      }
+    }
+
+    .subtract {
+      display: flex;
+      position: absolute;
+      top: 33px;
+      left: 0;
+      align-items: flex-start;
+      padding: 13px 27px 5px 37px;
+      width: 376px;
+      height: 64px;
+      background-image: url(../image/mfn8h0zs-te7fxiz.svg);
+      background-position: center;
+      background-size: cover;
+      background-repeat: no-repeat;
+
+      .autoWrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        align-self: stretch;
+
+        .home {
+          margin-left: 4px;
+          width: 24px;
+          height: 24px;
+        }
+
+        .inicio {
+          line-height: 22px;
+          letter-spacing: 0;
+          color: #acadb9;
+          font-family: Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+          font-size: 14px;
+          font-weight: 500;
+        }
+      }
+
+      .autoWrapper2 {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        align-self: stretch;
+        margin-left: 27px;
+
+        .grid5 {
+          width: 24px;
+          height: 24px;
+        }
+
+        .hBitos {
+          line-height: 22px;
+          letter-spacing: 0;
+          color: #acadb9;
+          font-family: Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+          font-size: 14px;
+        }
+      }
+
+      .progreso {
+        margin: 24px 0px 0px 78px;
+        line-height: 22px;
+        letter-spacing: 0;
+        color: #acadb9;
+        font-family: Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+        font-size: 14px;
+      }
+
+      .autoWrapper3 {
+        position: relative;
+        margin-top: 24px;
+        margin-left: 33px;
+        width: 33px;
+        height: 22px;
+
+        .profileCircle {
+          position: absolute;
+          top: -21px;
+          left: 4px;
+          width: 24px;
+          height: 24px;
+        }
+
+        .perfil {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 33px;
+          height: 22px;
+          line-height: 22px;
+          letter-spacing: 0;
+          color: #219540;
+          font-family: Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", SimHei, Arial, Helvetica, sans-serif;
+          font-size: 14px;
+        }
+      }
+
+      .group {
+        position: absolute;
+        top: 15px;
+        left: 242px;
+        width: 23px;
+        height: 23px;
+      }
+    }
+
+    .frame {
+      display: flex;
+      position: absolute;
+      top: 1px;
+      left: 160px;
+      align-items: flex-start;
+      border-radius: 50%;
+      box-shadow: 0px 6px 21px 0px #3aaef84d;
+      background: #219540;
+      padding: 12px 11px 10px 12px;
+      width: 56px;
+      height: 56px;
+      overflow: hidden;
+
+      .microphone2 {
+        width: 34px;
+        height: 34px;
+      }
+    }
+  }
+}

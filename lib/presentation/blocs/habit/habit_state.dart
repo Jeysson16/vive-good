@@ -81,6 +81,7 @@ class HabitLoaded extends HabitState {
     List<Habit>? habits,
     Map<String, List<HabitLog>>? habitLogs,
     String? selectedCategoryId,
+    bool resetSelectedCategory = false,
     int? pendingCount,
     int? completedCount,
     List<Habit>? habitSuggestions,
@@ -94,7 +95,7 @@ class HabitLoaded extends HabitState {
       categories: categories ?? this.categories,
       habits: habits ?? this.habits,
       habitLogs: habitLogs ?? this.habitLogs,
-      selectedCategoryId: selectedCategoryId ?? this.selectedCategoryId,
+      selectedCategoryId: resetSelectedCategory ? null : (selectedCategoryId ?? this.selectedCategoryId),
       pendingCount: pendingCount ?? this.pendingCount,
       completedCount: completedCount ?? this.completedCount,
       habitSuggestions: habitSuggestions ?? this.habitSuggestions,
@@ -111,6 +112,12 @@ class HabitLoaded extends HabitState {
       final habit = habits.firstWhere((h) => h.id == userHabit.habitId);
       return habit.categoryId == selectedCategoryId;
     }).toList();
+  }
+
+  // Get only categories that have related habits
+  List<Category> get filteredCategories {
+    final habitCategoryIds = habits.map((habit) => habit.categoryId).toSet();
+    return categories.where((category) => habitCategoryIds.contains(category.id)).toList();
   }
 }
 

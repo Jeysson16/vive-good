@@ -181,10 +181,7 @@ class CalendarService {
   /// Elimina un evento de calendario
   Future<void> deleteCalendarEvent(String eventId) async {
     try {
-      await _supabase
-          .from('calendar_events')
-          .delete()
-          .eq('id', eventId);
+      await _supabase.from('calendar_events').delete().eq('id', eventId);
     } catch (e) {
       throw ServerException('Error al eliminar evento de calendario: $e');
     }
@@ -216,10 +213,7 @@ class CalendarService {
       final now = DateTime.now();
       final response = await _supabase
           .from('calendar_events')
-          .update({
-            'completed_at': null,
-            'updated_at': now.toIso8601String(),
-          })
+          .update({'completed_at': null, 'updated_at': now.toIso8601String()})
           .eq('id', eventId)
           .select()
           .single();
@@ -355,8 +349,7 @@ class CalendarService {
       // Calcular tasa de completitud
       final total = stats['total'] as int;
       if (total > 0) {
-        stats['completionRate'] = 
-            (stats['completed'] as int) / total;
+        stats['completionRate'] = (stats['completed'] as int) / total;
       }
 
       return stats;
@@ -373,13 +366,14 @@ class CalendarService {
     try {
       final events = <CalendarEvent>[];
       var currentDate = parentEvent.startDate;
-      
-      while (currentDate.isBefore(endDate) || currentDate.isAtSameMomentAs(endDate)) {
+
+      while (currentDate.isBefore(endDate) ||
+          currentDate.isAtSameMomentAs(endDate)) {
         if (currentDate.isAfter(parentEvent.startDate)) {
           final recurringEvent = parentEvent.copyWith(
             id: null, // Se generará un nuevo ID
             startDate: currentDate,
-            endDate: parentEvent.endDate != null 
+            endDate: parentEvent.endDate != null
                 ? DateTime(
                     currentDate.year,
                     currentDate.month,
@@ -391,11 +385,11 @@ class CalendarService {
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
           );
-          
+
           final createdEvent = await createCalendarEvent(recurringEvent);
           events.add(createdEvent);
         }
-        
+
         // Calcular siguiente fecha según tipo de recurrencia
         switch (parentEvent.recurrenceType) {
           case 'daily':
@@ -426,7 +420,7 @@ class CalendarService {
             break;
         }
       }
-      
+
       return events;
     } catch (e) {
       throw ServerException('Error al crear eventos recurrentes: $e');

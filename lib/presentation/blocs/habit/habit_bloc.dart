@@ -113,22 +113,23 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
           currentAnimationState = currentState.animationState;
         }
 
-        emit(
-          HabitLoaded(
-            userHabits: userHabits,
-            categories: categories,
-            habits: habits,
-            habitLogs:
-                const <
-                  String,
-                  List<HabitLog>
-                >{}, // Empty map for now, will be loaded separately if needed
-            pendingCount: pendingCount,
-            completedCount: completedCount,
-            habitSuggestions: currentHabitSuggestions,
-            animationState: currentAnimationState,
-          ),
+        final newState = HabitLoaded(
+          userHabits: userHabits,
+          categories: categories,
+          habits: habits,
+          habitLogs:
+              const <
+                String,
+                List<HabitLog>
+              >{}, // Empty map for now, will be loaded separately if needed
+          pendingCount: pendingCount,
+          completedCount: completedCount,
+          habitSuggestions: currentHabitSuggestions,
+          animationState: currentAnimationState,
         );
+        
+        print('🔍 BLOC DEBUG: Emitting HabitLoaded state with ${newState.userHabits.length} userHabits');
+        emit(newState);
       });
     });
   }
@@ -137,13 +138,38 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
     LoadCategories event,
     Emitter<HabitState> emit,
   ) async {
+    print('🔍 DEBUG: LoadCategories event triggered');
     final result = await getCategoriesUseCase(const NoParams());
-    result.fold((failure) => emit(HabitError(failure.toString())), (
+    result.fold((failure) {
+      print('❌ DEBUG: Error loading categories: $failure');
+      emit(HabitError(failure.toString()));
+    }, (
       categories,
     ) {
+      print('🔍 DEBUG: Loaded ${categories.length} categories from database:');
+      for (var category in categories) {
+        print('  - ID: ${category.id}, Name: "${category.name}"');
+      }
+      
       if (state is HabitLoaded) {
         final currentState = state as HabitLoaded;
         emit(currentState.copyWith(categories: categories));
+        print('🔍 DEBUG: Updated HabitLoaded state with categories');
+      } else {
+        // If state is not HabitLoaded, emit a basic HabitLoaded state with categories
+        emit(
+          HabitLoaded(
+            userHabits: [],
+            categories: categories,
+            habits: [],
+            habitLogs: const {},
+            pendingCount: 0,
+            completedCount: 0,
+            habitSuggestions: [],
+            animationState: AnimationState.idle,
+          ),
+        );
+        print('🔍 DEBUG: Created new HabitLoaded state with categories');
       }
     });
   }
@@ -206,13 +232,16 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
     }
   }
 
-  Future<void> _onFilterHabitsByCategory(
+  void _onFilterHabitsByCategory(
     FilterHabitsByCategory event,
     Emitter<HabitState> emit,
-  ) async {
-    if (state is HabitLoaded) {
-      final currentState = state as HabitLoaded;
-      emit(currentState.copyWith(selectedCategoryId: event.categoryId));
+  ) {
+    final currentState = state;
+    if (currentState is HabitLoaded) {
+      emit(currentState.copyWith(
+        selectedCategoryId: event.categoryId,
+        resetSelectedCategory: event.categoryId == null,
+      ));
     }
   }
 
@@ -233,6 +262,7 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
       GetHabitSuggestionsParams(
         userId: event.userId,
         categoryId: event.categoryId ?? currentCategoryId,
+        limit: event.limit ?? 10,
       ),
     );
 
@@ -257,9 +287,9 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
         print(
           '🔍 BLOC DEBUG: Received ${suggestions.length} suggestions from Supabase',
         );
-        suggestions.forEach(
-          (habit) => print('  - ${habit.name} (${habit.categoryId})'),
-        );
+        // suggestions.forEach(
+        //   (habit) => print('  - ${habit.name} (${habit.categoryId})'),
+        // );
 
         if (state is HabitLoaded) {
           final currentState = state as HabitLoaded;
@@ -299,18 +329,33 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
     LoadDashboardHabits event,
     Emitter<HabitState> emit,
   ) async {
+    print('🔍 BLOC DEBUG: Loading dashboard habits for user: ${event.userId}');
     emit(const HabitLoading());
 
     final params = GetDashboardHabitsParams(userId: event.userId);
     final dashboardResult = await getDashboardHabitsUseCase(params);
     final categoriesResult = await getCategoriesUseCase(const NoParams());
+    
+    print('🔍 BLOC DEBUG: Dashboard result type: ${dashboardResult.runtimeType}');
+    print('🔍 BLOC DEBUG: Categories result type: ${categoriesResult.runtimeType}');
 
-    dashboardResult.fold((failure) => emit(HabitError(failure.toString())), (
+    dashboardResult.fold((failure) {
+      print('❌ BLOC ERROR: Dashboard habits failed: $failure');
+      emit(HabitError(failure.toString()));
+    }, (
       dashboardHabits,
     ) {
-      categoriesResult.fold((failure) => emit(HabitError(failure.toString())), (
+      print('🔍 BLOC DEBUG: Received ${dashboardHabits.length} dashboard habits');
+      // dashboardHabits.forEach((uh) => print('  - UserHabit: ${uh.id}, Habit: ${uh.habit?.name}, Completed: ${uh.isCompletedToday}'));
+      
+      categoriesResult.fold((failure) {
+        print('❌ BLOC ERROR: Categories failed: $failure');
+        emit(HabitError(failure.toString()));
+      }, (
         categories,
       ) {
+        print('🔍 BLOC DEBUG: Received ${categories.length} categories');
+        
         // dashboardHabits is already List<UserHabit>
         final userHabits = dashboardHabits;
 
@@ -327,6 +372,8 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
         final completedCount = userHabits
             .where((uh) => uh.isCompletedToday)
             .length;
+            
+        print('🔍 BLOC DEBUG: Extracted ${habits.length} habits, pending: $pendingCount, completed: $completedCount');
 
         List<Habit> currentHabitSuggestions = [];
         AnimationState currentAnimationState = AnimationState.idle;

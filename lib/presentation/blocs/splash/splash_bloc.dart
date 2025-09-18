@@ -6,6 +6,10 @@ import '../../../domain/usecases/user/has_completed_onboarding.dart';
 import '../../../domain/usecases/user/get_current_user.dart';
 import '../../../domain/usecases/user/save_user.dart';
 import '../../../core/usecases/usecase.dart';
+import '../habit/habit_bloc.dart';
+import '../habit/habit_event.dart';
+import '../auth/auth_bloc.dart';
+import '../auth/auth_state.dart' as app_auth;
 
 part 'splash_event.dart';
 part 'splash_state.dart';
@@ -15,12 +19,16 @@ class SplashBloc extends Bloc<SplashEvent, SplashState> {
   final HasCompletedOnboarding hasCompletedOnboarding;
   final GetCurrentUser getCurrentUser;
   final SaveUser saveUser;
+  final HabitBloc? habitBloc;
+  final AuthBloc? authBloc;
 
   SplashBloc({
     required this.isFirstTimeUser,
     required this.hasCompletedOnboarding,
     required this.getCurrentUser,
     required this.saveUser,
+    this.habitBloc,
+    this.authBloc,
   }) : super(SplashInitial()) {
     on<CheckAppStatus>(_onCheckAppStatus);
   }
@@ -29,60 +37,81 @@ class SplashBloc extends Bloc<SplashEvent, SplashState> {
     CheckAppStatus event,
     Emitter<SplashState> emit,
   ) async {
-    emit(SplashLoading());
-
     try {
-      // Simular retraso de pantalla de splash
-      await Future.delayed(const Duration(seconds: 2));
-
-      // 1. Verificar si hay una sesión activa en Supabase
-      final supabaseUser = Supabase.instance.client.auth.currentUser;
-      print('🔍 Verificando sesión: ${supabaseUser?.id}');
+      // Check if user has an active session
+      final session = Supabase.instance.client.auth.currentSession;
       
-      if (supabaseUser != null) {
-        print('✅ Sesión activa encontrada, navegando directamente al main');
-        
-        // Si hay sesión activa en Supabase, ir directo al main
-        if (!emit.isDone) emit(SplashNavigateToMain());
-        return;
+      if (session != null) {
+        // User is authenticated, preload data before navigating to main
+        await _preloadDataAndNavigateToMain(emit);
+      } else {
+        // User is not authenticated, check first time and onboarding
+        await _checkFirstTimeAndOnboarding(emit);
       }
-      
-      print('ℹ️ No hay sesión activa, verificando estado de onboarding');
-      await _checkFirstTimeAndOnboarding(emit);
-      
     } catch (e) {
-      print('❌ Error en verificación de estado: $e');
-      emit(SplashError(message: 'An unexpected error occurred: ${e.toString()}'));
+      // If there's an error, treat as not authenticated
+      await _checkFirstTimeAndOnboarding(emit);
     }
   }
   
+  Future<void> _preloadDataAndNavigateToMain(Emitter<SplashState> emit) async {
+    emit(SplashLoading());
+    
+    try {
+      // Simulate splash screen delay
+      await Future.delayed(const Duration(seconds: 1));
+      
+      // Preload habits data if blocs are available
+      if (habitBloc != null && authBloc != null) {
+        final authState = authBloc!.state;
+        if (authState is app_auth.AuthAuthenticated) {
+          final userId = authState.user.id;
+          
+          // Load habits and categories
+          habitBloc!.add(LoadDashboardHabits(userId: userId, date: DateTime.now()));
+          habitBloc!.add(LoadCategories());
+          
+          // Wait a bit for data to load
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      }
+      
+      emit(SplashNavigateToMain());
+    } catch (e) {
+      // If preloading fails, still navigate to main
+      emit(SplashNavigateToMain());
+    }
+  }
+
   Future<void> _checkFirstTimeAndOnboarding(Emitter<SplashState> emit) async {
-    final isFirstTimeResult = await isFirstTimeUser.call(const NoParams());
-    final hasCompletedOnboardingResult = await hasCompletedOnboarding.call(const NoParams());
-
-    // Verificar si el emitter sigue activo antes de emitir
-    if (emit.isDone) return;
-
-    isFirstTimeResult.fold(
-      (failure) {
-        if (!emit.isDone) emit(SplashError(message: failure.message));
-      },
-      (isFirstTime) {
-        hasCompletedOnboardingResult.fold(
-          (failure) {
-            if (!emit.isDone) emit(SplashError(message: failure.message));
-          },
-          (hasCompleted) {
-            if (!emit.isDone) {
-              if (isFirstTime || !hasCompleted) {
-                emit(SplashNavigateToOnboarding());
-              } else {
-                emit(SplashNavigateToWelcome());
-              }
+    try {
+      final isFirstTime = await isFirstTimeUser(NoParams());
+      
+      if (isFirstTime.isRight()) {
+        final isFirst = isFirstTime.getOrElse(() => false);
+        
+        if (isFirst) {
+          emit(SplashNavigateToOnboarding());
+        } else {
+          final hasOnboarded = await hasCompletedOnboarding(NoParams());
+          
+          if (hasOnboarded.isRight()) {
+            final completed = hasOnboarded.getOrElse(() => false);
+            
+            if (completed) {
+              emit(SplashNavigateToWelcome());
+            } else {
+              emit(SplashNavigateToOnboarding());
             }
-          },
-        );
-      },
-    );
+          } else {
+            emit(SplashNavigateToOnboarding());
+          }
+        }
+      } else {
+        emit(SplashNavigateToOnboarding());
+      }
+    } catch (e) {
+      emit(SplashError(message: 'Error checking app status: ${e.toString()}'));
+    }
   }
 }

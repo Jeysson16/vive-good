@@ -11,7 +11,7 @@ const Component = () => {
           <p className={styles.holaAnastacia2}>Hola, Jeysson!</p>
         </div>
         <div className={styles.ellipse452}>
-          <img src="../image/mfkb94no-pm6eq8q.png" className={styles.ellipse45} />
+          <img src="../image/mfosabuv-ycw5c4d.png" className={styles.ellipse45} />
         </div>
       </div>
       <div className={styles.frame416}>
@@ -31,7 +31,7 @@ const Component = () => {
         <div className={styles.tab}>
           <p className={styles.verProgreso}>Ver progreso</p>
           <img
-            src="../image/mfkb94nj-gu7wpqt.svg"
+            src="../image/mfosabur-3ku1ss3.svg"
             className={styles.arrowCaretRightSm}
           />
         </div>
@@ -50,7 +50,7 @@ const Component = () => {
             <div className={styles.frame12}>
               <div className={styles.uilWifiRouter}>
                 <img
-                  src="../image/mfkb94nj-qjqmg3g.svg"
+                  src="../image/mfosabur-2hk52xq.svg"
                   className={styles.bloodDrop11}
                 />
               </div>
@@ -70,7 +70,7 @@ const Component = () => {
             <div className={styles.frame122}>
               <div className={styles.ellipse3} />
               <img
-                src="../image/mfkb94nj-q5fa01z.svg"
+                src="../image/mfosabur-nvmhjs7.svg"
                 className={styles.a24PxCalendar}
               />
             </div>
@@ -91,7 +91,7 @@ const Component = () => {
             <div className={styles.frame123}>
               <div className={styles.ellipse3} />
               <img
-                src="../image/mfkb94nj-qjqmg3g.svg"
+                src="../image/mfosabur-2hk52xq.svg"
                 className={styles.bloodDrop112}
               />
             </div>
@@ -110,7 +110,7 @@ const Component = () => {
             <div className={styles.frame123}>
               <div className={styles.ellipse3} />
               <img
-                src="../image/mfkb94nj-qjqmg3g.svg"
+                src="../image/mfosabur-2hk52xq.svg"
                 className={styles.bloodDrop112}
               />
             </div>
@@ -135,7 +135,7 @@ const Component = () => {
               <div className={styles.frame124}>
                 <div className={styles.ellipse32} />
                 <img
-                  src="../image/mfkb94nj-bd7xu0l.svg"
+                  src="../image/mfosabur-oy6kq1f.svg"
                   className={styles.bloodDrop112}
                 />
               </div>
@@ -151,7 +151,7 @@ const Component = () => {
             <div className={styles.autoWrapper7}>
               <div className={styles.frame125}>
                 <div className={styles.ellipse32} />
-                <img src="../image/mfkb94nj-zk4bicv.svg" className={styles.frame} />
+                <img src="../image/mfosabur-a097khl.svg" className={styles.frame} />
               </div>
               <div className={styles.group15}>
                 <p className={styles.airConditioner}>Lights</p>
@@ -165,26 +165,26 @@ const Component = () => {
         <div className={styles.taskbar}>
           <div className={styles.subtract}>
             <div className={styles.autoWrapper8}>
-              <img src="../image/mfkb94nj-121cvpg.svg" className={styles.home} />
+              <img src="../image/mfosabur-pvlrnow.svg" className={styles.home} />
               <p className={styles.inicio}>Inicio</p>
             </div>
             <div className={styles.autoWrapper9}>
-              <img src="../image/mfkb94nj-0efp21q.svg" className={styles.grid5} />
+              <img src="../image/mfosabur-6qkq7bd.svg" className={styles.grid5} />
               <p className={styles.hBitos}>Hábitos</p>
             </div>
             <p className={styles.progreso}>Progreso</p>
             <div className={styles.autoWrapper10}>
               <img
-                src="../image/mfkb94nj-3gdn5yp.svg"
+                src="../image/mfosabur-aduhqr6.svg"
                 className={styles.profileCircle}
               />
               <p className={styles.perfil}>Perfil</p>
             </div>
-            <img src="../image/mfkb94nj-d2ocfxi.svg" className={styles.group} />
+            <img src="../image/mfosabur-ilhgwsa.svg" className={styles.group} />
           </div>
           <div className={styles.frame2}>
             <img
-              src="../image/mfkb94nj-jr2sctp.svg"
+              src="../image/mfosabur-g71bcoh.svg"
               className={styles.microphone2}
             />
           </div>

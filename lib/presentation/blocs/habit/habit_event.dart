@@ -46,21 +46,24 @@ class FilterHabitsByCategory extends HabitEvent {
 class LoadHabitSuggestions extends HabitEvent {
   final String? categoryId;
   final String userId;
+  final int? limit;
 
-  const LoadHabitSuggestions({this.categoryId, required this.userId});
+  const LoadHabitSuggestions({
+    this.categoryId,
+    required this.userId,
+    this.limit,
+  });
 
   @override
-  List<Object> get props => [categoryId, userId].whereType<Object>().toList();
+  List<Object> get props =>
+      [categoryId, userId, limit].whereType<Object>().toList();
 }
 
 class LoadDashboardHabits extends HabitEvent {
   final String userId;
   final DateTime date;
 
-  const LoadDashboardHabits({
-    required this.userId,
-    required this.date,
-  });
+  const LoadDashboardHabits({required this.userId, required this.date});
 
   @override
   List<Object> get props => [userId, date];

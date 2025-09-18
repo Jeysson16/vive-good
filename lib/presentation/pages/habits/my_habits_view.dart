@@ -493,7 +493,7 @@ class _MyHabitsViewState extends State<MyHabitsView>
             final matchesCategory = selectedCategoryId == null ||
                 true; // TODO: Implement category filtering with proper habit data
             final matchesSearch = searchQuery.isEmpty ||
-                habit.habitId.toLowerCase().contains(searchQuery.toLowerCase());
+                (habit.habitId != null && habit.habitId!.toLowerCase().contains(searchQuery.toLowerCase()));
             return matchesCategory && matchesSearch;
           }).toList();
 
@@ -521,7 +521,7 @@ class _MyHabitsViewState extends State<MyHabitsView>
                       index: index,
                       animation: _listAnimation,
                       onToggle: (isCompleted) => _onHabitToggle(userHabit.id, isCompleted),
-                      onEdit: () => _navigateToEditHabit(userHabit.habitId),
+                      onEdit: () => _navigateToEditHabit(userHabit.habitId ?? ''),
                     ),
                   );
                 },

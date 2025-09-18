@@ -3,8 +3,7 @@
 
 CREATE OR REPLACE FUNCTION get_dashboard_habits(
   p_user_id UUID,
-  p_date DATE DEFAULT CURRENT_DATE,
-  p_category_id UUID DEFAULT NULL
+  p_date DATE DEFAULT CURRENT_DATE
 )
 RETURNS TABLE (
   user_habit_id UUID,
@@ -27,7 +26,10 @@ RETURNS TABLE (
   completion_count_today INTEGER,
   last_completed_at TIMESTAMPTZ,
   streak_count INTEGER,
-  total_completions BIGINT
+  total_completions BIGINT,
+  calendar_event_id UUID,
+  event_start_time TIME,
+  event_end_time TIME
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -67,11 +69,44 @@ BEGIN
     COALESCE(streak_data.streak_count, 0)::INTEGER as streak_count,
     
     -- Total completions
-    COALESCE(total_stats.total_completions, 0) as total_completions
+    COALESCE(total_stats.total_completions, 0) as total_completions,
+    
+    -- Calendar event information
+    ce.id as calendar_event_id,
+    ce.start_time as event_start_time,
+    ce.end_time as event_end_time
     
   FROM user_habits uh
   INNER JOIN habits h ON uh.habit_id = h.id
   LEFT JOIN categories c ON h.category_id = c.id
+  
+  -- Inner join with calendar_events to show only habits scheduled for the specific date
+  INNER JOIN calendar_events ce ON (
+    ce.user_id = p_user_id 
+    AND ce.habit_id = h.id
+    AND (
+      -- Direct date match
+      ce.start_date = p_date
+      OR (
+        -- Recurring events
+        ce.recurrence_type IS NOT NULL 
+        AND ce.recurrence_type != 'none'
+        AND ce.start_date <= p_date
+        AND (ce.recurrence_end_date IS NULL OR ce.recurrence_end_date >= p_date)
+        AND (
+          -- Daily recurrence
+          (ce.recurrence_type = 'daily' AND (p_date - ce.start_date) % COALESCE(ce.recurrence_interval, 1) = 0)
+          OR
+          -- Weekly recurrence
+          (ce.recurrence_type = 'weekly' AND EXTRACT(DOW FROM p_date)::INTEGER = ANY(ce.recurrence_days))
+          OR
+          -- Monthly recurrence
+          (ce.recurrence_type = 'monthly' AND EXTRACT(DAY FROM p_date) = EXTRACT(DAY FROM ce.start_date))
+        )
+      )
+    )
+    AND ce.is_completed = false  -- Only show pending events
+  )
   
   -- Today's completion logs
   LEFT JOIN (
@@ -118,7 +153,6 @@ BEGIN
   WHERE 
     uh.user_id = p_user_id
     AND uh.is_active = true
-    AND (p_category_id IS NULL OR h.category_id = p_category_id)
     AND (
       uh.end_date IS NULL 
       OR uh.end_date >= p_date
@@ -126,14 +160,15 @@ BEGIN
     AND uh.start_date <= p_date
   
   ORDER BY 
+    ce.start_time ASC NULLS LAST,
     uh.scheduled_time ASC NULLS LAST,
     h.name ASC;
 END;
 $$;
 
 -- Grant permissions
-GRANT EXECUTE ON FUNCTION get_dashboard_habits(UUID, DATE, UUID) TO anon;
-GRANT EXECUTE ON FUNCTION get_dashboard_habits(UUID, DATE, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_dashboard_habits(UUID, DATE) TO anon;
+GRANT EXECUTE ON FUNCTION get_dashboard_habits(UUID, DATE) TO authenticated;
 
 -- Comment
-COMMENT ON FUNCTION get_dashboard_habits(UUID, DATE, UUID) IS 'Obtiene hábitos del usuario para el dashboard con información completa de progreso y estadísticas';
+COMMENT ON FUNCTION get_dashboard_habits(UUID, DATE) IS 'Obtiene todos los hábitos del usuario para el dashboard con información completa de progreso y estadísticas, filtrados por calendario y mostrando solo eventos pendientes del día específico';

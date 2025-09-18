@@ -5,15 +5,12 @@ import '../../../core/routes/app_routes.dart';
 class MainHeader extends StatelessWidget {
   final String userName;
 
-  const MainHeader({
-    super.key,
-    required this.userName,
-  });
+  const MainHeader({super.key, required this.userName});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.only(top: 10, left: 10, right: 10, bottom: 5),
       child: Row(
         children: [
           Expanded(
@@ -31,10 +28,7 @@ class MainHeader extends StatelessWidget {
                 const SizedBox(height: 4),
                 const Text(
                   '¿Cómo te sientes hoy?',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF6B7280),
-                  ),
+                  style: TextStyle(fontSize: 16, color: Color(0xFF6B7280)),
                 ),
               ],
             ),
@@ -57,41 +51,6 @@ class MainHeader extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-            ),
-          ),
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF4CAF50),
-              border: Border.all(
-                color: const Color(0xFFE5E7EB),
-                width: 2,
-              ),
-            ),
-            child: ClipOval(
-              child: Image.network(
-                'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
-                width: 50,
-                height: 50,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 50,
-                    height: 50,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFF4CAF50),
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  );
-                },
               ),
             ),
           ),

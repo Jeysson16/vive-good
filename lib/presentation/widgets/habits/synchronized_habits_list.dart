@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../domain/entities/category.dart' as entities;
 import '../../../domain/entities/habit.dart';
 import '../../../domain/entities/user_habit.dart';
-import '../../blocs/category_scroll/category_scroll_bloc.dart';
-import '../../blocs/category_scroll/category_scroll_event.dart';
+import '../common/responsive_dimensions.dart';
+import '../main/habit_item.dart';
 
 class SynchronizedHabitsList extends StatefulWidget {
   final List<UserHabit> userHabits;
@@ -95,30 +94,112 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
     if (categoryId == null) return widget.userHabits;
 
     return widget.userHabits.where((userHabit) {
-      final habit = widget.habits.firstWhere(
-        (h) => h.id == userHabit.habitId,
-        orElse: () => Habit(
-          id: '',
-          name: '',
-          description: '',
-          categoryId: null,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        ),
-      );
+      final habit = _getHabitForUserHabit(userHabit);
       return habit.categoryId == categoryId;
     }).toList();
+  }
+
+  Habit _getHabitForUserHabit(UserHabit userHabit) {
+    // Debug: Verificar si el habit está llegando correctamente
+    print('🔍 DEBUG _getHabitForUserHabit: userHabit.id = ${userHabit.id}');
+    print(
+      '🔍 DEBUG _getHabitForUserHabit: userHabit.habit = ${userHabit.habit}',
+    );
+    print(
+      '🔍 DEBUG _getHabitForUserHabit: userHabit.habitId = ${userHabit.habitId}',
+    );
+    print(
+      '🔍 DEBUG _getHabitForUserHabit: userHabit.customName = ${userHabit.customName}',
+    );
+
+    // Si el userHabit tiene un habit asociado (del stored procedure), usarlo
+    if (userHabit.habit != null) {
+      print(
+        '🔍 DEBUG _getHabitForUserHabit: Usando habit del stored procedure',
+      );
+      print(
+        '🔍 DEBUG _getHabitForUserHabit: habit.iconName = ${userHabit.habit!.iconName}',
+      );
+      print(
+        '🔍 DEBUG _getHabitForUserHabit: habit.iconColor = ${userHabit.habit!.iconColor}',
+      );
+      print(
+        '🔍 DEBUG _getHabitForUserHabit: habit.categoryId = ${userHabit.habit!.categoryId}',
+      );
+      return userHabit.habit!;
+    }
+
+    // Si no tiene habit asociado pero tiene customName, crear un habit personalizado
+    if (userHabit.customName != null && userHabit.customName!.isNotEmpty) {
+      return Habit(
+        id: userHabit.habitId ?? userHabit.id,
+        name: userHabit.customName!,
+        description: userHabit.customDescription ?? '',
+        categoryId: '',
+        iconName: 'star',
+        iconColor: '#6366F1',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+    }
+
+    // Fallback: buscar en la lista de hábitos predefinidos
+    if (userHabit.habitId != null) {
+      try {
+        return widget.habits.firstWhere(
+          (habit) => habit.id == userHabit.habitId,
+        );
+      } catch (e) {
+        // Si no se encuentra, crear un hábito genérico
+        return Habit(
+          id: userHabit.habitId!,
+          name: 'Hábito personalizado',
+          description: '',
+          categoryId: '',
+          iconName: 'star',
+          iconColor: '#6366F1',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+      }
+    }
+
+    // Último fallback
+    return Habit(
+      id: userHabit.id,
+      name: 'Hábito personalizado',
+      description: '',
+      categoryId: '',
+      iconName: 'star',
+      iconColor: '#6366F1',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  entities.Category _getCategoryForHabit(Habit habit) {
+    // Buscar la categoría correspondiente al hábito
+    try {
+      return widget.categories.firstWhere(
+        (category) => category.id == habit.categoryId,
+      );
+    } catch (e) {
+      // Fallback a una categoría genérica si no se encuentra
+      return entities.Category(
+        id: 'default',
+        name: 'General',
+        iconName: 'track_changes',
+        color: '#6366F1',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     // Agrupar hábitos por categoría
     final groupedHabits = <String?, List<UserHabit>>{};
-
-    // Agregar categoría "Todos" si hay hábitos
-    if (widget.userHabits.isNotEmpty) {
-      groupedHabits[null] = widget.userHabits;
-    }
 
     // Agrupar por categorías específicas
     for (final category in widget.categories) {
@@ -128,154 +209,63 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
       }
     }
 
+    final containerPadding = ResponsiveDimensions.getCardPadding(context);
+    final categorySpacing =
+        ResponsiveDimensions.getVerticalSpacing(context) * 1.5;
+    final titleBottomPadding = ResponsiveDimensions.getVerticalSpacing(context);
+    final categoryTitleFontSize = ResponsiveDimensions.getFontSize(
+      context,
+      type: 'heading',
+    );
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: EdgeInsets.symmetric(horizontal: containerPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: groupedHabits.entries.map((entry) {
           final categoryId = entry.key;
           final habits = entry.value;
-          final categoryName = categoryId == null
-              ? 'Todos los hábitos'
-              : widget.categories.firstWhere((c) => c.id == categoryId).name;
+          final categoryName = widget.categories
+              .firstWhere((c) => c.id == categoryId)
+              .name;
 
           return Container(
             key: _categoryKeys[categoryId ?? 'all'],
-            margin: const EdgeInsets.only(bottom: 24),
+            margin: EdgeInsets.only(bottom: categorySpacing),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Título de la categoría
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: EdgeInsets.only(bottom: titleBottomPadding),
                   child: Text(
                     categoryName,
-                    style: const TextStyle(
-                      fontSize: 20,
+                    style: TextStyle(
+                      fontSize: categoryTitleFontSize,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1F2937),
+                      color: const Color(0xFF1F2937),
                     ),
                   ),
                 ),
 
                 // Lista de hábitos de la categoría
                 ...habits.map((userHabit) {
-                  final habit = widget.habits.firstWhere(
-                    (h) => h.id == userHabit.habitId,
-                    orElse: () => Habit(
-                      id: '',
-                      name: 'Hábito no encontrado',        
-                      description: '',
-                      categoryId: null,
-                      createdAt: DateTime.now(),
-                      updatedAt: DateTime.now(),
-                    ),
+                  final habit = _getHabitForUserHabit(userHabit);
+                  final category = _getCategoryForHabit(habit);
+                  return HabitItem(
+                    userHabit: userHabit,
+                    habit: habit,
+                    category: category,
+                    isCompleted: userHabit.isCompletedToday,
+                    isSelected:
+                        false, // Default value since this widget doesn't handle selection
+                    onTap: () => widget.onHabitToggle(userHabit),
                   );
-
-                  return _buildHabitCard(userHabit, habit);
                 }).toList(),
               ],
             ),
           );
         }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildHabitCard(UserHabit userHabit, Habit habit) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Checkbox
-          GestureDetector(
-            onTap: () => widget.onHabitToggle(userHabit),
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: userHabit.isCompletedToday
-                    ? const Color(0xFF219540)
-                    : Colors.transparent,
-                border: Border.all(
-                  color: userHabit.isCompletedToday
-                      ? const Color(0xFF219540)
-                      : const Color(0xFFD1D5DB),
-                  width: 2,
-                ),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: userHabit.isCompletedToday
-                  ? const Icon(Icons.check, color: Colors.white, size: 16)
-                  : null,
-            ),
-          ),
-
-          const SizedBox(width: 16),
-
-          // Contenido del hábito
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  habit.name,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: userHabit.isCompletedToday
-                        ? const Color(0xFF6B7280)
-                        : const Color(0xFF1F2937),
-                    decoration: userHabit.isCompletedToday
-                        ? TextDecoration.lineThrough
-                        : null,
-                  ),
-                ),
-                if (habit.description?.isNotEmpty == true) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    habit.description!,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          // Indicador de racha
-          if (userHabit.streakCount > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF219540).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${userHabit.streakCount} días',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF219540),
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }

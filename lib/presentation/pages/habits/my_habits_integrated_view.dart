@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../domain/entities/category.dart';
 import '../../../domain/entities/habit.dart';
 import '../../../domain/entities/user_habit.dart';
 import '../../blocs/category_scroll/category_scroll_bloc.dart';
@@ -9,8 +11,9 @@ import '../../blocs/category_scroll/category_scroll_event.dart';
 import '../../blocs/habit/habit_bloc.dart';
 import '../../blocs/habit/habit_event.dart';
 import '../../blocs/habit/habit_state.dart';
-import '../../widgets/habits/animated_category_tabs.dart';
+import '../../widgets/animated_category_tabs_with_line.dart';
 import '../../widgets/habits/synchronized_habits_list.dart';
+import '../../widgets/responsive_dimensions.dart';
 import 'new_habit_screen.dart';
 
 class MyHabitsIntegratedView extends StatefulWidget {
@@ -30,11 +33,13 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   bool isSuggestionsExpanded = false;
   bool _isLoading = false;
   bool _hasUserInteracted = false;
-  String selectedSuggestionCategory = 'Alimentación';
   late AnimationController _suggestionsAnimationController;
   late Animation<double> _suggestionsAnimation;
   late PageController _pageController;
+  late PageController _suggestionsPageController;
   int _currentSuggestionIndex = 0;
+  late AnimationController _bounceAnimationController;
+  late Animation<double> _bounceAnimation;
 
   @override
   void initState() {
@@ -47,7 +52,29 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       parent: _suggestionsAnimationController,
       curve: Curves.easeInOut,
     );
+    _bounceAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _bounceAnimation = CurvedAnimation(
+      parent: _bounceAnimationController,
+      curve: Curves.elasticOut,
+    );
     _pageController = PageController();
+    _suggestionsPageController = PageController();
+
+    // Agregar listener simple para PageView de sugerencias
+    _suggestionsPageController.addListener(() {
+      if (_suggestionsPageController.hasClients) {
+        final page = _suggestionsPageController.page?.round() ?? 0;
+        if (page != _currentSuggestionIndex) {
+          setState(() {
+            _currentSuggestionIndex = page;
+          });
+        }
+      }
+    });
+
     // Inicializar la animación en estado contraído por defecto
     _suggestionsAnimationController.value = 0.0;
     isSuggestionsExpanded = false;
@@ -57,7 +84,9 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   @override
   void dispose() {
     _suggestionsAnimationController.dispose();
+    _bounceAnimationController.dispose();
     _pageController.dispose();
+    _suggestionsPageController.dispose();
     super.dispose();
   }
 
@@ -70,6 +99,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       final userId = await _tryGetUserIdFromSupabase();
       if (userId != null) {
         context.read<HabitBloc>().add(LoadUserHabits(userId: userId));
+        // Cargar sugerencias una sola vez
+        await _initializeSuggestionCategory();
         print('DEBUG: Loading suggestions for user: $userId'); // Debug log
       } else {
         print('DEBUG: No user ID found, cannot load suggestions'); // Debug log
@@ -105,18 +136,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
           LoadDashboardHabits(userId: supabaseUserId, date: DateTime.now()),
         );
         context.read<HabitBloc>().add(LoadCategories());
-        print(
-          '🔄 DEBUG: Enviando evento LoadHabitSuggestions para userId: $supabaseUserId',
-        );
-        final currentHabitState = context.read<HabitBloc>().state;
-        final String? categoryId = currentHabitState is HabitLoaded
-            ? currentHabitState.selectedCategoryId
-            : null;
 
-        context.read<HabitBloc>().add(
-          LoadHabitSuggestions(userId: supabaseUserId, categoryId: categoryId),
-        );
-        print('🔄 DEBUG: Evento LoadHabitSuggestions enviado correctamente');
+        // Las sugerencias se cargarán cuando sea necesario
         return supabaseUserId;
       } else {
         print('❌ No se pudo obtener ID de usuario desde Supabase');
@@ -152,6 +173,36 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     setState(() {
       showSuggestions = !showSuggestions;
     });
+  }
+
+  Future<void> _initializeSuggestionCategory() async {
+    setState(() {
+      _currentSuggestionIndex = 0;
+    });
+
+    // Cargar TODAS las sugerencias de Supabase una sola vez (sin filtro de categoría)
+    print(
+      '🔍 SUPABASE DEBUG: Cargando TODAS las sugerencias sin filtro de categoría',
+    );
+    final supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (supabaseUserId != null) {
+      context.read<HabitBloc>().add(
+        LoadHabitSuggestions(
+          userId: supabaseUserId,
+          categoryId: null, // Sin filtro de categoría - cargar todas
+          limit: 100, // Límite más alto para obtener todas las sugerencias
+        ),
+      );
+    }
+
+    // Asegurar que el PageController esté en la posición correcta
+    if (_suggestionsPageController.hasClients) {
+      _suggestionsPageController.animateToPage(
+        0,
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   @override
@@ -315,42 +366,13 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                 SizeTransition(
                   sizeFactor: _suggestionsAnimation,
                   child: Container(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
                     child: Column(
                       children: [
-                        const Divider(color: Color(0xFFE5E7EB)),
-                        const SizedBox(height: 16),
-                        // Category tabs
-                        _buildSuggestionCategoryTabs(),
-                        const SizedBox(height: 16),
-                        // Debug: Print suggestions count
-                        Builder(
-                          builder: (context) {
-                            print(
-                              '🔍 UI DEBUG: habitSuggestions.length = ${state.habitSuggestions.length}',
-                            );
-                            state.habitSuggestions.forEach((suggestion) {
-                              print('  - UI: ${suggestion.name}');
-                            });
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                        // Texto introductorio
-                        const Text(
-                          'Podrías beneficiarte de este hábito:',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF374151),
-                          ),
-                        ),
-
-                        const SizedBox(height: 12),
-
                         // Sugerencia destacada única
                         _buildFeaturedSuggestion(),
 
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 6),
 
                         // Indicadores de puntos (slider)
                         _buildDotIndicators(),
@@ -406,6 +428,9 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       print('DEBUG: Starting forward animation');
       _suggestionsAnimationController.forward().then((_) {
         print('DEBUG: Forward animation completed');
+        // Activar animación de rebote después de expandir
+        _bounceAnimationController.reset();
+        _bounceAnimationController.forward();
       });
     } else {
       print('DEBUG: Starting reverse animation');
@@ -425,7 +450,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
               _buildSearchBar(),
 
               // Animated Category tabs with scroll
-              AnimatedCategoryTabs(
+              AnimatedCategoryTabsWithLine(
                 categories: habitState.categories,
                 selectedCategoryId: selectedCategoryId,
                 onCategorySelected: _onCategorySelected,
@@ -1082,247 +1107,358 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   }
 
   Widget _buildFeaturedSuggestion() {
-    // Múltiples sugerencias por categoría
-    final suggestions = {
-      'Alimentación': [
-        {
-          'title': 'Beber 8 vasos de agua',
-          'description': 'Mantente hidratado todo el día',
-          'icon': Icons.local_drink,
-          'color': const Color(0xFF10B981),
-        },
-        {
-          'title': 'Comer 5 frutas y verduras',
-          'description': 'Nutrición balanceada diaria',
-          'icon': Icons.eco,
-          'color': const Color(0xFF10B981),
-        },
-        {
-          'title': 'Evitar comida procesada',
-          'description': 'Alimentación más natural',
-          'icon': Icons.no_food,
-          'color': const Color(0xFF10B981),
-        },
-      ],
-      'Actividad física': [
-        {
-          'title': 'Caminar 30 minutos',
-          'description': 'Ejercicio cardiovascular básico',
-          'icon': Icons.directions_walk,
-          'color': const Color(0xFF3B82F6),
-        },
-        {
-          'title': 'Hacer 20 flexiones',
-          'description': 'Fortalece el tren superior',
-          'icon': Icons.fitness_center,
-          'color': const Color(0xFF3B82F6),
-        },
-        {
-          'title': 'Estirar 10 minutos',
-          'description': 'Mejora la flexibilidad',
-          'icon': Icons.self_improvement,
-          'color': const Color(0xFF3B82F6),
-        },
-      ],
-      'Sueño': [
-        {
-          'title': 'Dormir 8 horas',
-          'description': 'Descanso reparador para tu salud',
-          'icon': Icons.bedtime,
-          'color': const Color(0xFF8B5CF6),
-        },
-        {
-          'title': 'Acostarse antes de las 11 PM',
-          'description': 'Rutina de sueño saludable',
-          'icon': Icons.schedule,
-          'color': const Color(0xFF8B5CF6),
-        },
-        {
-          'title': 'Evitar pantallas 1 hora antes',
-          'description': 'Mejor calidad de sueño',
-          'icon': Icons.phone_android,
-          'color': const Color(0xFF8B5CF6),
-        },
-      ],
-    };
+    final habitState = context.read<HabitBloc>().state;
+    if (habitState is! HabitLoaded) {
+      return const SizedBox(height: 110);
+    }
 
-    final currentSuggestions =
-        suggestions[selectedSuggestionCategory] ?? suggestions['Alimentación']!;
+    final allSuggestions = habitState.habitSuggestions;
 
-    return Container(
-      height: 100,
-      child: PageView.builder(
-        controller: _pageController,
-        onPageChanged: (index) {
-          setState(() {
-            _currentSuggestionIndex = index;
-          });
-        },
-        itemCount: currentSuggestions.length,
-        itemBuilder: (context, index) {
-          final suggestion = currentSuggestions[index];
-          return Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFFDAF5E9),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: (suggestion['color'] as Color).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    suggestion['icon'] as IconData,
-                    color: suggestion['color'] as Color,
-                    size: 24,
+    if (allSuggestions.isEmpty) {
+      return Container(
+        height: 110,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Text(
+            'No hay sugerencias disponibles',
+            style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+          ),
+        ),
+      );
+    }
+
+    // Verificar que la animación esté inicializada
+    if (!_bounceAnimationController.isCompleted &&
+        !_bounceAnimationController.isAnimating) {
+      _bounceAnimationController.forward();
+    }
+
+    return AnimatedBuilder(
+      animation: _bounceAnimation,
+      builder: (context, child) {
+        // Verificar que el controlador esté inicializado
+        if (!mounted) {
+          return const SizedBox(height: 100);
+        }
+
+        return Container(
+          height: 110,
+          child: PageView.builder(
+            controller: _suggestionsPageController,
+            itemCount: allSuggestions.length,
+            padEnds: false,
+            pageSnapping: true,
+            onPageChanged: (index) {
+              setState(() {
+                _currentSuggestionIndex = index;
+              });
+              // print('🔍 SUPABASE DEBUG: PageView changed to index: $index');
+            },
+            itemBuilder: (context, index) {
+              final habit = allSuggestions[index];
+              // print(
+              //   '🔍 SUPABASE DEBUG: Building suggestion card for: ${habit.name} (categoryId: ${habit.categoryId})',
+              // );
+
+              // Obtener información de la categoría
+              String categoryName = 'General';
+              final category = habitState.categories
+                  .cast<Category?>()
+                  .firstWhere(
+                    (cat) => cat?.id == habit.categoryId,
+                    orElse: () => habitState.categories.isNotEmpty
+                        ? habitState.categories.first
+                        : null,
+                  );
+              if (category != null) {
+                categoryName = category.name;
+              }
+
+              final iconData = _getIconForCategory(categoryName);
+              final colorData = _getColorForCategory(categoryName);
+
+              // Aplicar animación de rebote con delay escalonado
+              final animationDelay = (index * 0.1).clamp(0.0, 1.0);
+              final bounceValue = Curves.elasticOut.transform(
+                (_bounceAnimation.value - animationDelay).clamp(0.0, 1.0),
+              );
+
+              return Transform.scale(
+                scale: 0.8 + (bounceValue * 0.2),
+                child: Transform.translate(
+                  offset: Offset(0, -10 * bounceValue),
+                  child: Container(
+                    width: MediaQuery.of(context).size.width - 32,
+                    margin: ResponsiveDimensions.getCardMargin(context),
+                    padding: ResponsiveDimensions.getCardPadding(context),
+                    constraints: BoxConstraints(
+                      minHeight: ResponsiveDimensions.getCardMinHeight(context),
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDAF5E9),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05 * bounceValue),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: colorData.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(iconData, color: colorData, size: 20),
+                            ),
+                            SizedBox(
+                              width: ResponsiveDimensions.getSpacing(
+                                context,
+                                12,
+                              ),
+                            ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    categoryName,
+                                    style: TextStyle(
+                                      fontSize:
+                                          ResponsiveDimensions.getFontSize(
+                                            context,
+                                            12,
+                                          ),
+                                      color: colorData,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    habit.name,
+                                    style: TextStyle(
+                                      fontSize:
+                                          ResponsiveDimensions.getFontSize(
+                                            context,
+                                            14,
+                                          ),
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF111827),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(
+                          height: ResponsiveDimensions.getSpacing(context, 8),
+                        ),
+                        Text(
+                          habit.description ??
+                              'Hábito recomendado para mejorar tu bienestar',
+                          style: TextStyle(
+                            fontSize: ResponsiveDimensions.getFontSize(
+                              context,
+                              12,
+                            ),
+                            color: const Color(0xFF6B7280),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        suggestion['title'] as String,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF111827),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        suggestion['description'] as String,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF6B7280),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
   Widget _buildDotIndicators() {
-    // Obtener el número de sugerencias para la categoría actual
-    final suggestions = {'Alimentación': 3, 'Actividad física': 3, 'Sueño': 3};
+    final habitState = context.read<HabitBloc>().state;
+    if (habitState is! HabitLoaded) {
+      return const SizedBox.shrink();
+    }
 
-    final currentSuggestionsCount =
-        suggestions[selectedSuggestionCategory] ?? 3;
+    final suggestions = habitState.habitSuggestions;
+    final totalSuggestions = suggestions.length;
+
+    if (totalSuggestions == 0) {
+      return const SizedBox.shrink();
+    }
+
+    // Usar el índice actual del PageView
+    final currentIndex = _currentSuggestionIndex.clamp(0, totalSuggestions - 1);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(currentSuggestionsCount, (index) {
-        final isActive = _currentSuggestionIndex == index;
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 4),
-          width: 8,
+      children: List.generate(totalSuggestions, (index) {
+        final isActive = currentIndex == index;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          width: isActive ? 12 : 8,
           height: 8,
           decoration: BoxDecoration(
             color: isActive ? const Color(0xFF219540) : const Color(0xFFE5E7EB),
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(4),
           ),
         );
       }),
     );
   }
 
-  Map<String, dynamic>? _getCurrentSuggestion() {
-    final suggestions = {
-      'Alimentación': [
-        {
-          'title': 'Beber 8 vasos de agua al día',
-          'description': 'Mantente hidratado',
-          'icon': Icons.local_drink,
-          'color': const Color(0xFF3B82F6),
-          'category': 'Alimentación',
-        },
-        {
-          'title': 'Comer 5 porciones de frutas y verduras',
-          'description': 'Nutrición balanceada',
-          'icon': Icons.eco,
-          'color': const Color(0xFF10B981),
-          'category': 'Alimentación',
-        },
-        {
-          'title': 'Evitar comida procesada',
-          'description': 'Alimentación natural',
-          'icon': Icons.no_food,
-          'color': const Color(0xFFEF4444),
-          'category': 'Alimentación',
-        },
-      ],
-      'Actividad física': [
-        {
-          'title': 'Caminar 30 minutos diarios',
-          'description': 'Ejercicio cardiovascular',
-          'icon': Icons.directions_walk,
-          'color': const Color(0xFFF59E0B),
-          'category': 'Actividad física',
-        },
-        {
-          'title': 'Hacer ejercicios de estiramiento',
-          'description': 'Flexibilidad y movilidad',
-          'icon': Icons.self_improvement,
-          'color': const Color(0xFF8B5CF6),
-          'category': 'Actividad física',
-        },
-        {
-          'title': 'Subir escaleras en lugar del ascensor',
-          'description': 'Actividad física diaria',
-          'icon': Icons.stairs,
-          'color': const Color(0xFF06B6D4),
-          'category': 'Actividad física',
-        },
-      ],
-      'Sueño': [
-        {
-          'title': 'Dormir 8 horas diarias',
-          'description': 'Descanso reparador',
-          'icon': Icons.bedtime,
-          'color': const Color(0xFF6366F1),
-          'category': 'Sueño',
-        },
-        {
-          'title': 'Evitar pantallas antes de dormir',
-          'description': 'Higiene del sueño',
-          'icon': Icons.phone_android,
-          'color': const Color(0xFFEC4899),
-          'category': 'Sueño',
-        },
-        {
-          'title': 'Mantener horario regular de sueño',
-          'description': 'Mejor calidad de sueño',
-          'icon': Icons.schedule,
-          'color': const Color(0xFF8B5CF6),
-          'category': 'Sueño',
-        },
-      ],
-    };
+  Future<Map<String, dynamic>?> _getCurrentSuggestion() async {
+    final habitState = context.read<HabitBloc>().state;
+    if (habitState is HabitLoaded) {
+      // Filtrar sugerencias rechazadas
+      final filteredSuggestions = await _filterRejectedSuggestions(
+        habitState.habitSuggestions,
+      );
 
-    final currentSuggestions = suggestions[selectedSuggestionCategory];
-    if (currentSuggestions != null &&
-        _currentSuggestionIndex < currentSuggestions.length) {
-      return currentSuggestions[_currentSuggestionIndex];
+      if (filteredSuggestions.isNotEmpty &&
+          _currentSuggestionIndex < filteredSuggestions.length) {
+        final habit = filteredSuggestions[_currentSuggestionIndex];
+
+        // Obtener el nombre de la categoría
+        String categoryName = 'General';
+        final category = habitState.categories.cast<Category?>().firstWhere(
+          (cat) => cat?.id == habit.categoryId,
+          orElse: () => habitState.categories.isNotEmpty
+              ? habitState.categories.first
+              : null,
+        );
+        if (category != null) {
+          categoryName = category.name;
+        }
+
+        return {
+          'title': habit.name,
+          'description': habit.description ?? 'Hábito recomendado',
+          'icon': _getIconForCategory(categoryName),
+          'color': _getColorForCategory(categoryName),
+          'category': categoryName,
+        };
+      }
     }
+
+    print('🔍 SUPABASE DEBUG: No suggestions available');
     return null;
   }
 
-  void _navigateToNewHabit({bool prefillData = false}) {
-    final currentSuggestion = _getCurrentSuggestion();
+  // Métodos para manejar sugerencias rechazadas
+  Future<void> _saveRejectedSuggestion(
+    String habitName,
+    String category,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rejectedKey =
+          '${habitName.toLowerCase()}_${category.toLowerCase()}';
+
+      // Obtener lista actual de sugerencias rechazadas
+      List<String> rejectedSuggestions =
+          prefs.getStringList('rejected_suggestions') ?? [];
+
+      // Agregar nueva sugerencia rechazada si no existe
+      if (!rejectedSuggestions.contains(rejectedKey)) {
+        rejectedSuggestions.add(rejectedKey);
+        await prefs.setStringList('rejected_suggestions', rejectedSuggestions);
+        print('🚫 Sugerencia rechazada guardada: $rejectedKey');
+      }
+    } catch (e) {
+      print('❌ Error al guardar sugerencia rechazada: $e');
+    }
+  }
+
+  Future<List<String>> _loadRejectedSuggestions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList('rejected_suggestions') ?? [];
+    } catch (e) {
+      print('❌ Error al cargar sugerencias rechazadas: $e');
+      return [];
+    }
+  }
+
+  Future<List<Habit>> _filterRejectedSuggestions(
+    List<Habit> suggestions,
+  ) async {
+    final rejectedSuggestions = await _loadRejectedSuggestions();
+
+    return suggestions.where((habit) {
+      // Obtener el nombre de la categoría para este hábito
+      final habitState = context.read<HabitBloc>().state;
+      String categoryName = 'General';
+
+      if (habitState is HabitLoaded) {
+        final category = habitState.categories.cast<Category?>().firstWhere(
+          (cat) => cat?.id == habit.categoryId,
+          orElse: () => null,
+        );
+        if (category != null) {
+          categoryName = category.name;
+        }
+      }
+
+      final habitKey =
+          '${habit.name.toLowerCase()}_${categoryName.toLowerCase()}';
+      return !rejectedSuggestions.contains(habitKey);
+    }).toList();
+  }
+
+  IconData _getIconForCategory(String categoryName) {
+    switch (categoryName.toLowerCase()) {
+      case 'alimentación':
+        return Icons.restaurant;
+      case 'actividad física':
+        return Icons.fitness_center;
+      case 'sueño':
+        return Icons.bedtime;
+      case 'bienestar mental':
+        return Icons.psychology;
+      default:
+        return Icons.star;
+    }
+  }
+
+  Color _getColorForCategory(String categoryName) {
+    switch (categoryName.toLowerCase()) {
+      case 'alimentación':
+        return const Color(0xFF10B981);
+      case 'actividad física':
+        return const Color(0xFF3B82F6);
+      case 'sueño':
+        return const Color(0xFF8B5CF6);
+      case 'bienestar mental':
+        return const Color(0xFFEC4899);
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  Future<void> _navigateToNewHabit({bool prefillData = false}) async {
+    final currentSuggestion = await _getCurrentSuggestion();
 
     Navigator.push(
       context,
@@ -1346,26 +1482,35 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   }
 
   String? _getCategoryIdByName(String categoryName) {
-    // Mapeo básico de nombres de categoría a IDs
-    // En una implementación real, esto debería venir de la base de datos
-    switch (categoryName) {
-      case 'Alimentación':
-        return '1'; // ID de la categoría Alimentación
-      case 'Actividad física':
-        return '2'; // ID de la categoría Actividad física
-      case 'Sueño':
-        return '3'; // ID de la categoría Sueño
-      default:
-        return null;
+    final habitState = context.read<HabitBloc>().state;
+    if (habitState is HabitLoaded) {
+      final category = habitState.categories.cast<Category?>().firstWhere(
+        (cat) => cat?.name.toLowerCase() == categoryName.toLowerCase(),
+        orElse: () => null,
+      );
+      return category?.id;
     }
+    return null;
   }
 
   Map<String, dynamic> _habitToSuggestionMap(Habit habit) {
+    final habitState = context.read<HabitBloc>().state;
+    String categoryName = 'General';
+
+    if (habitState is HabitLoaded) {
+      final category = habitState.categories.cast<Category?>().firstWhere(
+        (cat) => cat?.id == habit.categoryId,
+        orElse: () => null,
+      );
+      if (category != null) {
+        categoryName = category.name;
+      }
+    }
+
     return {
       'title': habit.name,
       'description': habit.description ?? '',
-      'category':
-          'General', // Default category since Habit entity doesn't have category name
+      'category': categoryName,
     };
   }
 
@@ -1437,8 +1582,17 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       children: [
         Expanded(
           child: OutlinedButton(
-            onPressed: () {
-              // Lógica de rechazar - simplemente cerrar las sugerencias
+            onPressed: () async {
+              // Guardar sugerencia rechazada antes de cerrar
+              final currentSuggestion = await _getCurrentSuggestion();
+              if (currentSuggestion != null) {
+                await _saveRejectedSuggestion(
+                  currentSuggestion['title'] as String,
+                  currentSuggestion['category'] as String,
+                );
+              }
+
+              // Cerrar las sugerencias
               setState(() {
                 isSuggestionsExpanded = false;
                 _hasUserInteracted = true;
@@ -1465,47 +1619,19 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         const SizedBox(width: 8),
         Expanded(
           child: OutlinedButton(
-            onPressed: () {
+            onPressed: () async {
               // Navegar a nueva pantalla de hábito con datos prellenados
-              _navigateToNewHabit(prefillData: true);
+              await _navigateToNewHabit(prefillData: true);
             },
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFF219540)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            child: const Text(
-              'Modificar',
-              style: TextStyle(
-                color: Color(0xFF219540),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: ElevatedButton(
-            onPressed: () {
-              // Agregar hábito directamente con los datos de la sugerencia
-              final currentSuggestion = _getCurrentSuggestion();
-              if (currentSuggestion != null) {
-                _addHabitFromSuggestion(currentSuggestion);
-              }
-            },
-            style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF219540),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
               padding: const EdgeInsets.symmetric(vertical: 12),
-              elevation: 0,
             ),
             child: const Text(
-              'Aceptar',
+              'Configurar',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 14,
@@ -1515,62 +1641,6 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSuggestionCategoryTabs() {
-    final categories = ['Alimentación', 'Actividad física', 'Sueño'];
-
-    return Container(
-      height: 40,
-      child: Row(
-        children: categories.map((category) {
-          final isSelected = selectedSuggestionCategory == category;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  selectedSuggestionCategory = category;
-                  _currentSuggestionIndex = 0;
-                });
-                // Resetear el PageController a la primera página
-                _pageController.animateToPage(
-                  0,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                );
-              },
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isSelected
-                          ? const Color(0xFF219540)
-                          : Colors.transparent,
-                      width: 2,
-                    ),
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    category,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                      color: isSelected
-                          ? const Color(0xFF219540)
-                          : const Color(0xFF6B7280),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
     );
   }
 
