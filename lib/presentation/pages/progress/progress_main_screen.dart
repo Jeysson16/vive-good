@@ -8,6 +8,7 @@ import 'monthly_evolution_screen.dart';
 import '../../widgets/progress/metric_card.dart';
 import '../../widgets/progress/circular_progress_widget.dart';
 import '../../widgets/progress/progress_slider.dart';
+import '../../widgets/connectivity_indicator.dart';
 import 'dart:math' as math;
 
 class ProgressMainScreen extends StatefulWidget {
@@ -23,8 +24,8 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
   // Helper method to get current user ID
   String? _getCurrentUserId() {
     final currentUser = Supabase.instance.client.auth.currentUser;
-    if (currentUser?.id != null && currentUser!.id.isNotEmpty) {
-      return currentUser.id;
+    if (currentUser?.id?.isNotEmpty == true) {
+      return currentUser!.id;
     }
     return null;
   }
@@ -33,7 +34,9 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
   void _handleUserIdError() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Error: Usuario no autenticado. Por favor, inicia sesión nuevamente.'),
+        content: Text(
+          'Error: Usuario no autenticado. Por favor, inicia sesión nuevamente.',
+        ),
         backgroundColor: Colors.red,
       ),
     );
@@ -43,7 +46,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     setState(() {
       _showMonthlyEvolution = !_showMonthlyEvolution;
     });
-    
+
     // Load data when switching to monthly evolution view
     if (_showMonthlyEvolution) {
       final userId = _getCurrentUserId();
@@ -59,9 +62,18 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
-      body: _showMonthlyEvolution 
-        ? _buildMonthlyEvolutionView()
-        : _buildMainProgressView(),
+      body: Column(
+        children: [
+          // Offline banner at the top
+          const OfflineBanner(),
+          // Main content
+          Expanded(
+            child: _showMonthlyEvolution
+                ? _buildMonthlyEvolutionView()
+                : _buildMainProgressView(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -70,7 +82,12 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       children: [
         // Custom app bar for monthly evolution
         Container(
-          padding: const EdgeInsets.only(top: 40, left: 16, right: 16, bottom: 16),
+          padding: const EdgeInsets.only(
+            top: 40,
+            left: 16,
+            right: 16,
+            bottom: 16,
+          ),
           decoration: const BoxDecoration(
             color: Colors.white,
             boxShadow: [
@@ -108,9 +125,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             builder: (context, state) {
               if (state is ProgressLoading) {
                 return const Center(
-                  child: CircularProgressIndicator(
-                    color: Color(0xFF4CAF50),
-                  ),
+                  child: CircularProgressIndicator(color: Color(0xFF4CAF50)),
                 );
               }
 
@@ -127,18 +142,12 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                       const SizedBox(height: 16),
                       Text(
                         'Error al cargar datos',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         state.message,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
@@ -146,7 +155,9 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                         onPressed: () {
                           final userId = _getCurrentUserId();
                           if (userId != null) {
-                            context.read<ProgressBloc>().add(LoadUserProgress(userId: userId));
+                            context.read<ProgressBloc>().add(
+                              LoadUserProgress(userId: userId),
+                            );
                           } else {
                             _handleUserIdError();
                           }
@@ -178,9 +189,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                 );
               }
 
-              return const Center(
-                child: Text('No hay datos disponibles'),
-              );
+              return const Center(child: Text('No hay datos disponibles'));
             },
           ),
         ),
@@ -191,19 +200,16 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
   Widget _buildMainProgressView() {
     return BlocBuilder<ProgressBloc, ProgressState>(
       builder: (context, state) {
-        print('🔍 PROGRESS DEBUG: Current state: ${state.runtimeType}');
-        
+
         if (state is ProgressLoading) {
-          print('🔍 PROGRESS DEBUG: Showing loading state');
           return const Center(
             child: CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
             ),
           );
         }
-        
+
         if (state is ProgressError) {
-          print('🔍 PROGRESS DEBUG: Showing error state: ${state.message}');
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
@@ -255,14 +261,18 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                                 // Mostrar datos offline si están disponibles
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Mostrando datos guardados localmente'),
+                                    content: Text(
+                                      'Mostrando datos guardados localmente',
+                                    ),
                                     backgroundColor: Color(0xFF4CAF50),
                                   ),
                                 );
                               },
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF666666),
-                                side: const BorderSide(color: Color(0xFFE0E0E0)),
+                                side: const BorderSide(
+                                  color: Color(0xFFE0E0E0),
+                                ),
                               ),
                               child: const Text('Ver offline'),
                             ),
@@ -271,7 +281,9 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                               onPressed: () {
                                 final userId = _getCurrentUserId();
                                 if (userId != null) {
-                                  context.read<ProgressBloc>().add(LoadUserProgress(userId: userId));
+                                  context.read<ProgressBloc>().add(
+                                    LoadUserProgress(userId: userId),
+                                  );
                                 } else {
                                   _handleUserIdError();
                                 }
@@ -280,7 +292,10 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                                 backgroundColor: const Color(0xFF4CAF50),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 12,
+                                ),
                               ),
                               icon: const Icon(Icons.refresh, size: 18),
                               label: const Text('Reintentar'),
@@ -320,8 +335,12 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        _buildTipItem('Verifica tu conexión WiFi o datos móviles'),
-                        _buildTipItem('Asegúrate de tener una conexión estable'),
+                        _buildTipItem(
+                          'Verifica tu conexión WiFi o datos móviles',
+                        ),
+                        _buildTipItem(
+                          'Asegúrate de tener una conexión estable',
+                        ),
                         _buildTipItem('Intenta cerrar y abrir la aplicación'),
                       ],
                     ),
@@ -331,18 +350,19 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             ),
           );
         }
-        
+
         if (state is ProgressLoaded || state is ProgressRefreshing) {
-          print('🔍 PROGRESS DEBUG: Showing loaded state');
-          final progress = state is ProgressLoaded 
-              ? state.progress 
+          final progress = state is ProgressLoaded
+              ? state.progress
               : (state as ProgressRefreshing).progress;
-          
+
           return RefreshIndicator(
             onRefresh: () async {
               final userId = _getCurrentUserId();
               if (userId != null) {
-                context.read<ProgressBloc>().add(RefreshUserProgress(userId: userId));
+                context.read<ProgressBloc>().add(
+                  RefreshUserProgress(userId: userId),
+                );
               } else {
                 _handleUserIdError();
               }
@@ -357,43 +377,46 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 24),
-                    
+
                     // Header with greeting and profile
-                    _buildHeader(progress.userName ?? 'Usuario', progress.userProfileImage),
+                    _buildHeader(
+                      progress.userName ?? 'Usuario',
+                      progress.userProfileImage,
+                    ),
                     const SizedBox(height: 16),
-                    
+
                     // Quick stats overview
                     _buildQuickStatsOverview(progress),
                     const SizedBox(height: 16),
-                    
+
                     // Weekly progress bars
                     _buildWeeklyProgressBars(state),
                     const SizedBox(height: 16),
-                    
+
                     // Detailed metrics cards
                     _buildDetailedMetricsCards(progress),
                     const SizedBox(height: 16),
-                    
+
                     // Metrics cards row
                     _buildMetricsRow(progress),
                     const SizedBox(height: 8),
-                    
+
                     // Activities metrics
                     _buildActivitiesMetrics(progress),
                     const SizedBox(height: 8),
-                    
+
                     // Progress insights
                     _buildProgressInsights(progress),
                     const SizedBox(height: 12),
-                    
+
                     // Progress slider
                     _buildProgressSlider(),
                     const SizedBox(height: 12),
-                    
+
                     // Motivational message
                     _buildMotivationalMessage(progress),
                     const SizedBox(height: 12),
-                    
+
                     // Monthly evolution button
                     _buildMonthlyEvolutionButton(),
                     const SizedBox(height: 60), // Space for bottom navigation
@@ -403,9 +426,8 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             ),
           );
         }
-        
+
         // Default case: show loading or trigger initial load
-        print('🔍 PROGRESS DEBUG: Unhandled state, triggering load');
         // Trigger initial load if not already loading
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final userId = _getCurrentUserId();
@@ -415,7 +437,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             _handleUserIdError();
           }
         });
-        
+
         return const Center(
           child: CircularProgressIndicator(
             valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
@@ -481,11 +503,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                       },
                     ),
                   )
-                : const Icon(
-                    Icons.person,
-                    color: Color(0xFF666666),
-                    size: 24,
-                  ),
+                : const Icon(Icons.person, color: Color(0xFF666666), size: 24),
           ),
         ],
       ),
@@ -534,10 +552,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                 children: [
                   _buildDayLabel(dayName),
                   const SizedBox(height: 8),
-                  SizedBox(
-                    height: 60,
-                    child: _buildProgressBar(progress),
-                  ),
+                  SizedBox(height: 60, child: _buildProgressBar(progress)),
                 ],
               );
             }),
@@ -546,7 +561,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       },
     );
   }
-  
+
   Widget _buildDayLabel(String day) {
     return Text(
       day,
@@ -557,11 +572,11 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       ),
     );
   }
-  
+
   Widget _buildProgressBar(double progress) {
     // Ensure progress is between 0 and 1
     final clampedProgress = progress.clamp(0.0, 1.0);
-    
+
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 1200),
       curve: Curves.easeInOut,
@@ -600,7 +615,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       },
     );
   }
-  
+
   Color _getProgressColor(double progress) {
     if (progress >= 0.8) {
       return const Color(0xFF219540); // Green for high progress
@@ -612,7 +627,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       return const Color(0xFFFF7043); // Red-orange for low progress
     }
   }
-  
+
   Widget _buildWeeklyProgressBars(dynamic state) {
     return Container(
       width: double.infinity,
@@ -629,11 +644,26 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: const [
-                Text('Lun', style: TextStyle(fontSize: 12, color: Color(0xFF666666))),
-                Text('Mar', style: TextStyle(fontSize: 12, color: Color(0xFF666666))),
-                Text('Mié', style: TextStyle(fontSize: 12, color: Color(0xFF666666))),
-                Text('Jue', style: TextStyle(fontSize: 12, color: Color(0xFF666666))),
-                Text('Vie', style: TextStyle(fontSize: 12, color: Color(0xFF666666))),
+                Text(
+                  'Lun',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF666666)),
+                ),
+                Text(
+                  'Mar',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF666666)),
+                ),
+                Text(
+                  'Mié',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF666666)),
+                ),
+                Text(
+                  'Jue',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF666666)),
+                ),
+                Text(
+                  'Vie',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF666666)),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -641,7 +671,12 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: List.generate(5, (index) {
-                final progress = _calculateDayProgress(state, index, false, false);
+                final progress = _calculateDayProgress(
+                  state,
+                  index,
+                  false,
+                  false,
+                );
                 return Flexible(
                   child: Container(
                     width: 40,
@@ -675,19 +710,24 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       ),
     );
   }
-  
-  double _calculateDayProgress(ProgressState state, int dayIndex, bool isToday, bool isPastDay) {
+
+  double _calculateDayProgress(
+    ProgressState state,
+    int dayIndex,
+    bool isToday,
+    bool isPastDay,
+  ) {
     if (state is ProgressLoaded && state.dailyProgress != null) {
       // Get daily progress from the loaded state
       final dailyProgressMap = state.dailyProgress!;
       final dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
-      
+
       if (dayIndex < dayNames.length) {
         final dayName = dayNames[dayIndex];
         return dailyProgressMap[dayName]?.clamp(0.0, 1.0) ?? 0.0;
       }
     }
-    
+
     // Fallback to mock data if no real data available
     final mockProgress = [0.8, 1.0, 0.6, 0.9, 0.3];
     return dayIndex < mockProgress.length ? mockProgress[dayIndex] : 0.0;
@@ -720,7 +760,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       ),
     );
   }
-  
+
   Widget _buildMetricCard(
     String title,
     String value,
@@ -732,10 +772,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFF8F9FA),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: accentColor.withOpacity(0.2),
-          width: 1,
-        ),
+        border: Border.all(color: accentColor.withOpacity(0.2), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -866,7 +903,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     // This section is now integrated into _buildActivitiesMetrics
     return const SizedBox.shrink();
   }
-  
+
   Widget _buildProgressSlider() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -882,7 +919,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       ),
     );
   }
-  
+
   Widget _buildProgressDot(bool isActive) {
     return Container(
       width: 8,
@@ -955,7 +992,8 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
         border: Border.all(color: const Color(0xFFE0E0E0)),
       ),
       child: Text(
-        progress.motivationalMessage ?? '¡Sigue así! Tus nuevos hábitos están reduciendo los factores de riesgo de gastritis',
+        progress.motivationalMessage ??
+            '¡Sigue así! Tus nuevos hábitos están reduciendo los factores de riesgo de gastritis',
         style: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w400,
@@ -990,7 +1028,9 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                   value: percentage / 100.0,
                   strokeWidth: 4,
                   backgroundColor: const Color(0xFFE0E0E0),
-                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF219540)),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    Color(0xFF219540),
+                  ),
                 ),
               ),
               Center(
@@ -1013,17 +1053,17 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
   Widget _buildQuickStatsOverview(dynamic progress) {
     final weeklyCompleted = progress.weeklyCompletedHabits ?? 0;
     final suggestedHabits = progress.suggestedHabits ?? 0;
-    
+
     // Evitar división por cero y valores infinitos
-    final completionRate = suggestedHabits > 0 
+    final completionRate = suggestedHabits > 0
         ? (weeklyCompleted / suggestedHabits).clamp(0.0, 1.0)
         : 0.0;
-    
+
     // Validar que el resultado sea finito antes de convertir a entero
-    final progressPercentage = completionRate.isFinite 
+    final progressPercentage = completionRate.isFinite
         ? (completionRate * 100).round()
         : 0;
-    
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(20),
@@ -1095,16 +1135,14 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                       value: completionRate.clamp(0.0, 1.0),
                       strokeWidth: 4,
                       backgroundColor: Colors.white.withOpacity(0.3),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Colors.white,
+                      ),
                     ),
                   ),
                 ),
                 Center(
-                  child: Icon(
-                    Icons.trending_up,
-                    color: Colors.white,
-                    size: 24,
-                  ),
+                  child: Icon(Icons.trending_up, color: Colors.white, size: 24),
                 ),
               ],
             ),
@@ -1132,7 +1170,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
           Expanded(
             child: _buildDetailedMetricCard(
               'Promedio Semanal',
-              '${((progress.weeklyProgressPercentage ?? 0.0) * 100).round()}%',
+              '${((progress.weeklyProgressPercentage ?? 0.0) * 100).clamp(0.0, 100.0).round()}%',
               Icons.analytics,
               const Color(0xFF2196F3),
               'Muy bien',
@@ -1165,10 +1203,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.2),
-          width: 1,
-        ),
+        border: Border.all(color: color.withOpacity(0.2), width: 1),
         boxShadow: [
           BoxShadow(
             color: color.withOpacity(0.1),
@@ -1186,11 +1221,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
               color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 20,
-            ),
+            child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(height: 12),
           Text(
@@ -1231,10 +1262,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFF8F9FA),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFE0E0E0),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1290,14 +1318,15 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     );
   }
 
-  Widget _buildInsightItem(String label, String value, IconData icon, Color color) {
+  Widget _buildInsightItem(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Row(
       children: [
-        Icon(
-          icon,
-          color: color,
-          size: 16,
-        ),
+        Icon(icon, color: color, size: 16),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -1322,21 +1351,12 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
   }
 
   int _calculateCurrentStreak() {
-    // Calculate streak based on actual progress data
+    // Get streak from BLoC state (calculated from database)
     final state = context.read<ProgressBloc>().state;
-    if (state is ProgressLoaded) {
-      // Simple streak calculation based on weekly completed habits
-      final completedHabits = state.progress.weeklyCompletedHabits;
-      final suggestedHabits = state.progress.suggestedHabits;
-      
-      if (suggestedHabits > 0) {
-        final completionRate = completedHabits / suggestedHabits;
-        if (completionRate >= 0.8) return completedHabits;
-        if (completionRate >= 0.6) return (completedHabits * 0.8).round();
-        return (completedHabits * 0.5).round();
-      }
+    if (state is ProgressLoaded && state.userStreak != null) {
+      return state.userStreak!;
     }
-    return 0;
+    return 0; // Default value if streak is not available
   }
 
   int _calculateMonthlyGoalProgress() {
@@ -1345,7 +1365,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     if (state is ProgressLoaded) {
       final weeklyPercentage = state.progress.weeklyProgressPercentage;
       // Estimate monthly progress based on weekly progress
-      return (weeklyPercentage * 100).round();
+      return (weeklyPercentage * 100).clamp(0.0, 100.0).round();
     }
     return 0;
   }
@@ -1357,14 +1377,14 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       final dailyProgress = state.dailyProgress!;
       String bestDay = 'Lunes';
       double bestProgress = 0.0;
-      
+
       dailyProgress.forEach((day, progress) {
         if (progress > bestProgress) {
           bestProgress = progress;
           bestDay = day;
         }
       });
-      
+
       return bestDay;
     }
     return 'Sin datos';
@@ -1403,7 +1423,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
               Expanded(
                 child: _buildStatCard(
                   'Progreso Total',
-                  '${((state.progress.weeklyProgressPercentage * 100).isFinite ? (state.progress.weeklyProgressPercentage * 100).toInt() : 0)}%',
+                  '${((state.progress.weeklyProgressPercentage * 100).clamp(0.0, 100.0).isFinite ? (state.progress.weeklyProgressPercentage * 100).clamp(0.0, 100.0).toInt() : 0)}%',
                   const Color(0xFF4CAF50),
                   Icons.trending_up,
                 ),
@@ -1424,25 +1444,23 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color, IconData icon) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 1,
-        ),
+        border: Border.all(color: color.withOpacity(0.3), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            color: color,
-            size: 24,
-          ),
+          Icon(icon, color: color, size: 24),
           const SizedBox(height: 8),
           Text(
             value,
@@ -1493,10 +1511,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          SizedBox(
-            height: 200,
-            child: _buildWeeklyProgressChart(),
-          ),
+          SizedBox(height: 200, child: _buildWeeklyProgressChart()),
         ],
       ),
     );
@@ -1504,11 +1519,11 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
 
   Widget _buildWeeklyProgressChart() {
     final weeks = ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'];
-    
+
     // Get actual progress data from state
     final state = context.read<ProgressBloc>().state;
     List<double> progress = [0.0, 0.0, 0.0, 0.0]; // Default to zeros
-    
+
     if (state is ProgressLoaded) {
       // Use actual weekly progress percentage for current week
       final currentWeekProgress = state.progress.weeklyProgressPercentage;
@@ -1540,7 +1555,9 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             const SizedBox(height: 8),
             Container(
               width: 40,
-              height: (progress[index] * 150).isFinite ? progress[index] * 150 : 0,
+              height: (progress[index] * 150).isFinite
+                  ? progress[index] * 150
+                  : 0,
               decoration: BoxDecoration(
                 color: const Color(0xFF4CAF50),
                 borderRadius: BorderRadius.circular(8),
@@ -1549,10 +1566,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             const SizedBox(height: 8),
             Text(
               weeks[index],
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.black54,
-              ),
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ],
         );
@@ -1720,3 +1734,4 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     );
   }
 }
+

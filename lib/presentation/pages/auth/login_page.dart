@@ -167,7 +167,7 @@ class _LoginPageState extends State<LoginPage> {
                   text: 'Iniciar Sesión',
                   onPressed: _isFormValid
                       ? () {
-                          if (_formKey.currentState!.validate()) {
+                          if (_formKey.currentState?.validate() == true) {
                             context.read<AuthBloc>().add(
                                   AuthSignInRequested(
                                     email: _emailController.text.trim(),

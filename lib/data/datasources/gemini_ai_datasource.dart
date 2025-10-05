@@ -1,6 +1,8 @@
 import 'package:vive_good_app/core/error/failures.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:developer' as developer;
 
 abstract class GeminiAIDataSource {
   Future<Map<String, dynamic>> generateHabitSuggestions({
@@ -27,14 +29,14 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
 
     // If environment variable is not set, use the configured API key
     if (apiKey.isEmpty) {
-      finalApiKey = 'AIzaSyAXlDOJOXjApYsIhoaj_iiogc3RBXEl2v4';
+      finalApiKey = 'AIzaSyAJ0SdbXQTyxjQ9IpPjKD97rNzFB2zJios';
     }
 
     if (finalApiKey.isEmpty) {
       throw Exception('GOOGLE_API_KEY is not configured');
     }
 
-    _model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: finalApiKey);
+    _model = GenerativeModel(model: 'gemini-2.0-flash-exp', apiKey: finalApiKey);
   }
 
   @override
@@ -44,7 +46,12 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
     String? description,
     String? userGoals,
   }) async {
+    developer.log('🤖 Iniciando generación de sugerencias para hábito: $habitName');
+    
     try {
+      // Validar conectividad a internet
+      await _validateInternetConnection();
+      
       final prompt = _buildHabitSuggestionsPrompt(
         habitName: habitName,
         category: category,
@@ -52,8 +59,16 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
         userGoals: userGoals,
       );
 
+      developer.log('📝 Enviando prompt a Gemini AI...');
       final content = [Content.text(prompt)];
-      final response = await _model.generateContent(content);
+      
+      // Agregar timeout de 30 segundos
+      final response = await _model.generateContent(content).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw ServerFailure('Timeout: La IA no respondió en 30 segundos. Verifica tu conexión.');
+        },
+      );
 
       if (response.text == null || response.text!.isEmpty) {
         throw ServerFailure('No response from Gemini AI');
@@ -95,8 +110,35 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
         };
       }
     } catch (e) {
+      developer.log('❌ Error en generateHabitSuggestions: $e', name: 'GeminiAI');
+      
+      // Manejo específico de errores de Gemini
+      if (e is ServerException) {
+        final errorMessage = e.message ?? e.toString();
+        
+        if (errorMessage.contains('quota') || errorMessage.contains('QUOTA_EXCEEDED')) {
+          throw ServerFailure('La cuota de la API de Gemini se ha agotado. Intenta más tarde o verifica tu plan de facturación.');
+        } else if (errorMessage.contains('API_KEY_INVALID')) {
+          throw ServerFailure('La clave de API de Gemini es inválida. Verifica la configuración.');
+        } else if (errorMessage.contains('PERMISSION_DENIED')) {
+          throw ServerFailure('Sin permisos para usar la API de Gemini. Verifica tu cuenta.');
+        } else if (errorMessage.contains('not found') || errorMessage.contains('not supported')) {
+          throw ServerFailure('El modelo de Gemini no está disponible. Contacta al soporte.');
+        } else if (errorMessage.contains('UNAVAILABLE') || errorMessage.contains('503')) {
+          throw ServerFailure('El servicio de Gemini está temporalmente no disponible. Intenta en unos minutos.');
+        }
+      }
+      
+      if (e.toString().contains('SocketException') || e.toString().contains('NetworkException')) {
+        throw ServerFailure('Error de conexión. Verifica tu internet e intenta de nuevo.');
+      }
+      
+      if (e is ServerFailure) {
+        throw e; // Re-lanzar ServerFailure ya formateados
+      }
+      
       throw ServerFailure(
-        'Error generating habit suggestions: ${e.toString()}',
+        'Error inesperado al generar sugerencias: ${e.toString()}',
       );
     }
   }
@@ -107,15 +149,28 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
     String? category,
     String? userPreferences,
   }) async {
+    developer.log('🕐 Iniciando generación de horarios para: $habitName');
+    
     try {
+      // Validar conectividad a internet
+      await _validateInternetConnection();
+      
       final prompt = _buildScheduleSuggestionsPrompt(
         habitName: habitName,
         category: category,
         userPreferences: userPreferences,
       );
 
+      developer.log('📝 Enviando prompt de horarios a Gemini AI...');
       final content = [Content.text(prompt)];
-      final response = await _model.generateContent(content);
+      
+      // Agregar timeout de 30 segundos
+      final response = await _model.generateContent(content).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw ServerFailure('Timeout: La IA no respondió en 30 segundos. Verifica tu conexión.');
+        },
+      );
 
       if (response.text == null || response.text!.isEmpty) {
         throw ServerFailure('No response from Gemini AI');
@@ -131,9 +186,55 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
 
       return lines;
     } catch (e) {
+      developer.log('❌ Error en generateScheduleSuggestions: $e', name: 'GeminiAI');
+      
+      // Manejo específico de errores de Gemini
+      if (e is ServerException) {
+        final errorMessage = e.message ?? e.toString();
+        
+        if (errorMessage.contains('quota') || errorMessage.contains('QUOTA_EXCEEDED')) {
+          throw ServerFailure('La cuota de la API de Gemini se ha agotado. Intenta más tarde o verifica tu plan de facturación.');
+        } else if (errorMessage.contains('API_KEY_INVALID')) {
+          throw ServerFailure('La clave de API de Gemini es inválida. Verifica la configuración.');
+        } else if (errorMessage.contains('PERMISSION_DENIED')) {
+          throw ServerFailure('Sin permisos para usar la API de Gemini. Verifica tu cuenta.');
+        } else if (errorMessage.contains('not found') || errorMessage.contains('not supported')) {
+          throw ServerFailure('El modelo de Gemini no está disponible. Contacta al soporte.');
+        } else if (errorMessage.contains('UNAVAILABLE') || errorMessage.contains('503')) {
+          throw ServerFailure('El servicio de Gemini está temporalmente no disponible. Intenta en unos minutos.');
+        }
+      }
+      
+      if (e.toString().contains('SocketException') || e.toString().contains('NetworkException')) {
+        throw ServerFailure('Error de conexión. Verifica tu internet e intenta de nuevo.');
+      }
+      
+      if (e is ServerFailure) {
+        throw e; // Re-lanzar ServerFailure ya formateados
+      }
+      
       throw ServerFailure(
-        'Error generating schedule suggestions: ${e.toString()}',
+        'Error inesperado al generar horarios: ${e.toString()}',
       );
+    }
+  }
+
+  /// Valida la conectividad a internet antes de hacer llamadas a la API
+  Future<void> _validateInternetConnection() async {
+    try {
+      developer.log('🌐 Verificando conectividad a internet...');
+      final result = await InternetAddress.lookup('google.com').timeout(
+        const Duration(seconds: 10),
+      );
+      
+      if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
+        developer.log('✅ Conectividad a internet confirmada');
+      } else {
+        throw ServerFailure('Sin conexión a internet. Verifica tu red.');
+      }
+    } catch (e) {
+      developer.log('❌ Error de conectividad: $e');
+      throw ServerFailure('Sin conexión a internet. Verifica tu red e intenta de nuevo.');
     }
   }
 
@@ -144,26 +245,24 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
     String? userGoals,
   }) {
     return '''
-Actúa como un experto en formación de hábitos y bienestar personal. 
-Genera sugerencias detalladas para el siguiente hábito:
+Experto en hábitos. Genera JSON para:
+Hábito: $habitName
+Categoría: ${category ?? 'General'}
+Descripción: ${description ?? 'N/A'}
+Objetivos: ${userGoals ?? 'N/A'}
 
-Nombre del hábito: $habitName
-Categoría: ${category ?? 'No especificada'}
-Descripción: ${description ?? 'No especificada'}
-Objetivos del usuario: ${userGoals ?? 'No especificados'}
-
-Por favor, proporciona una respuesta en formato JSON con la siguiente estructura:
+Respuesta JSON:
 {
-  "optimizedName": "Nombre optimizado del hábito",
-  "suggestedDuration": "Duración recomendada en minutos",
-  "bestTimes": ["Lista de mejores horarios para realizar el hábito"],
+  "optimizedName": "nombre optimizado",
+  "suggestedDuration": "minutos",
+  "bestTimes": ["horarios"],
   "difficulty": "fácil|medio|difícil",
-  "tips": ["Lista de consejos para mantener el hábito"],
-  "frequency": "Frecuencia recomendada (diario, semanal, etc.)",
-  "motivation": "Mensaje motivacional personalizado"
+  "tips": ["consejos breves"],
+  "frequency": "frecuencia",
+  "motivation": "mensaje corto"
 }
 
-Asegúrate de que la respuesta sea únicamente JSON válido, sin texto adicional.''';
+Solo JSON válido.''';
   }
 
   String _buildScheduleSuggestionsPrompt({
@@ -172,21 +271,15 @@ Asegúrate de que la respuesta sea únicamente JSON válido, sin texto adicional
     String? userPreferences,
   }) {
     return '''
-Actúa como un experto en productividad y gestión del tiempo.
-Genera 5 sugerencias de horarios específicos para el siguiente hábito:
+Genera 5 horarios para: $habitName
+Categoría: ${category ?? 'General'}
+Preferencias: ${userPreferences ?? 'N/A'}
 
-Nombre del hábito: $habitName
-Categoría: ${category ?? 'No especificada'}
-Preferencias del usuario: ${userPreferences ?? 'No especificadas'}
-
-Proporciona horarios específicos en formato de 24 horas (ej: "07:00 - Ideal para empezar el día con energía").
-Cada sugerencia debe incluir el horario y una breve explicación del por qué es recomendable.
-
-Formato de respuesta:
-- HH:MM - Explicación breve
-- HH:MM - Explicación breve
-- HH:MM - Explicación breve
-- HH:MM - Explicación breve
-- HH:MM - Explicación breve''';
+Formato:
+- HH:MM - Razón breve
+- HH:MM - Razón breve
+- HH:MM - Razón breve
+- HH:MM - Razón breve
+- HH:MM - Razón breve''';
   }
 }

@@ -114,6 +114,7 @@ class UserHabitModel {
       userId: userId,
       habitId: habitId ?? '',
       frequency: frequency,
+      frequencyDetails: frequencyDetails,
       scheduledTime: scheduledTime,
       notificationsEnabled: notificationsEnabled,
       startDate: startDate,

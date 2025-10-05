@@ -472,7 +472,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
   }
 
   void _saveEvent() {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState?.validate() == true) {
       final now = DateTime.now();
 
       final event = CalendarEvent(

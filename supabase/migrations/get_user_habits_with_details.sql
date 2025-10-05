@@ -124,13 +124,9 @@ BEGIN
   
   WHERE 
     uh.user_id = p_user_id
-    AND uh.is_active = true
     AND (p_category_id IS NULL OR h.category_id = p_category_id)
-    AND (
-      uh.end_date IS NULL 
-      OR uh.end_date >= CURRENT_DATE
-    )
-    AND uh.start_date <= CURRENT_DATE
+    -- Mostrar TODOS los hábitos del usuario (pendientes, aplazados, cumplidos)
+    -- Sin filtrar por is_active ni fechas para la pantalla de hábitos
   
   ORDER BY 
     uh.scheduled_time ASC NULLS LAST,
@@ -143,4 +139,4 @@ GRANT EXECUTE ON FUNCTION get_user_habits_with_details(UUID, UUID) TO anon;
 GRANT EXECUTE ON FUNCTION get_user_habits_with_details(UUID, UUID) TO authenticated;
 
 -- Comment
-COMMENT ON FUNCTION get_user_habits_with_details(UUID, UUID) IS 'Obtiene user_habits del usuario con detalles completos de habits usando INNER JOIN';
+COMMENT ON FUNCTION get_user_habits_with_details(UUID, UUID) IS 'Obtiene TODOS los user_habits del usuario (activos/inactivos, pendientes/cumplidos/aplazados) para la pantalla de hábitos';

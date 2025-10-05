@@ -20,7 +20,7 @@ class WelcomeView extends StatelessWidget {
     final isSmallScreen = screenSize.width < 360;
     final isLargeScreen = screenSize.width > 600;
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-    
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       body: SafeArea(
@@ -33,9 +33,10 @@ class WelcomeView extends StatelessWidget {
           ),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              minHeight: screenSize.height - 
-                  MediaQuery.of(context).padding.top - 
-                  MediaQuery.of(context).padding.bottom - 
+              minHeight:
+                  screenSize.height -
+                  MediaQuery.of(context).padding.top -
+                  MediaQuery.of(context).padding.bottom -
                   keyboardHeight,
               maxWidth: isLargeScreen ? 500 : double.infinity,
             ),
@@ -52,14 +53,20 @@ class WelcomeView extends StatelessWidget {
                       height: isSmallScreen ? 104 : (isLargeScreen ? 145 : 129),
                       child: Image.asset(
                         'assets/images/logo.png',
-                        width: isSmallScreen ? 100 : (isLargeScreen ? 140 : 124),
-                        height: isSmallScreen ? 104 : (isLargeScreen ? 145 : 129),
+                        width: isSmallScreen
+                            ? 100
+                            : (isLargeScreen ? 140 : 124),
+                        height: isSmallScreen
+                            ? 104
+                            : (isLargeScreen ? 145 : 129),
                         fit: BoxFit.contain,
                       ),
                     ),
-                    
-                    SizedBox(height: isSmallScreen ? 40 : (isLargeScreen ? 80 : 63)),
-                    
+
+                    SizedBox(
+                      height: isSmallScreen ? 40 : (isLargeScreen ? 80 : 63),
+                    ),
+
                     // Welcome Text
                     SizedBox(
                       width: double.infinity,
@@ -70,7 +77,9 @@ class WelcomeView extends StatelessWidget {
                             TextSpan(
                               text: 'Bienvenido a\n',
                               style: TextStyle(
-                                fontSize: isSmallScreen ? 32 : (isLargeScreen ? 48 : 40),
+                                fontSize: isSmallScreen
+                                    ? 32
+                                    : (isLargeScreen ? 48 : 40),
                                 fontWeight: FontWeight.w700,
                                 color: const Color(0xFF212121),
                                 height: 1.6,
@@ -80,7 +89,9 @@ class WelcomeView extends StatelessWidget {
                             TextSpan(
                               text: 'Vive',
                               style: TextStyle(
-                                fontSize: isSmallScreen ? 32 : (isLargeScreen ? 48 : 40),
+                                fontSize: isSmallScreen
+                                    ? 32
+                                    : (isLargeScreen ? 48 : 40),
                                 fontWeight: FontWeight.w700,
                                 color: const Color(0xFF219540),
                                 height: 1.6,
@@ -90,7 +101,9 @@ class WelcomeView extends StatelessWidget {
                             TextSpan(
                               text: 'Good',
                               style: TextStyle(
-                                fontSize: isSmallScreen ? 32 : (isLargeScreen ? 48 : 40),
+                                fontSize: isSmallScreen
+                                    ? 32
+                                    : (isLargeScreen ? 48 : 40),
                                 fontWeight: FontWeight.w700,
                                 color: const Color(0xFF2D57AF),
                                 height: 1.6,
@@ -101,26 +114,34 @@ class WelcomeView extends StatelessWidget {
                         ),
                       ),
                     ),
-                    
-                    SizedBox(height: isSmallScreen ? 40 : (isLargeScreen ? 80 : 63)),
-                    
+
+                    SizedBox(
+                      height: isSmallScreen ? 40 : (isLargeScreen ? 80 : 63),
+                    ),
+
                     // Buttons Container
                     Padding(
                       padding: EdgeInsets.symmetric(
-                        horizontal: isSmallScreen ? 0 : (isLargeScreen ? 16 : 8),
+                        horizontal: isSmallScreen
+                            ? 0
+                            : (isLargeScreen ? 16 : 8),
                       ),
                       child: Column(
                         children: [
                           // Iniciar Sesión Button
                           Container(
                             width: double.infinity,
-                            height: isSmallScreen ? 56 : (isLargeScreen ? 70 : 63),
+                            height: isSmallScreen
+                                ? 56
+                                : (isLargeScreen ? 70 : 63),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(95),
                               color: const Color(0xFF090D3A),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF17CE92).withOpacity(0.25),
+                                  color: const Color(
+                                    0xFF17CE92,
+                                  ).withOpacity(0.25),
                                   offset: const Offset(4, 8),
                                   blurRadius: 24,
                                   spreadRadius: 0,
@@ -139,14 +160,20 @@ class WelcomeView extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(95),
                                 ),
                                 padding: EdgeInsets.symmetric(
-                                  vertical: isSmallScreen ? 14 : (isLargeScreen ? 20 : 17),
-                                  horizontal: isSmallScreen ? 12 : (isLargeScreen ? 18 : 15),
+                                  vertical: isSmallScreen
+                                      ? 14
+                                      : (isLargeScreen ? 20 : 17),
+                                  horizontal: isSmallScreen
+                                      ? 12
+                                      : (isLargeScreen ? 18 : 15),
                                 ),
                               ),
                               child: Text(
                                 'Iniciar Sesión',
                                 style: TextStyle(
-                                  fontSize: isSmallScreen ? 16 : (isLargeScreen ? 20 : 18),
+                                  fontSize: isSmallScreen
+                                      ? 16
+                                      : (isLargeScreen ? 20 : 18),
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.2,
                                   fontFamily: 'Urbanist',
@@ -154,13 +181,19 @@ class WelcomeView extends StatelessWidget {
                               ),
                             ),
                           ),
-                          
-                          SizedBox(height: isSmallScreen ? 16 : (isLargeScreen ? 30 : 23)),
-                          
+
+                          SizedBox(
+                            height: isSmallScreen
+                                ? 16
+                                : (isLargeScreen ? 30 : 23),
+                          ),
+
                           // Registrarse Button
                           Container(
                             width: double.infinity,
-                            height: isSmallScreen ? 56 : (isLargeScreen ? 70 : 63),
+                            height: isSmallScreen
+                                ? 56
+                                : (isLargeScreen ? 70 : 63),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(95),
                               color: const Color(0xFFE3E3E3),
@@ -177,14 +210,20 @@ class WelcomeView extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(95),
                                 ),
                                 padding: EdgeInsets.symmetric(
-                                  vertical: isSmallScreen ? 14 : (isLargeScreen ? 20 : 17),
-                                  horizontal: isSmallScreen ? 12 : (isLargeScreen ? 18 : 15),
+                                  vertical: isSmallScreen
+                                      ? 14
+                                      : (isLargeScreen ? 20 : 17),
+                                  horizontal: isSmallScreen
+                                      ? 12
+                                      : (isLargeScreen ? 18 : 15),
                                 ),
                               ),
                               child: Text(
                                 'Registrarse',
                                 style: TextStyle(
-                                  fontSize: isSmallScreen ? 15 : (isLargeScreen ? 19 : 17),
+                                  fontSize: isSmallScreen
+                                      ? 15
+                                      : (isLargeScreen ? 19 : 17),
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.19,
                                   fontFamily: 'Urbanist',

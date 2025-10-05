@@ -5,6 +5,7 @@ class UserHabit {
   final String userId;
   final String? habitId; // Can be null for custom habits
   final String frequency; // daily, weekly, monthly
+  final Map<String, dynamic>? frequencyDetails; // Contains days_of_week for weekly habits
   final String? scheduledTime;
   final bool notificationsEnabled;
   final DateTime startDate;
@@ -28,6 +29,7 @@ class UserHabit {
     required this.userId,
     this.habitId, // Can be null for custom habits
     required this.frequency,
+    this.frequencyDetails,
     this.scheduledTime,
     required this.notificationsEnabled,
     required this.startDate,
@@ -76,5 +78,49 @@ class UserHabit {
     );
   }
 
-
+  UserHabit copyWith({
+    String? id,
+    String? userId,
+    String? habitId,
+    String? frequency,
+    Map<String, dynamic>? frequencyDetails,
+    String? scheduledTime,
+    bool? notificationsEnabled,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool? isActive,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? customName,
+    String? customDescription,
+    bool? isCompletedToday,
+    int? completionCountToday,
+    DateTime? lastCompletedAt,
+    int? streakCount,
+    int? totalCompletions,
+    Habit? habit,
+  }) {
+    return UserHabit(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      habitId: habitId ?? this.habitId,
+      frequency: frequency ?? this.frequency,
+      frequencyDetails: frequencyDetails ?? this.frequencyDetails,
+      scheduledTime: scheduledTime ?? this.scheduledTime,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      customName: customName ?? this.customName,
+      customDescription: customDescription ?? this.customDescription,
+      isCompletedToday: isCompletedToday ?? this.isCompletedToday,
+      completionCountToday: completionCountToday ?? this.completionCountToday,
+      lastCompletedAt: lastCompletedAt ?? this.lastCompletedAt,
+      streakCount: streakCount ?? this.streakCount,
+      totalCompletions: totalCompletions ?? this.totalCompletions,
+      habit: habit ?? this.habit,
+    );
+  }
 }

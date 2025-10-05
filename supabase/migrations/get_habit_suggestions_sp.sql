@@ -46,14 +46,18 @@ BEGIN
     GROUP BY uh.habit_id
   ) usage_stats ON h.id = usage_stats.habit_id
   WHERE 
-    (p_category_id IS NULL OR h.category_id = p_category_id)
+    h.is_active = true
+    AND (p_category_id IS NULL OR h.category_id = p_category_id)
+    -- FIXED: Always exclude user's existing habits when user_id is provided
+    -- This ensures that habits already in user_habits are NEVER suggested
     AND (
       p_user_id IS NULL 
       OR h.id NOT IN (
-        SELECT uh.habit_id 
+        SELECT DISTINCT uh.habit_id 
         FROM user_habits uh 
         WHERE uh.user_id = p_user_id 
-        AND uh.is_active = true
+        -- Exclude both active and inactive habits to prevent re-suggestions
+        -- AND uh.is_active = true  -- Commented out to exclude ALL user habits
       )
     )
   ORDER BY 

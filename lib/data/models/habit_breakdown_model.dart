@@ -29,7 +29,7 @@ class HabitBreakdownModel extends Equatable {
       categoryId: json['category_id'] ?? '',
       categoryName: json['category_name'] ?? '',
       categoryColor: json['category_color'] ?? '#4CAF50',
-      categoryIcon: json['category_icon'] ?? 'heart',
+      categoryIcon: json['category_icon'] ?? 'star',
       totalHabits: (json['total_habits'] ?? 0).toInt(),
       completedHabits: (json['completed_habits'] ?? 0).toInt(),
       completionPercentage: (json['completion_percentage'] ?? 0.0).toDouble(),

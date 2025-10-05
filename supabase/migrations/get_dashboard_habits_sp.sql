@@ -10,6 +10,8 @@ RETURNS TABLE (
   habit_id UUID,
   habit_name VARCHAR,
   habit_description TEXT,
+  habit_icon_name VARCHAR,
+  habit_icon_color VARCHAR,
   category_id UUID,
   category_name VARCHAR,
   category_color VARCHAR,
@@ -41,6 +43,8 @@ BEGIN
     h.id as habit_id,
     h.name as habit_name,
     h.description as habit_description,
+    h.icon_name as habit_icon_name,
+    h.icon_color as habit_icon_color,
     c.id as category_id,
     c.name as category_name,
     c.color as category_color,
@@ -80,33 +84,39 @@ BEGIN
   INNER JOIN habits h ON uh.habit_id = h.id
   LEFT JOIN categories c ON h.category_id = c.id
   
-  -- Inner join with calendar_events to show only habits scheduled for the specific date
-  INNER JOIN calendar_events ce ON (
-    ce.user_id = p_user_id 
-    AND ce.habit_id = h.id
-    AND (
-      -- Direct date match
-      ce.start_date = p_date
-      OR (
-        -- Recurring events
-        ce.recurrence_type IS NOT NULL 
-        AND ce.recurrence_type != 'none'
-        AND ce.start_date <= p_date
-        AND (ce.recurrence_end_date IS NULL OR ce.recurrence_end_date >= p_date)
-        AND (
-          -- Daily recurrence
-          (ce.recurrence_type = 'daily' AND (p_date - ce.start_date) % COALESCE(ce.recurrence_interval, 1) = 0)
-          OR
-          -- Weekly recurrence
-          (ce.recurrence_type = 'weekly' AND EXTRACT(DOW FROM p_date)::INTEGER = ANY(ce.recurrence_days))
-          OR
-          -- Monthly recurrence
-          (ce.recurrence_type = 'monthly' AND EXTRACT(DAY FROM p_date) = EXTRACT(DAY FROM ce.start_date))
+  -- Left join with calendar_events and use DISTINCT ON to avoid duplicates
+  LEFT JOIN (
+    SELECT DISTINCT ON (ce.habit_id) 
+      ce.id,
+      ce.habit_id,
+      ce.start_time,
+      ce.end_time
+    FROM calendar_events ce
+    WHERE ce.user_id = p_user_id 
+      AND (
+        -- Direct date match
+        ce.start_date = p_date
+        OR (
+          -- Recurring events
+          ce.recurrence_type IS NOT NULL 
+          AND ce.recurrence_type != 'none'
+          AND ce.start_date <= p_date
+          AND (ce.recurrence_end_date IS NULL OR ce.recurrence_end_date >= p_date)
+          AND (
+            -- Daily recurrence
+            (ce.recurrence_type = 'daily' AND (p_date - ce.start_date) % COALESCE(ce.recurrence_interval, 1) = 0)
+            OR
+            -- Weekly recurrence
+            (ce.recurrence_type = 'weekly' AND EXTRACT(DOW FROM p_date)::INTEGER = ANY(ce.recurrence_days))
+            OR
+            -- Monthly recurrence
+            (ce.recurrence_type = 'monthly' AND EXTRACT(DAY FROM p_date) = EXTRACT(DAY FROM ce.start_date))
+          )
         )
       )
-    )
-    AND ce.is_completed = false  -- Only show pending events
-  )
+      AND ce.is_completed = false  -- Only show pending events
+    ORDER BY ce.habit_id, ce.start_time ASC NULLS LAST
+  ) ce ON ce.habit_id = h.id
   
   -- Today's completion logs
   LEFT JOIN (
@@ -160,6 +170,7 @@ BEGIN
     AND uh.start_date <= p_date
   
   ORDER BY 
+    c.name ASC NULLS LAST,  -- Order by category name first
     ce.start_time ASC NULLS LAST,
     uh.scheduled_time ASC NULLS LAST,
     h.name ASC;

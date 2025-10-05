@@ -36,7 +36,7 @@ class UserModel extends User {
   @HiveField(7)
   final String? role;
 
-  const UserModel({
+  UserModel({
     required this.id,
     required this.name,
     required this.email,
@@ -116,6 +116,9 @@ class UserModel extends User {
     String? firstName,
     String? lastName,
     String? role,
+    String? avatarUrl,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return UserModel(
       id: id ?? this.id,

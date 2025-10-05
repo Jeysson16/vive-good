@@ -53,7 +53,7 @@ class NotificationService {
   /// Maneja cuando se toca una notificación
   void _onNotificationTapped(NotificationResponse response) {
     // TODO: Navegar a la pantalla correspondiente
-    print('Notificación tocada: ${response.payload}');
+    // Notificación tocada: ${response.payload}
   }
 
   /// Solicita permisos de notificación
@@ -84,6 +84,209 @@ class NotificationService {
 
     return false;
   }
+
+  /// Verifica permisos de notificación
+  Future<bool> checkPermissions() async {
+    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+        _notifications.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidImplementation != null) {
+      final bool? granted = await androidImplementation
+          .areNotificationsEnabled();
+      return granted ?? false;
+    }
+
+    final IOSFlutterLocalNotificationsPlugin? iosImplementation =
+        _notifications.resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>();
+
+    if (iosImplementation != null) {
+      final bool granted = await iosImplementation
+          .checkPermissions()
+          .then((permissions) => permissions?.isEnabled ?? false);
+      return granted;
+    }
+
+    return false;
+  }
+
+  // ===== HABIT NOTIFICATIONS =====
+
+  /// Programa una notificación de hábito
+  Future<int> scheduleNotification({
+    required String notificationId,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+    String? payload,
+    String? sound,
+  }) async {
+    if (!_isInitialized) await initialize();
+
+    // No programar notificaciones para tiempos pasados
+    if (scheduledTime.isBefore(DateTime.now())) {
+      throw Exception('No se puede programar una notificación para el pasado');
+    }
+
+    final platformNotificationId = notificationId.hashCode;
+
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'habit_notifications',
+      'Notificaciones de Hábitos',
+      channelDescription: 'Recordatorios para completar hábitos diarios',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+      enableVibration: true,
+      playSound: true,
+    );
+
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      categoryIdentifier: 'habit_reminder',
+    );
+
+    const NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.zonedSchedule(
+      platformNotificationId,
+      title,
+      body,
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      notificationDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: payload ?? notificationId,
+    );
+
+    return platformNotificationId;
+  }
+
+  /// Programa notificaciones recurrentes para hábitos
+  Future<List<int>> scheduleRecurringHabitNotification({
+    required String notificationId,
+    required String title,
+    required String body,
+    required List<int> daysOfWeek, // 1=Monday, 7=Sunday
+    required DateTime time,
+    String? payload,
+    String? sound,
+    int maxWeeks = 52, // Programar para un año
+  }) async {
+    if (!_isInitialized) await initialize();
+
+    final platformNotificationIds = <int>[];
+    final now = DateTime.now();
+    
+    for (int week = 0; week < maxWeeks; week++) {
+      for (final dayOfWeek in daysOfWeek) {
+        final scheduledDate = _getNextDateForDayOfWeek(
+          now.add(Duration(days: week * 7)), 
+          dayOfWeek
+        );
+        
+        final scheduledDateTime = DateTime(
+          scheduledDate.year,
+          scheduledDate.month,
+          scheduledDate.day,
+          time.hour,
+          time.minute,
+        );
+
+        // Solo programar si es en el futuro
+        if (scheduledDateTime.isAfter(now)) {
+          final weeklyNotificationId = '${notificationId}_w${week}_d$dayOfWeek';
+          final platformId = await scheduleNotification(
+            notificationId: weeklyNotificationId,
+            title: title,
+            body: body,
+            scheduledTime: scheduledDateTime,
+            payload: payload,
+            sound: sound,
+          );
+          platformNotificationIds.add(platformId);
+        }
+      }
+    }
+
+    return platformNotificationIds;
+  }
+
+  /// Cancela una notificación específica por ID de plataforma
+  Future<void> cancelNotification(int platformNotificationId) async {
+    await _notifications.cancel(platformNotificationId);
+  }
+
+  /// Cancela notificaciones por ID de notificación personalizado
+  Future<void> cancelNotificationById(String notificationId) async {
+    await _notifications.cancel(notificationId.hashCode);
+  }
+
+  /// Cancela todas las notificaciones de un hábito
+  Future<void> cancelHabitNotifications(String habitNotificationId) async {
+    // Cancelar notificaciones recurrentes (aproximación)
+    for (int week = 0; week < 52; week++) {
+      for (int day = 1; day <= 7; day++) {
+        final weeklyNotificationId = '${habitNotificationId}_w${week}_d$day';
+        await cancelNotificationById(weeklyNotificationId);
+      }
+    }
+    
+    // También cancelar la notificación base
+    await cancelNotificationById(habitNotificationId);
+  }
+
+  /// Programa una notificación de snooze
+  Future<int> scheduleSnoozeNotification({
+    required String originalNotificationId,
+    required String title,
+    required String body,
+    required int snoozeMinutes,
+    String? payload,
+  }) async {
+    final snoozeTime = DateTime.now().add(Duration(minutes: snoozeMinutes));
+    final snoozeNotificationId = '${originalNotificationId}_snooze_${DateTime.now().millisecondsSinceEpoch}';
+    
+    return await scheduleNotification(
+      notificationId: snoozeNotificationId,
+      title: '$title (Pospuesto)',
+      body: body,
+      scheduledTime: snoozeTime,
+      payload: payload,
+    );
+  }
+
+  /// Muestra una notificación inmediata de hábito
+  Future<void> showHabitCompletionNotification({
+    required String habitName,
+    String? motivationalMessage,
+  }) async {
+    final title = '🎉 ¡Hábito Completado!';
+    final body = motivationalMessage ?? '¡Excelente trabajo completando "$habitName"!';
+    
+    await showImmediateNotification(title, body);
+  }
+
+  /// Muestra una notificación de racha
+  Future<void> showStreakNotification({
+    required String habitName,
+    required int streakDays,
+  }) async {
+    final title = '🔥 ¡Racha Increíble!';
+    final body = '¡Llevas $streakDays días consecutivos con "$habitName"!';
+    
+    await showImmediateNotification(title, body);
+  }
+
+  // ===== CALENDAR EVENTS (EXISTING FUNCTIONALITY) =====
 
   /// Programa una notificación para un evento
   Future<void> scheduleEventNotification(
@@ -214,8 +417,8 @@ class NotificationService {
     }
   }
 
-  /// Cancela una notificación específica
-  Future<void> cancelNotification(String eventId) async {
+  /// Cancela una notificación específica de evento
+  Future<void> cancelEventNotification(String eventId) async {
     await _notifications.cancel(eventId.hashCode);
     
     // Eliminar de la base de datos
@@ -348,6 +551,14 @@ class NotificationService {
     }
   }
 
+  // ===== HELPER METHODS =====
+
+  DateTime _getNextDateForDayOfWeek(DateTime startDate, int dayOfWeek) {
+    final currentDayOfWeek = startDate.weekday;
+    final daysUntilTarget = (dayOfWeek - currentDayOfWeek) % 7;
+    return startDate.add(Duration(days: daysUntilTarget));
+  }
+
   /// Métodos auxiliares privados
   
   DateTime _getEventDateTime(CalendarEvent event) {
@@ -449,7 +660,7 @@ class NotificationService {
       });
     } catch (e) {
       // Log error but don't throw to avoid breaking notification scheduling
-      print('Error al guardar notificación en base de datos: $e');
+      // Error al guardar notificación en base de datos
     }
   }
 }

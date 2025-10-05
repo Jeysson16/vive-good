@@ -7,9 +7,12 @@ import 'package:vive_good_app/data/models/user_habit_model.dart';
 
 abstract class HabitRemoteDataSource {
   Future<List<UserHabitModel>> getUserHabits(String userId);
+  Future<UserHabitModel> getUserHabitById(String userHabitId);
   Future<List<CategoryModel>> getHabitCategories();
   Future<void> addHabit(HabitModel habit);
   Future<void> deleteHabit(String habitId);
+  Future<void> updateUserHabit(String userHabitId, Map<String, dynamic> updates);
+  Future<void> deleteUserHabit(String userHabitId);
   Future<void> logHabitCompletion(String habitId, DateTime date);
   Future<List<HabitModel>> getHabitSuggestions({
     String? userId,
@@ -93,18 +96,60 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
   }
 
   @override
-  Future<List<CategoryModel>> getHabitCategories() async {
+  Future<UserHabitModel> getUserHabitById(String userHabitId) async {
     try {
-      final response = await supabaseClient.from('categories').select();
+      final response = await supabaseClient
+          .from('user_habits')
+          .select('''
+            *,
+            habits (
+              id,
+              name,
+              description,
+              category_id,
+              icon_name,
+              icon_color,
+              created_at,
+              updated_at
+            )
+          ''')
+          .eq('id', userHabitId)
+          .single();
 
       if (response == null) {
+        throw ServerFailure('Habit not found');
+      }
+
+      return UserHabitModel.fromJson(response);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<List<CategoryModel>> getHabitCategories() async {
+    try {
+      print('🔍 [DEBUG] Fetching categories from Supabase...');
+      final response = await supabaseClient.from('categories').select();
+      print('🔍 [DEBUG] Raw response from categories: $response');
+
+      if (response == null) {
+        print('❌ [DEBUG] No data received from Supabase');
         throw ServerFailure('No data received from Supabase');
       }
 
-      return (response as List)
+      final categories = (response as List)
           .map((json) => CategoryModel.fromJson(json))
           .toList();
+      
+      print('✅ [DEBUG] Categories loaded: ${categories.length} categories');
+      for (var category in categories) {
+        print('   - ${category.name} (${category.id})');
+      }
+
+      return categories;
     } catch (e) {
+      print('❌ [DEBUG] Error loading categories: $e');
       throw ServerFailure(e.toString());
     }
   }
@@ -128,11 +173,43 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
   }
 
   @override
+  Future<void> updateUserHabit(String userHabitId, Map<String, dynamic> updates) async {
+    try {
+      await supabaseClient
+          .from('user_habits')
+          .update(updates)
+          .eq('id', userHabitId);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<void> deleteUserHabit(String userHabitId) async {
+    try {
+      // Eliminar en cascada: primero los logs, luego el user_habit
+      await supabaseClient
+          .from('habit_logs')
+          .delete()
+          .eq('user_habit_id', userHabitId);
+      
+      await supabaseClient
+          .from('user_habits')
+          .delete()
+          .eq('id', userHabitId);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
   Future<void> logHabitCompletion(String habitId, DateTime date) async {
     try {
-      await supabaseClient.from('habit_logs').insert({
-        'habit_id': habitId,
-        'completion_date': date.toIso8601String(),
+      // habitId is actually user_habit_id in this context
+      await supabaseClient.from('user_habit_logs').insert({
+        'user_habit_id': habitId,
+        'completed_at': date.toIso8601String(),
+        'status': 'completed',
       });
     } catch (e) {
       throw ServerFailure(e.toString());
@@ -176,18 +253,15 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
   ) async {
     try {
       // Usar el stored procedure get_dashboard_habits para obtener información completa
-      print('🔍 DATASOURCE DEBUG: Calling get_dashboard_habits with userId: $userId');
       final response = await supabaseClient.rpc(
         'get_dashboard_habits',
         params: {
           'p_user_id': userId,
-          'p_date': DateTime.now().toIso8601String().split('T')[0], // Solo la fecha
+          'p_date': DateTime.now().toIso8601String().split(
+            'T',
+          )[0], // Solo la fecha
         },
       );
-      
-      print('🔍 DATASOURCE DEBUG: Raw response from get_dashboard_habits: $response');
-      print('🔍 DATASOURCE DEBUG: Response type: ${response.runtimeType}');
-      print('🔍 DATASOURCE DEBUG: Response length: ${response?.length ?? 0}');
 
       if (response == null) {
         throw ServerFailure('No data received from Supabase');
@@ -222,20 +296,20 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
             'name': item['habit_name'],
             'description': item['habit_description'],
             'category_id': item['category_id'],
-            'icon_name': item['category_icon'],
-            'icon_color': item['category_color'],
+            'icon_name': item['habit_icon_name'],
+            'icon_color': item['habit_icon_color'],
             'created_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
           },
         };
         userHabits.add(UserHabitModel.fromJson(mappedItem));
       }
-      
+
       // Aplicar límite si se especifica
       if (limit > 0 && userHabits.length > limit) {
         return userHabits.take(limit).toList();
       }
-      
+
       return userHabits;
     } catch (e) {
       throw ServerFailure(e.toString());

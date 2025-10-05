@@ -42,3 +42,12 @@ class LoadDailyWeekProgress extends ProgressEvent {
   @override
   List<Object?> get props => [userId];
 }
+
+class LoadUserStreak extends ProgressEvent {
+  final String userId;
+
+  const LoadUserStreak({required this.userId});
+
+  @override
+  List<Object?> get props => [userId];
+}

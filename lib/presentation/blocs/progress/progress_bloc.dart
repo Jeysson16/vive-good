@@ -3,21 +3,25 @@ import '../../../core/error/failures.dart';
 import '../../../core/usecases/usecase.dart';
 import '../../../domain/usecases/get_user_progress.dart';
 import '../../../domain/usecases/get_daily_week_progress.dart';
+import '../../../domain/usecases/get_user_streak.dart';
 import 'progress_event.dart';
 import 'progress_state.dart';
 
 class ProgressBloc extends Bloc<ProgressEvent, ProgressState> {
   final GetUserProgress getUserProgress;
   final GetDailyWeekProgress getDailyWeekProgress;
+  final GetUserStreak getUserStreak;
 
   ProgressBloc({
     required this.getUserProgress,
     required this.getDailyWeekProgress,
+    required this.getUserStreak,
   }) : super(ProgressInitial()) {
     on<LoadUserProgress>(_onLoadUserProgress);
     on<RefreshUserProgress>(_onRefreshUserProgress);
     on<UpdateUserProgress>(_onUpdateUserProgress);
     on<LoadDailyWeekProgress>(_onLoadDailyWeekProgress);
+    on<LoadUserStreak>(_onLoadUserStreak);
   }
 
   Future<void> _onLoadUserProgress(
@@ -34,12 +38,21 @@ class ProgressBloc extends Bloc<ProgressEvent, ProgressState> {
       GetDailyWeekProgressParams(userId: event.userId),
     );
     
+    final streakResult = await getUserStreak(
+      GetUserStreakParams(userId: event.userId),
+    );
+    
     progressResult.fold(
       (failure) => emit(ProgressError(message: _mapFailureToMessage(failure))),
       (progress) {
         dailyProgressResult.fold(
           (failure) => emit(ProgressLoaded(progress: progress)),
-          (dailyProgress) => emit(ProgressLoaded(progress: progress, dailyProgress: dailyProgress)),
+          (dailyProgress) {
+            streakResult.fold(
+              (failure) => emit(ProgressLoaded(progress: progress, dailyProgress: dailyProgress)),
+              (streak) => emit(ProgressLoaded(progress: progress, dailyProgress: dailyProgress, userStreak: streak)),
+            );
+          },
         );
       },
     );
@@ -101,6 +114,28 @@ class ProgressBloc extends Bloc<ProgressEvent, ProgressState> {
         (dailyProgress) => emit(ProgressLoaded(
           progress: currentState.progress,
           dailyProgress: dailyProgress,
+        )),
+      );
+    }
+  }
+
+  Future<void> _onLoadUserStreak(
+    LoadUserStreak event,
+    Emitter<ProgressState> emit,
+  ) async {
+    if (state is ProgressLoaded) {
+      final currentState = state as ProgressLoaded;
+      
+      final streakResult = await getUserStreak(
+        GetUserStreakParams(userId: event.userId),
+      );
+      
+      streakResult.fold(
+        (failure) => emit(ProgressError(message: _mapFailureToMessage(failure))),
+        (streak) => emit(ProgressLoaded(
+          progress: currentState.progress,
+          dailyProgress: currentState.dailyProgress,
+          userStreak: streak,
         )),
       );
     }

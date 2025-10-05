@@ -33,19 +33,19 @@ class CalendarEventModel extends CalendarEvent {
       title: json['title'] as String,
       description: json['description'] as String? ?? '',
       eventType: json['event_type'] as String? ?? 'event',
-      startDate: DateTime.parse(json['start_date'] as String),
+      startDate: _parseDate(json['start_date'] as String),
       endDate: json['end_date'] != null 
-          ? DateTime.parse(json['end_date'] as String) 
+          ? _parseDate(json['end_date'] as String) 
           : null,
       startTime: json['start_time'] != null 
-          ? DateTime.parse(json['start_time'] as String) 
+          ? _parseDateTime(json['start_time'] as String) 
           : null,
       endTime: json['end_time'] != null 
-          ? DateTime.parse(json['end_time'] as String) 
+          ? _parseDateTime(json['end_time'] as String) 
           : null,
       recurrenceType: json['recurrence_type'] as String? ?? 'none',
       recurrenceEndDate: json['recurrence_end_date'] != null 
-          ? DateTime.parse(json['recurrence_end_date'] as String) 
+          ? _parseDate(json['recurrence_end_date'] as String) 
           : null,
       recurrenceDays: json['recurrence_days'] != null 
           ? List<int>.from(json['recurrence_days'] as List) 
@@ -61,6 +61,39 @@ class CalendarEventModel extends CalendarEvent {
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
+  }
+
+  /// Helper method to parse date strings that might be in different formats
+  static DateTime _parseDate(String dateString) {
+    try {
+      // Try parsing as ISO format first
+      return DateTime.parse(dateString);
+    } catch (e) {
+      // If that fails, try parsing as date-only format (YYYY-MM-DD)
+      if (dateString.length == 10 && dateString.contains('-')) {
+        return DateTime.parse('${dateString}T00:00:00.000Z');
+      }
+      // If all else fails, rethrow the original exception
+      rethrow;
+    }
+  }
+
+  /// Helper method to parse datetime strings with better error handling
+  static DateTime _parseDateTime(String dateTimeString) {
+    try {
+      print('DEBUG: Parsing datetime: $dateTimeString');
+      return DateTime.parse(dateTimeString);
+    } catch (e) {
+      print('ERROR: Failed to parse datetime "$dateTimeString": $e');
+      // Try to extract just the date part if it's a malformed datetime
+      if (dateTimeString.contains('T')) {
+        final datePart = dateTimeString.split('T')[0];
+        print('DEBUG: Trying to parse date part: $datePart');
+        return DateTime.parse('${datePart}T00:00:00.000Z');
+      }
+      // If all else fails, rethrow the original exception
+      rethrow;
+    }
   }
 
   Map<String, dynamic> toJson() {

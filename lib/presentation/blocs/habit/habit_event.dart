@@ -36,11 +36,49 @@ class ToggleHabitCompletion extends HabitEvent {
 
 class FilterHabitsByCategory extends HabitEvent {
   final String? categoryId;
+  final bool shouldScrollToFirst;
 
-  const FilterHabitsByCategory(this.categoryId);
+  const FilterHabitsByCategory(this.categoryId, {this.shouldScrollToFirst = false});
 
   @override
-  List<Object> get props => [categoryId].whereType<Object>().toList();
+  List<Object> get props => [categoryId, shouldScrollToFirst].whereType<Object>().toList();
+}
+
+class FilterHabitsAdvanced extends HabitEvent {
+  final String? categoryId;
+  final String? frequency;
+  final String? completionStatus;
+  final int? minStreakCount;
+  final String? scheduledTime;
+  final bool shouldScrollToFirst;
+
+  const FilterHabitsAdvanced({
+    this.categoryId,
+    this.frequency,
+    this.completionStatus,
+    this.minStreakCount,
+    this.scheduledTime,
+    this.shouldScrollToFirst = false,
+  });
+
+  @override
+  List<Object> get props => [
+    categoryId,
+    frequency,
+    completionStatus,
+    minStreakCount,
+    scheduledTime,
+    shouldScrollToFirst,
+  ].whereType<Object>().toList();
+}
+
+class ScrollToFirstHabitOfCategory extends HabitEvent {
+  final String categoryId;
+
+  const ScrollToFirstHabitOfCategory(this.categoryId);
+
+  @override
+  List<Object> get props => [categoryId];
 }
 
 class LoadHabitSuggestions extends HabitEvent {
@@ -85,4 +123,87 @@ class DeleteHabit extends HabitEvent {
 
   @override
   List<Object> get props => [habitId];
+}
+
+class LoadUserHabitById extends HabitEvent {
+  final String userHabitId;
+
+  const LoadUserHabitById(this.userHabitId);
+
+  @override
+  List<Object> get props => [userHabitId];
+}
+
+class UpdateUserHabit extends HabitEvent {
+  final String userHabitId;
+  final Map<String, dynamic> updates;
+
+  const UpdateUserHabit({
+    required this.userHabitId,
+    required this.updates,
+  });
+
+  @override
+  List<Object> get props => [userHabitId, updates];
+}
+
+class DeleteUserHabit extends HabitEvent {
+  final String userHabitId;
+
+  const DeleteUserHabit(this.userHabitId);
+
+  @override
+  List<Object> get props => [userHabitId];
+}
+
+// ===== NOTIFICATION EVENTS =====
+
+class SetupHabitNotifications extends HabitEvent {
+  final String userHabitId;
+  final List<int> daysOfWeek;
+  final DateTime reminderTime;
+
+  const SetupHabitNotifications({
+    required this.userHabitId,
+    required this.daysOfWeek,
+    required this.reminderTime,
+  });
+
+  @override
+  List<Object> get props => [userHabitId, daysOfWeek, reminderTime];
+}
+
+class ToggleHabitNotifications extends HabitEvent {
+  final String userHabitId;
+  final bool enabled;
+
+  const ToggleHabitNotifications({
+    required this.userHabitId,
+    required this.enabled,
+  });
+
+  @override
+  List<Object> get props => [userHabitId, enabled];
+}
+
+class UpdateHabitNotificationTime extends HabitEvent {
+  final String userHabitId;
+  final DateTime newTime;
+
+  const UpdateHabitNotificationTime({
+    required this.userHabitId,
+    required this.newTime,
+  });
+
+  @override
+  List<Object> get props => [userHabitId, newTime];
+}
+
+class RemoveHabitNotifications extends HabitEvent {
+  final String userHabitId;
+
+  const RemoveHabitNotifications(this.userHabitId);
+
+  @override
+  List<Object> get props => [userHabitId];
 }

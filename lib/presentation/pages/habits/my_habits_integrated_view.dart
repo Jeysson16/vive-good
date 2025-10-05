@@ -11,15 +11,21 @@ import '../../blocs/category_scroll/category_scroll_event.dart';
 import '../../blocs/habit/habit_bloc.dart';
 import '../../blocs/habit/habit_event.dart';
 import '../../blocs/habit/habit_state.dart';
-import '../../widgets/animated_category_tabs_with_line.dart';
+import '../../widgets/figma_habit_card.dart';
+import '../../widgets/main/habit_item.dart';
 import '../../widgets/habits/synchronized_habits_list.dart';
 import '../../widgets/responsive_dimensions.dart';
+import '../../widgets/connectivity_indicator.dart';
+import '../progress/progress_main_screen.dart';
+import '../progress/habit_progress_screen.dart';
+import '../main/main_page.dart';
 import 'new_habit_screen.dart';
 
 class MyHabitsIntegratedView extends StatefulWidget {
   final VoidCallback? onBack;
+  final VoidCallback? onHabitCreated;
 
-  const MyHabitsIntegratedView({Key? key, this.onBack}) : super(key: key);
+  const MyHabitsIntegratedView({Key? key, this.onBack, this.onHabitCreated}) : super(key: key);
 
   @override
   State<MyHabitsIntegratedView> createState() => _MyHabitsIntegratedViewState();
@@ -33,6 +39,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   bool isSuggestionsExpanded = false;
   bool _isLoading = false;
   bool _hasUserInteracted = false;
+  Set<String> _selectedHabits = <String>{};
   late AnimationController _suggestionsAnimationController;
   late Animation<double> _suggestionsAnimation;
   late PageController _pageController;
@@ -40,6 +47,12 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   int _currentSuggestionIndex = 0;
   late AnimationController _bounceAnimationController;
   late Animation<double> _bounceAnimation;
+  
+  // Nuevas variables para filtros expandidos
+  String? selectedFrequency;
+  String? selectedCompletionStatus; // 'completed', 'pending', null (todos)
+  int? minStreakCount;
+  TimeOfDay? selectedScheduledTime;
 
   @override
   void initState() {
@@ -98,15 +111,14 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     try {
       final userId = await _tryGetUserIdFromSupabase();
       if (userId != null) {
+        // Load user habits and categories only once
         context.read<HabitBloc>().add(LoadUserHabits(userId: userId));
+        context.read<HabitBloc>().add(LoadCategories());
         // Cargar sugerencias una sola vez
         await _initializeSuggestionCategory();
-        print('DEBUG: Loading suggestions for user: $userId'); // Debug log
       } else {
-        print('DEBUG: No user ID found, cannot load suggestions'); // Debug log
       }
     } catch (e) {
-      print('Error loading data: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -129,18 +141,9 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     try {
       final supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
       if (supabaseUserId != null && supabaseUserId.isNotEmpty) {
-        print('🔄 Obteniendo ID desde Supabase: $supabaseUserId');
-        // AÑADE ESTA LÍNEA PARA VER EL USER ID EN LA CONSOLA
-        print('DEBUG: Current Supabase User ID: $supabaseUserId');
-        context.read<HabitBloc>().add(
-          LoadDashboardHabits(userId: supabaseUserId, date: DateTime.now()),
-        );
-        context.read<HabitBloc>().add(LoadCategories());
-
-        // Las sugerencias se cargarán cuando sea necesario
+        // Return user ID without loading data here - data loading is handled in _loadData
         return supabaseUserId;
       } else {
-        print('❌ No se pudo obtener ID de usuario desde Supabase');
         // Show error state
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -151,7 +154,6 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         return null;
       }
     } catch (e) {
-      print('❌ Error al obtener ID de Supabase: $e');
       return null;
     }
   }
@@ -160,7 +162,24 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     setState(() {
       selectedCategoryId = categoryId;
     });
-    context.read<HabitBloc>().add(FilterHabitsByCategory(categoryId));
+    // Use shouldScrollToFirst=true to trigger automatic scroll and highlight animation
+    context.read<HabitBloc>().add(
+      FilterHabitsByCategory(categoryId, shouldScrollToFirst: true),
+    );
+  }
+
+  void _applyFilters() {
+    // Aplicar filtros combinados
+    context.read<HabitBloc>().add(
+      FilterHabitsAdvanced(
+        categoryId: selectedCategoryId,
+        frequency: selectedFrequency,
+        completionStatus: selectedCompletionStatus,
+        minStreakCount: minStreakCount,
+        scheduledTime: selectedScheduledTime?.format(context),
+        shouldScrollToFirst: true,
+      ),
+    );
   }
 
   void _onSearchChanged(String query) {
@@ -180,10 +199,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       _currentSuggestionIndex = 0;
     });
 
-    // Cargar TODAS las sugerencias de Supabase una sola vez (sin filtro de categoría)
-    print(
-      '🔍 SUPABASE DEBUG: Cargando TODAS las sugerencias sin filtro de categoría',
-    );
+    // Cargar TODAS las sugerencias de Supabase una sola vez
     final supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
     if (supabaseUserId != null) {
       context.read<HabitBloc>().add(
@@ -210,21 +226,51 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     return BlocProvider(
       create: (context) =>
           CategoryScrollBloc()..add(InitializeCategoryScroll()),
-      child: Container(
-        color: Colors.transparent,
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // Suggestions dropdown
-              _buildSuggestionsDropdown(),
+      child: BlocListener<HabitBloc, HabitState>(
+        listener: (context, state) {
+          if (state is UserHabitDeleted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Hábito eliminado exitosamente'),
+                backgroundColor: Color(0xFF10B981),
+              ),
+            );
+            // Recargar datos después de eliminar
+            _loadData();
+          } else if (state is HabitError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error: ${state.message}'),
+                backgroundColor: const Color(0xFFEF4444),
+              ),
+            );
+          }
+        },
+        child: Column(
+          children: [
+            // Offline banner at the top
+            const OfflineBanner(),
+            // Main content
+            Expanded(
+              child: Container(
+                color: Colors.transparent,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      // Suggestions dropdown
+                      _buildSuggestionsDropdown(),
 
-              // Header
-              _buildHeader(),
+                      // Header
+                      _buildHeader(),
 
-              // My Habits content
-              _buildMyHabitsView(),
-            ],
-          ),
+                      // My Habits content
+                      _buildMyHabitsView(),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -407,35 +453,20 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   }
 
   void _toggleSuggestionsDropdown() {
-    print(
-      'DEBUG: Toggle suggestions dropdown called. Current state: $isSuggestionsExpanded',
-    );
-    print(
-      'DEBUG: Animation controller value: ${_suggestionsAnimationController.value}',
-    );
-    print(
-      'DEBUG: Animation controller status: ${_suggestionsAnimationController.status}',
-    );
-
     setState(() {
       isSuggestionsExpanded = !isSuggestionsExpanded;
       _hasUserInteracted = true; // Marcar que el usuario ha interactuado
     });
 
-    print('DEBUG: New state: $isSuggestionsExpanded');
 
     if (isSuggestionsExpanded) {
-      print('DEBUG: Starting forward animation');
       _suggestionsAnimationController.forward().then((_) {
-        print('DEBUG: Forward animation completed');
         // Activar animación de rebote después de expandir
         _bounceAnimationController.reset();
         _bounceAnimationController.forward();
       });
     } else {
-      print('DEBUG: Starting reverse animation');
       _suggestionsAnimationController.reverse().then((_) {
-        print('DEBUG: Reverse animation completed');
       });
     }
   }
@@ -449,22 +480,24 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
               // Search bar
               _buildSearchBar(),
 
-              // Animated Category tabs with scroll
-              AnimatedCategoryTabsWithLine(
-                categories: habitState.categories,
-                selectedCategoryId: selectedCategoryId,
-                onCategorySelected: _onCategorySelected,
-              ),
-
               // Synchronized Habits list
               SynchronizedHabitsList(
                 userHabits: habitState.filteredHabits,
                 habits: [], // Lista vacía por ahora
-                categories: habitState.categories,
+                categories: habitState.filteredCategories,
                 selectedCategoryId: selectedCategoryId,
                 onCategoryChanged: _onCategorySelected,
                 onHabitToggle: (userHabit) {
                   // Implementar toggle de hábito
+                },
+                onEdit: (userHabit) {
+                  _handleHabitAction('edit', userHabit);
+                },
+                onViewProgress: (userHabit) {
+                  _handleHabitAction('progress', userHabit);
+                },
+                onDelete: (userHabit) {
+                  _handleHabitAction('delete', userHabit);
                 },
               ),
 
@@ -659,112 +692,66 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     );
   }
 
-  Widget _buildHabitItem(UserHabit userHabit) {
-    // Determinar el color basado en el estado del hábito
-    final bool isCompleted = userHabit.isCompletedToday;
-    final Color statusColor = isCompleted
-        ? const Color(0xFF219540)
-        : const Color(0xFFF59E0B);
-    final Color backgroundColor = isCompleted
-        ? const Color(0xFF219540).withOpacity(0.1)
-        : const Color(0xFFF59E0B).withOpacity(0.1);
-    final IconData statusIcon = isCompleted
-        ? Icons.check_circle
-        : Icons.schedule;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+  Widget _buildHabitItem(
+    UserHabit userHabit,
+    List<Habit> habits,
+    List<Category> categories,
+  ) {
+    final habit = habits.firstWhere(
+      (h) => h.id == userHabit.habitId,
+      orElse: () => Habit(
+        id: 'fallback',
+        name: 'Hábito no encontrado',
+        description: '',
+        categoryId: userHabit.habitId != null ? 'fallback' : userHabit.id,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(statusIcon, color: statusColor, size: 26),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Hábito ${userHabit.habitId}',
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF111827),
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Frecuencia: ${userHabit.frequency}',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                if (userHabit.scheduledTime != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Programado: ${userHabit.scheduledTime}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF9CA3AF),
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: PopupMenuButton<String>(
-              onSelected: (value) => _handleHabitAction(value, userHabit),
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Text('Editar hábito'),
-                ),
-                const PopupMenuItem(
-                  value: 'progress',
-                  child: Text('Ver progreso'),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Text('Eliminar hábito'),
-                ),
-              ],
-              child: const Icon(
-                Icons.more_vert,
-                color: Color(0xFF6B7280),
-                size: 20,
-              ),
-            ),
-          ),
-        ],
+    );
+
+    final category = categories.firstWhere(
+      (c) => c.id == habit.categoryId,
+      orElse: () => Category(
+        id: 'fallback',
+        name: 'Sin categoría',
+        color: '#808080',
+        iconName: 'help_outline',
+      ),
+    );
+
+    return HabitItem(
+      userHabit: userHabit,
+      habit: habit,
+      category: category,
+      isCompleted: userHabit.isCompletedToday,
+      isSelected: _selectedHabits.contains(userHabit.id),
+      isHighlighted:
+          false, // Por ahora false, se puede implementar lógica de highlight después
+      isFirstInCategory: false, // Por ahora false
+      // Al tocar el checkbox, completar el hábito (no solo seleccionar)
+      onTap: () => _toggleHabitCompletion(userHabit),
+      onSelectionChanged: (id, selected) {
+        setState(() {
+          if (selected) {
+            _selectedHabits.add(id);
+          } else {
+            _selectedHabits.remove(id);
+          }
+        });
+      },
+      onHighlightComplete: () {
+        // Callback cuando termine el highlight
+      },
+    );
+  }
+
+  void _toggleHabitCompletion(UserHabit userHabit) {
+    // Despachar el evento al HabitBloc para reflejar el completado hoy
+    context.read<HabitBloc>().add(
+      ToggleHabitCompletion(
+        habitId: userHabit.id,
+        date: DateTime.now(),
+        isCompleted: !userHabit.isCompletedToday,
       ),
     );
   }
@@ -821,26 +808,139 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const NewHabitScreen()),
-    );
+    ).then((result) {
+      // Recargar datos si se creó un hábito exitosamente
+      if (result == true) {
+        _loadData();
+        // Notificar a main_page para que recargue el dashboard
+        widget.onHabitCreated?.call();
+      }
+    });
   }
 
   void _handleHabitAction(String action, UserHabit userHabit) {
     switch (action) {
       case 'edit':
-        // TODO: Implementar lógica para guardar nuevo hábito
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Hábito guardado exitosamente'),
-            backgroundColor: Color(0xFF219540),
-          ),
-        );
+        _navigateToEditHabit(userHabit);
         break;
       case 'progress':
+        _navigateToHabitProgress(userHabit);
         break;
       case 'delete':
+        _showDeleteConfirmation(userHabit);
         break;
     }
+  }
+
+  void _navigateToEditHabit(UserHabit userHabit) {
+    // Navegar a NewHabitScreen en modo edición con datos prellenados
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NewHabitScreen(
+          isEditMode: true,
+          userHabitToEdit: userHabit,
+        ),
+      ),
+    ).then((result) {
+      // Recargar datos después de editar
+      if (result == true) {
+        _loadData();
+        // Notificar a main_page para que recargue el dashboard
+        widget.onHabitCreated?.call();
+      }
+    });
+  }
+
+  void _navigateToHabitProgress(UserHabit userHabit) {
+    // Obtener el userId del usuario actual
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    
+    if (userId != null) {
+      // Navegar a la pantalla de progreso del hábito específico
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HabitProgressScreen(
+            userHabit: userHabit,
+            userId: userId,
+          ),
+        ),
+      );
+    } else {
+      // Mostrar error si no hay usuario autenticado
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error: Usuario no autenticado'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showDeleteConfirmation(UserHabit userHabit) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Eliminar hábito'),
+          content: Text(
+            '¿Estás seguro de que quieres eliminar "${userHabit.habit?.name ?? userHabit.customName ?? 'este hábito'}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _deleteHabit(userHabit);
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _deleteHabit(UserHabit userHabit) {
+    // Usar DeleteUserHabit en lugar de DeleteHabit para eliminación en cascada
+    context.read<HabitBloc>().add(DeleteUserHabit(userHabit.id));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Eliminando hábito "${userHabit.habit?.name ?? userHabit.customName ?? 'Hábito'}"...',
+        ),
+        backgroundColor: const Color(0xFFEF4444),
+      ),
+    );
+  }
+
+  void _handleHabitSelection(UserHabit userHabit) {
+    setState(() {
+      if (_selectedHabits.contains(userHabit.id)) {
+        _selectedHabits.remove(userHabit.id);
+      } else {
+        _selectedHabits.add(userHabit.id);
+      }
+    });
+
+    // Mostrar feedback visual
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _selectedHabits.contains(userHabit.id)
+              ? 'Hábito seleccionado: ${userHabit.habit?.name ?? userHabit.customName ?? "Hábito"}'
+              : 'Hábito deseleccionado: ${userHabit.habit?.name ?? userHabit.customName ?? "Hábito"}',
+        ),
+        backgroundColor: const Color(0xFF4CAF50),
+        duration: const Duration(milliseconds: 1500),
+      ),
+    );
   }
 
   void _showAddHabitModal() {
@@ -1157,11 +1257,9 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
               setState(() {
                 _currentSuggestionIndex = index;
               });
-              // print('🔍 SUPABASE DEBUG: PageView changed to index: $index');
             },
             itemBuilder: (context, index) {
               final habit = allSuggestions[index];
-              // print(
               //   '🔍 SUPABASE DEBUG: Building suggestion card for: ${habit.name} (categoryId: ${habit.categoryId})',
               // );
 
@@ -1310,26 +1408,143 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     // Usar el índice actual del PageView
     final currentIndex = _currentSuggestionIndex.clamp(0, totalSuggestions - 1);
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(totalSuggestions, (index) {
-        final isActive = currentIndex == index;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          width: isActive ? 12 : 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: isActive ? const Color(0xFF219540) : const Color(0xFFE5E7EB),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        );
-      }),
-    );
+    // Limitar la cantidad de puntos visibles para evitar overflow
+    const maxVisibleDots = 7;
+    final showAllDots = totalSuggestions <= maxVisibleDots;
+
+    if (showAllDots) {
+      // Mostrar todos los puntos si son pocos
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(totalSuggestions, (index) {
+          final isActive = currentIndex == index;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            width: isActive ? 12 : 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: isActive ? const Color(0xFF219540) : const Color(0xFFE5E7EB),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          );
+        }),
+      );
+    } else {
+      // Mostrar indicadores con scroll visual cuando hay muchos puntos
+      return Container(
+        height: 20,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Indicador de más contenido a la izquierda
+            if (currentIndex > 2)
+              Container(
+                margin: const EdgeInsets.only(right: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CA3AF),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CA3AF),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CA3AF),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            
+            // Puntos principales (máximo 5 visibles)
+            ...List.generate(5, (i) {
+              int actualIndex;
+              if (currentIndex <= 2) {
+                actualIndex = i;
+              } else if (currentIndex >= totalSuggestions - 3) {
+                actualIndex = totalSuggestions - 5 + i;
+              } else {
+                actualIndex = currentIndex - 2 + i;
+              }
+              
+              if (actualIndex < 0 || actualIndex >= totalSuggestions) {
+                return const SizedBox.shrink();
+              }
+              
+              final isActive = currentIndex == actualIndex;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: isActive ? 12 : 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: isActive ? const Color(0xFF219540) : const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              );
+            }),
+            
+            // Indicador de más contenido a la derecha
+            if (currentIndex < totalSuggestions - 3)
+              Container(
+                margin: const EdgeInsets.only(left: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CA3AF),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CA3AF),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9CA3AF),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+    }
   }
 
   Future<Map<String, dynamic>?> _getCurrentSuggestion() async {
     final habitState = context.read<HabitBloc>().state;
+
     if (habitState is HabitLoaded) {
       // Filtrar sugerencias rechazadas
       final filteredSuggestions = await _filterRejectedSuggestions(
@@ -1362,7 +1577,6 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       }
     }
 
-    print('🔍 SUPABASE DEBUG: No suggestions available');
     return null;
   }
 
@@ -1384,10 +1598,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       if (!rejectedSuggestions.contains(rejectedKey)) {
         rejectedSuggestions.add(rejectedKey);
         await prefs.setStringList('rejected_suggestions', rejectedSuggestions);
-        print('🚫 Sugerencia rechazada guardada: $rejectedKey');
       }
     } catch (e) {
-      print('❌ Error al guardar sugerencia rechazada: $e');
     }
   }
 
@@ -1396,7 +1608,6 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       final prefs = await SharedPreferences.getInstance();
       return prefs.getStringList('rejected_suggestions') ?? [];
     } catch (e) {
-      print('❌ Error al cargar sugerencias rechazadas: $e');
       return [];
     }
   }
@@ -1475,14 +1686,19 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
               : null,
         ),
       ),
-    ).then((_) {
+    ).then((result) {
       // Recargar datos cuando regrese de la pantalla de nuevo hábito
-      _loadData();
+      if (result == true) {
+        _loadData();
+        // Notificar a main_page para que recargue el dashboard
+        widget.onHabitCreated?.call();
+      }
     });
   }
 
   String? _getCategoryIdByName(String categoryName) {
     final habitState = context.read<HabitBloc>().state;
+
     if (habitState is HabitLoaded) {
       final category = habitState.categories.cast<Category?>().firstWhere(
         (cat) => cat?.name.toLowerCase() == categoryName.toLowerCase(),
@@ -1516,8 +1732,11 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
 
   Future<void> _addHabitFromSuggestion(Map<String, dynamic> suggestion) async {
     try {
+      print('DEBUG: Iniciando _addHabitFromSuggestion con datos: $suggestion');
+      
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
+        print('DEBUG: Usuario no autenticado');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Usuario no autenticado'),
@@ -1527,27 +1746,34 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         return;
       }
 
+      print('DEBUG: Usuario autenticado: ${user.id}');
+      
+      // Obtener category_id
+      final categoryId = _getCategoryIdByName(suggestion['category'] as String);
+      print('DEBUG: Category ID obtenido: $categoryId para categoría: ${suggestion['category']}');
+
       // Crear el user_habit directamente con los datos de la sugerencia
       final userHabitData = {
         'user_id': user.id,
         'habit_id': null, // Hábito custom
-        'frequency': 'diario',
+        'frequency': 'daily',
         'frequency_details': {'times_per_day': 1},
         'scheduled_time': '09:00:00',
         'notifications_enabled': true,
         'notification_time': '09:00:00',
         'start_date': DateTime.now().toIso8601String().split('T')[0],
         'is_active': true,
-        'is_public':
-            false, // Los hábitos desde sugerencias son privados por defecto
-        'estimated_duration': 15, // Duración por defecto
-        'difficulty_level': 'Fácil', // Dificultad por defecto
+        'is_public': false, // Los hábitos desde sugerencias son privados por defecto
         'custom_name': suggestion['title'] as String,
         'custom_description': suggestion['description'] as String,
-        'category_id': _getCategoryIdByName(suggestion['category'] as String),
+        'category_id': categoryId,
       };
 
+      print('DEBUG: Datos del hábito a insertar: $userHabitData');
+
       await Supabase.instance.client.from('user_habits').insert(userHabitData);
+      
+      print('DEBUG: Hábito insertado exitosamente');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1564,8 +1790,13 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         });
         _suggestionsAnimationController.reverse();
         _loadData();
+        // Notificar a main_page para que recargue el dashboard
+        widget.onHabitCreated?.call();
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('DEBUG: Error en _addHabitFromSuggestion: $e');
+      print('DEBUG: Stack trace: $stackTrace');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1578,78 +1809,118 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   }
 
   Widget _buildActionButtons() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () async {
-              // Guardar sugerencia rechazada antes de cerrar
-              final currentSuggestion = await _getCurrentSuggestion();
-              if (currentSuggestion != null) {
-                await _saveRejectedSuggestion(
-                  currentSuggestion['title'] as String,
-                  currentSuggestion['category'] as String,
-                );
-              }
+        const SizedBox(height: 12),
+        
+        // Botones de acción principales
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () async {
+                  // Guardar sugerencia rechazada antes de navegar a la siguiente
+                  final currentSuggestion = await _getCurrentSuggestion();
+                  if (currentSuggestion != null) {
+                    await _saveRejectedSuggestion(
+                      currentSuggestion['title'] as String,
+                      currentSuggestion['category'] as String,
+                    );
+                  }
 
-              // Cerrar las sugerencias
-              setState(() {
-                isSuggestionsExpanded = false;
-                _hasUserInteracted = true;
-              });
-              _suggestionsAnimationController.reverse();
-            },
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            child: const Text(
-              'Rechazar',
-              style: TextStyle(
-                color: Color(0xFF6B7280),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                  // Navegar a la siguiente sugerencia o cerrar si es la última
+                  await _navigateToNextSuggestion();
+                },
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFE5E7EB)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: const Text(
+                  'Rechazar',
+                  style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () async {
-              // Navegar a nueva pantalla de hábito con datos prellenados
-              await _navigateToNewHabit(prefillData: true);
-            },
-            style: OutlinedButton.styleFrom(
-              backgroundColor: const Color(0xFF219540),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () async {
+                  // Navegar a nueva pantalla de hábito con datos prellenados
+                  await _navigateToNewHabit(prefillData: true);
+                },
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: const Color(0xFF219540),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: const Text(
+                  'Configurar',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-            child: const Text(
-              'Configurar',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
+          ],
         ),
       ],
     );
   }
 
+  void _navigateToPreviousSuggestion() {
+    final habitState = context.read<HabitBloc>().state;
+    if (habitState is HabitLoaded && _currentSuggestionIndex > 0) {
+      setState(() {
+        _currentSuggestionIndex--;
+      });
+    }
+  }
+
+  Future<void> _navigateToNextSuggestion() async {
+    final habitState = context.read<HabitBloc>().state;
+    if (habitState is HabitLoaded) {
+      final totalSuggestions = habitState.habitSuggestions.length;
+      
+      if (_currentSuggestionIndex < totalSuggestions - 1) {
+        setState(() {
+          _currentSuggestionIndex++;
+        });
+      } else {
+        // Si es la última sugerencia, cerrar las sugerencias
+        setState(() {
+          isSuggestionsExpanded = false;
+          _hasUserInteracted = true;
+        });
+        _suggestionsAnimationController.reverse();
+      }
+    }
+  }
+
   void _showFiltersModal() {
+    // Estados temporales locales para que el modal sea reactivo
+    String? tempCategoryId = selectedCategoryId;
+    String? tempFrequency = selectedFrequency;
+    String? tempCompletionStatus = selectedCompletionStatus;
+    int? tempMinStreakCount = minStreakCount;
+    TimeOfDay? tempScheduledTime = selectedScheduledTime;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
+      builder: (context) => StatefulBuilder(
+        builder: (context, modalSetState) => Container(
         height: MediaQuery.of(context).size.height * 0.7,
         decoration: const BoxDecoration(
           color: Colors.white,
@@ -1701,6 +1972,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Filtro por Categoría
                     const Text(
                       'Categoría',
                       style: TextStyle(
@@ -1717,19 +1989,21 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                             children: [
                               _buildFilterOption(
                                 'Todas las categorías',
-                                selectedCategoryId == null,
+                                tempCategoryId == null,
                                 () {
-                                  _onCategorySelected(null);
-                                  Navigator.pop(context);
+                                  modalSetState(() {
+                                    tempCategoryId = null;
+                                  });
                                 },
                               ),
                               ...state.categories.map(
                                 (category) => _buildFilterOption(
                                   category.name,
-                                  selectedCategoryId == category.id,
+                                  tempCategoryId == category.id,
                                   () {
-                                    _onCategorySelected(category.id);
-                                    Navigator.pop(context);
+                                    modalSetState(() {
+                                      tempCategoryId = category.id;
+                                    });
                                   },
                                 ),
                               ),
@@ -1739,6 +2013,213 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                         return const SizedBox.shrink();
                       },
                     ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Filtro por Frecuencia
+                    const Text(
+                      'Frecuencia',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Column(
+                      children: [
+                        _buildFilterOption(
+                          'Todas las frecuencias',
+                          tempFrequency == null,
+                          () {
+                            modalSetState(() {
+                              tempFrequency = null;
+                            });
+                          },
+                        ),
+                        _buildFilterOption(
+                          'Diario',
+                          tempFrequency == 'daily',
+                          () {
+                            modalSetState(() {
+                              tempFrequency = 'daily';
+                            });
+                          },
+                        ),
+                        _buildFilterOption(
+                          'Semanal',
+                          tempFrequency == 'weekly',
+                          () {
+                            modalSetState(() {
+                              tempFrequency = 'weekly';
+                            });
+                          },
+                        ),
+                        _buildFilterOption(
+                          'Mensual',
+                          tempFrequency == 'monthly',
+                          () {
+                            modalSetState(() {
+                              tempFrequency = 'monthly';
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Filtro por Estado de Completado
+                    const Text(
+                      'Estado de Completado',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Column(
+                      children: [
+                        _buildFilterOption(
+                          'Todos los estados',
+                          tempCompletionStatus == null,
+                          () {
+                            modalSetState(() {
+                              tempCompletionStatus = null;
+                            });
+                          },
+                        ),
+                        _buildFilterOption(
+                          'Completados hoy',
+                          tempCompletionStatus == 'completed',
+                          () {
+                            modalSetState(() {
+                              tempCompletionStatus = 'completed';
+                            });
+                          },
+                        ),
+                        _buildFilterOption(
+                          'Pendientes',
+                          tempCompletionStatus == 'pending',
+                          () {
+                            modalSetState(() {
+                              tempCompletionStatus = 'pending';
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Filtro por Racha Mínima
+                    const Text(
+                      'Racha Mínima',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.trending_up, color: Color(0xFF6B7280), size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                hintText: 'Ej: 5 días',
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                              onChanged: (value) {
+                                modalSetState(() {
+                                  tempMinStreakCount = int.tryParse(value);
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Padding inferior para evitar solapamiento con botones fijos
+                    const SizedBox(height: 100),
+                  ],
+                ),
+              ),
+            ),
+            // Botones fijos al fondo
+            SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          modalSetState(() {
+                            tempCategoryId = null;
+                            tempFrequency = null;
+                            tempCompletionStatus = null;
+                            tempMinStreakCount = null;
+                            tempScheduledTime = null;
+                          });
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFE5E7EB)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text(
+                          'Limpiar',
+                          style: TextStyle(color: Color(0xFF6B7280)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          // Persistir selección a estado del padre y aplicar filtros
+                          setState(() {
+                            selectedCategoryId = tempCategoryId;
+                            selectedFrequency = tempFrequency;
+                            selectedCompletionStatus = tempCompletionStatus;
+                            minStreakCount = tempMinStreakCount;
+                            selectedScheduledTime = tempScheduledTime;
+                          });
+                          _applyFilters();
+                          Navigator.pop(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text(
+                          'Aplicar',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1746,11 +2227,13 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
           ],
         ),
       ),
+    ),
     );
   }
 
   Widget _buildFilterOption(String title, bool isSelected, VoidCallback onTap) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -1794,39 +2277,99 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     );
   }
 
+  // Static map for icon name to IconData mapping
+  static const Map<String, IconData> _iconMap = {
+    // Iconos de las categorías de la base de datos
+    'utensils': Icons.restaurant,
+    'restaurant': Icons.restaurant,
+    'food': Icons.restaurant,
+    'activity': Icons.fitness_center,
+    'fitness_center': Icons.fitness_center,
+    'exercise': Icons.fitness_center,
+    'moon': Icons.bedtime,
+    'bed': Icons.bedtime,
+    'sleep': Icons.bedtime,
+    'droplet': Icons.water_drop,
+    'water_drop': Icons.water_drop,
+    'water': Icons.water_drop,
+    'local_drink': Icons.local_drink,
+    'brain': Icons.psychology,
+    'psychology': Icons.psychology,
+    'mental': Icons.psychology,
+    'target': Icons.track_changes,
+    'track_changes': Icons.track_changes,
+    'productivity': Icons.track_changes,
+    // Iconos específicos de la base de datos
+    'apple': Icons.apple,
+    'directions_walk': Icons.directions_walk,
+    'accessibility_new': Icons.accessibility_new,
+    'bedtime': Icons.bedtime,
+    'phone_iphone': Icons.phone_iphone,
+    'self_improvement': Icons.self_improvement,
+    'edit': Icons.edit,
+    'menu_book': Icons.menu_book,
+    'event_note': Icons.event_note,
+    // Iconos adicionales
+    'favorite': Icons
+        .fitness_center, // Cambiar de corazón a fitness para hábitos generales
+    'heart': Icons.favorite,
+    'work': Icons.work,
+    'business': Icons.work,
+    'school': Icons.school,
+    'education': Icons.school,
+    'person': Icons.person,
+    'personal': Icons.person,
+    'home': Icons.home,
+    'house': Icons.home,
+    'people': Icons.people,
+    'social': Icons.people,
+    'palette': Icons.palette,
+    'creative': Icons.palette,
+    'spiritual': Icons.self_improvement,
+    'movie': Icons.movie,
+    'entertainment': Icons.movie,
+    'attach_money': Icons.attach_money,
+    'money': Icons.attach_money,
+    'finance': Icons.attach_money,
+    'fastfood': Icons.fastfood,
+    'general': Icons.track_changes,
+  };
+
   IconData _getIconData(String? iconName) {
-    switch (iconName) {
-      case 'fastfood':
-        return Icons.fastfood;
-      case 'fitness_center':
-        return Icons.fitness_center;
-      case 'self_improvement':
-        return Icons.self_improvement;
-      case 'bedtime':
-        return Icons.bedtime;
-      case 'water_drop':
-        return Icons.water_drop;
-      default:
-        return Icons.category; // Default icon
+    if (iconName == null) return Icons.star;
+
+    // Get icon from map using lowercase key, return default if not found
+    return _iconMap[iconName.toLowerCase()] ?? Icons.star;
+  }
+
+  Color _getIconColor(String? colorString) {
+    if (colorString == null) return const Color(0xFF6B7280);
+
+    try {
+      String cleanColor = colorString.trim();
+
+      // Remove # if present
+      if (cleanColor.startsWith('#')) {
+        cleanColor = cleanColor.substring(1);
+      }
+
+      // Ensure we have a valid hex color (6 or 8 characters)
+      if (cleanColor.length == 6) {
+        // Add alpha channel for 6-digit hex
+        cleanColor = 'FF$cleanColor';
+      } else if (cleanColor.length != 8) {
+        // Invalid length, use default
+        return const Color(0xFF6B7280);
+      }
+
+      // Parse as hex and create Color
+      final colorValue = int.parse(cleanColor, radix: 16);
+      return Color(colorValue);
+    } catch (e) {
+      // Debug: print error for troubleshooting
+      return const Color(0xFF6B7280);
     }
   }
 
-  Color _getIconColor(String? colorName) {
-    switch (colorName) {
-      case 'red':
-        return Colors.red;
-      case 'green':
-        return Colors.green;
-      case 'blue':
-        return Colors.blue;
-      case 'orange':
-        return Colors.orange;
-      case 'purple':
-        return Colors.purple;
-      default:
-        return Colors.grey; // Default color
-    }
-  }
 
-  // ...
 }

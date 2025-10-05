@@ -1,24 +1,28 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
+import '../../blocs/dashboard/dashboard_bloc.dart';
+import '../../blocs/dashboard/dashboard_event.dart';
+import '../../blocs/dashboard/dashboard_state.dart';
 import '../../blocs/habit/habit_bloc.dart';
 import '../../blocs/habit/habit_event.dart';
-import '../../blocs/habit/habit_state.dart';
+
 import '../../blocs/auth/auth_bloc.dart';
-import '../../blocs/auth/auth_state.dart' as app_auth;
-import '../../widgets/main/main_header.dart';
-import '../../widgets/main/daily_register_section.dart';
-import '../../widgets/main/category_tabs.dart';
-import '../../widgets/main/habit_list.dart';
-import '../../widgets/animated_category_tabs_with_line.dart';
+import '../../blocs/auth/auth_state.dart';
+import '../../../domain/entities/category.dart';
+import '../../../domain/entities/user_habit.dart';
+import '../../../domain/entities/habit.dart';
+import '../../../domain/entities/habit_log.dart';
 import '../../widgets/main/bottom_navigation.dart';
-import '../../widgets/main/quick_actions_modal.dart';
 import '../../widgets/main/sliver_main_content.dart';
 import '../../controllers/sliver_scroll_controller.dart';
 import '../habits/my_habits_integrated_view.dart';
 import '../progress/progress_main_screen.dart';
+import '../assistant/assistant_page.dart';
 import '../../../views/profile/profile_view.dart';
-import '../../../blocs/profile/profile_bloc.dart';
+import '../../blocs/profile/profile_bloc.dart';
+import '../../widgets/connectivity_indicator.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MainPage extends StatefulWidget {
@@ -33,34 +37,120 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   Set<String> _selectedHabits = {};
   bool _showBottomTab = false;
   String? _selectedCategoryId;
+  String?
+  _firstHabitOfCategoryId; // ID del primer hábito de la categoría seleccionada
   late TabController _tabController;
   late SliverScrollController _sliverController;
+  Timer? _loadingVerificationTimer;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 1, vsync: this); // Start with 1 tab
+    // Inicializa TabController con el número correcto de pestañas si ya hay datos cargados;
+    // de lo contrario, usa 1 pestaña ("Todos") como placeholder para evitar mismatch inicial.
+    int initialTabLength = 1; // Siempre al menos 1 por "Todos"
+    final dashboardState = context.read<DashboardBloc>().state;
+    if (dashboardState is DashboardLoaded) {
+      // Calcular categorías con hábitos visibles hoy para las pestañas
+      final categoriesWithHabits = _getCategoriesWithHabits(
+        dashboardState.categories,
+        dashboardState.userHabits,
+        dashboardState.habits,
+        dashboardState.habitLogs.values.expand((e) => e).toList(),
+      );
+      initialTabLength = (categoriesWithHabits.length + 1).clamp(1, 1000);
+    }
+    _tabController = TabController(length: initialTabLength, vsync: this);
     _sliverController = SliverScrollController(
       tabController: _tabController,
       context: context,
       onCategoryChanged: _onCategorySelected,
     );
+
+    // Load dashboard data only if not already loaded
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUserHabitsIfNeeded();
+      _startLoadingVerificationTimer();
+    });
+  }
+
+  void _updateTabController(int newLength) {
+    // Ensure minimum length of 1
+    final safeLength = newLength > 0 ? newLength : 1;
     
-    // Data is now preloaded in splash screen, no need to load again
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //   _loadUserHabits();
-    // });
+    // Only recreate if the length actually changed and is different from current
+    if (_tabController.length != safeLength) {
+      print('🔧 [DEBUG] Updating TabController: ${_tabController.length} -> $safeLength');
+      
+      // Store current index to preserve selection if possible
+      final currentIndex = _tabController.index;
+      
+      // Dispose old controller
+      _tabController.dispose();
+
+      // Create new controller with correct length
+      _tabController = TabController(
+        length: safeLength, 
+        vsync: this,
+        initialIndex: currentIndex < safeLength ? currentIndex : 0,
+      );
+
+      // Only recreate SliverScrollController if necessary
+      if (_sliverController.tabController != _tabController) {
+        _sliverController.dispose();
+        _sliverController = SliverScrollController(
+          tabController: _tabController,
+          context: context,
+          onCategoryChanged: _onCategorySelected,
+        );
+      }
+
+      print('🔧 [DEBUG] TabController updated successfully with $safeLength tabs');
+      
+      // Trigger rebuild only when necessary
+      if (mounted) {
+        setState(() {});
+      }
+    } else {
+      print('🔧 [DEBUG] TabController length unchanged: $safeLength');
+    }
+  }
+
+  void _loadUserHabitsIfNeeded() {
+    final dashboardState = context.read<DashboardBloc>().state;
+    print('🔍 [DEBUG] MainPage - Dashboard state: ${dashboardState.runtimeType}');
+    
+    // Only load if data is not already loaded
+    if (dashboardState is! DashboardLoaded) {
+      print('🔍 [DEBUG] MainPage - Dashboard not loaded, loading data...');
+      _loadUserHabits();
+    } else {
+      print('🔍 [DEBUG] MainPage - Dashboard already loaded with ${(dashboardState as DashboardLoaded).userHabits.length} habits');
+    }
   }
 
   void _loadUserHabits() {
     final authState = context.read<AuthBloc>().state;
-    if (authState is app_auth.AuthAuthenticated) {
+    print('🔍 [DEBUG] MainPage - Auth state: ${authState.runtimeType}');
+    if (authState is AuthAuthenticated) {
       final userId = authState.user.id;
-      // Usar LoadDashboardHabits con parámetros requeridos
-      context.read<HabitBloc>().add(
-        LoadDashboardHabits(userId: userId, date: DateTime.now()),
+      print('🔍 [DEBUG] MainPage - Loading dashboard data for user: $userId');
+      
+      // Reload dashboard data
+      context.read<DashboardBloc>().add(
+        LoadDashboardData(userId: userId, date: DateTime.now()),
       );
-      context.read<HabitBloc>().add(LoadCategories());
+      
+      // Also reload habit suggestions to reflect new habits
+      context.read<HabitBloc>().add(
+        LoadHabitSuggestions(
+          userId: userId,
+          categoryId: null, // Load all suggestions
+          limit: 100,
+        ),
+      );
+    } else {
+      print('❌ [DEBUG] MainPage - User not authenticated!');
     }
   }
 
@@ -76,8 +166,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     });
   }
 
-  void _onMicPressed() {
-    QuickActionsModal.show(context, onActionSelected: _handleQuickAction);
+  Widget _buildAssistantPage() {
+    return const AssistantPage();
   }
 
   void _handleQuickAction(String action) {
@@ -113,31 +203,75 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   //   );
   // }
 
-  void _onHabitToggle(String userHabitId, bool isCompleted) {
+  void _onHabitToggle(String habitId, bool isCompleted) {
+    // Actualiza Dashboard (animación y métricas)
+    context.read<DashboardBloc>().add(
+      ToggleDashboardHabitCompletion(
+        habitId: habitId,
+        date: DateTime.now(),
+        isCompleted: isCompleted,
+      ),
+    );
+
+    // Sincroniza también HabitBloc para que "Mis Hábitos" refleje el cambio
     context.read<HabitBloc>().add(
       ToggleHabitCompletion(
-        habitId: userHabitId,
+        habitId: habitId,
         date: DateTime.now(),
-        isCompleted: !isCompleted,
+        isCompleted: isCompleted,
       ),
     );
   }
 
   void _onCategorySelected(String? categoryId) {
+    // Identificar el primer hábito de la categoría seleccionada
+    String? firstHabitId;
+    if (categoryId != null) {
+      final dashboardState = context.read<DashboardBloc>().state;
+      if (dashboardState is DashboardLoaded) {
+        // Filtrar hábitos por categoría y obtener el primero (solo hábitos no completados)
+        final habitsInCategory = dashboardState.userHabits.where((userHabit) {
+          // Solo considerar hábitos no completados
+          if (userHabit.isCompletedToday) return false;
+          
+          final habit = dashboardState.habits.firstWhere(
+            (h) => h.id == userHabit.habitId,
+            orElse: () => Habit(
+              id: '',
+              name: '',
+              description: '',
+              categoryId: null,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          );
+          return habit.categoryId == categoryId;
+        }).toList();
+
+        if (habitsInCategory.isNotEmpty) {
+          // Usar el ID del UserHabit, no del Habit
+          firstHabitId = habitsInCategory.first.id;
+        } 
+      }
+    }
+
     setState(() {
       _selectedCategoryId = categoryId;
+      _firstHabitOfCategoryId = firstHabitId;
     });
+
     if (mounted) {
-      context.read<HabitBloc>().add(FilterHabitsByCategory(categoryId));
+      // Use DashboardBloc to handle category filtering for dashboard
+      context.read<DashboardBloc>().add(FilterDashboardByCategory(categoryId));
+
+      // Scroll to first habit of selected category if categoryId is not null
+      if (categoryId != null) {
+        _sliverController.scrollToFirstHabitOfCategory(categoryId);
+      }
     }
   }
 
-  void _onProgressTap() {
-    // Navigate to progress page
-    setState(() {
-      _selectedIndex = 2;
-    });
-  }
+
 
   void _onHabitSelected(String habitId, bool isSelected) {
     setState(() {
@@ -150,13 +284,42 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     });
   }
 
-  void _onMarkSelectedAsCompleted() {
-    for (String habitId in _selectedHabits) {
-      _onHabitToggle(habitId, true); // Mark as completed (true because it gets inverted in _onHabitToggle)
+  void _onMarkSelectedAsCompleted() async {
+    // Prevent multiple executions
+    if (_selectedHabits.isEmpty) return;
+    
+    // Store the selected habits to process
+    final habitsToComplete = List<String>.from(_selectedHabits);
+    
+    // Disparar una sola acción de completado en bloque para animación simultánea
+    context.read<DashboardBloc>().add(
+      ToggleDashboardHabitsCompletionBulk(
+        habitIds: habitsToComplete,
+        date: DateTime.now(),
+        isCompleted: true,
+      ),
+    );
+
+    // También actualizar HabitBloc para que "Mis Hábitos" se mantenga en sincronía
+    final now = DateTime.now();
+    for (final id in habitsToComplete) {
+      context.read<HabitBloc>().add(
+        ToggleHabitCompletion(
+          habitId: id,
+          date: now,
+          isCompleted: true,
+        ),
+      );
     }
-    setState(() {
-      _selectedHabits.clear();
-      _showBottomTab = false;
+
+    // Mantener la selección visible durante la animación para evitar "dispose" prematuro
+    // y luego limpiar cuando hayan terminado las animaciones internas
+    Future.delayed(const Duration(milliseconds: 2200), () {
+      if (!mounted) return;
+      setState(() {
+        _selectedHabits.clear();
+        _showBottomTab = false;
+      });
     });
   }
 
@@ -167,8 +330,145 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     });
   }
 
+  void _onAnimationError() {
+    print('🚨 [ERROR] Animation error detected in main page');
+    // Trigger a sync error state with auto-refresh
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      context.read<DashboardBloc>().add(
+        RefreshDashboardData(
+          userId: authState.user.id,
+          date: DateTime.now(),
+        ),
+      );
+    }
+  }
+
+  void _startLoadingVerificationTimer() {
+    // Cancel any existing timer
+    _loadingVerificationTimer?.cancel();
+    
+    // Start a timer to check if habits load within 8 seconds
+    _loadingVerificationTimer = Timer(const Duration(seconds: 8), () {
+      if (!mounted) return;
+      
+      final dashboardState = context.read<DashboardBloc>().state;
+      print('🕐 [DEBUG] Loading verification timer triggered. State: ${dashboardState.runtimeType}');
+      
+      // If still loading or in error state after 8 seconds, trigger refresh
+      if (dashboardState is DashboardLoading || 
+          dashboardState is DashboardError ||
+          (dashboardState is DashboardLoaded && dashboardState.userHabits.isEmpty)) {
+        
+        print('🚨 [WARNING] Habits not loaded after 8 seconds, triggering refresh');
+        final authState = context.read<AuthBloc>().state;
+        if (authState is AuthAuthenticated) {
+          context.read<DashboardBloc>().add(
+            RefreshDashboardData(
+              userId: authState.user.id,
+              date: DateTime.now(),
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  /// Get categories that have user habits for tabs
+  List<Category> _getCategoriesWithHabits(
+    List<Category> categories,
+    List<UserHabit> userHabits,
+    List<Habit> habits,
+    List<HabitLog> habitLogs,
+  ) {
+    print('🔍 [DEBUG] MainPage _getCategoriesWithHabits called');
+    print('   - Total categories: ${categories.length}');
+    print('   - Total user habits: ${userHabits.length}');
+    print('   - Total habits: ${habits.length}');
+    
+    // Filter categories with at least one visible (pending & active today) habit
+    final categoriesWithHabits = categories.where((category) {
+      final hasVisible = userHabits.any((userHabit) {
+        final habit = habits.firstWhere(
+          (h) => h.id == userHabit.habitId,
+          orElse: () => Habit(
+            id: '',
+            name: '',
+            description: '',
+            categoryId: null,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+        if (habit.categoryId != category.id) return false;
+        final today = DateTime.now();
+        final isCompletedToday = _isHabitCompletedToday(userHabit, habitLogs);
+        final activeToday = _shouldHabitBeActiveToday(userHabit, today);
+        return !isCompletedToday && activeToday;
+      });
+      
+      if (hasVisible) {
+        print('   - Category "${category.name}" has pending habits for today');
+      }
+      
+      return hasVisible;
+    }).toList();
+    
+    print('   - Categories with habits: ${categoriesWithHabits.length}');
+    for (var category in categoriesWithHabits) {
+      print('     - ${category.name} (${category.id})');
+    }
+    
+    return categoriesWithHabits;
+  }
+
+  bool _isHabitCompletedToday(UserHabit userHabit, List<HabitLog> logs) {
+    final now = DateTime.now();
+    bool sameDay(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+    return logs.any((log) =>
+        log.userHabitId == userHabit.id && sameDay(log.completedAt, now));
+  }
+
+  /// Verifica si el hábito debe estar activo hoy según su frecuencia
+  bool _shouldHabitBeActiveToday(UserHabit userHabit, DateTime today) {
+    if (!userHabit.isActive) return false;
+
+    switch (userHabit.frequency.toLowerCase()) {
+      case 'daily':
+      case 'diario':
+        return true;
+      case 'weekly':
+      case 'semanal':
+        if (userHabit.frequencyDetails != null &&
+            userHabit.frequencyDetails!.containsKey('days_of_week')) {
+          final selectedDays =
+              userHabit.frequencyDetails!['days_of_week'] as List<dynamic>?;
+          if (selectedDays != null && selectedDays.isNotEmpty) {
+            final todayWeekday = today.weekday; // 1=Lunes .. 7=Domingo
+            return selectedDays.contains(todayWeekday);
+          }
+        }
+        return true; // Sin días específicos => todos los días
+      case 'monthly':
+      case 'mensual':
+        if (userHabit.frequencyDetails != null &&
+            userHabit.frequencyDetails!.containsKey('day_of_month')) {
+          final targetDay =
+              userHabit.frequencyDetails!['day_of_month'] as int?;
+          if (targetDay != null) {
+            return today.day == targetDay;
+          }
+        }
+        return today.day == 1; // Sin día específico => día 1 del mes
+      default:
+        return true; // Frecuencia desconocida => activo
+    }
+  }
+
   @override
   void dispose() {
+    _loadingVerificationTimer?.cancel();
     _tabController.dispose();
     _sliverController.dispose();
     super.dispose();
@@ -178,82 +478,207 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            IndexedStack(
-              index: _selectedIndex,
+      body: Column(
+        children: [
+          // Offline banner at the top
+          const OfflineBanner(),
+          // Main content
+          Expanded(
+            child: Stack(
               children: [
-                _buildMainContent(), // Home page (index 0)
-                MyHabitsIntegratedView(), // My Habits page (index 1)
-                const ProgressMainScreen(), // Progress page (index 2)
-                BlocProvider(
-                  create: (context) =>
-                      ProfileBloc(supabaseClient: Supabase.instance.client),
-                  child: const ProfileView(),
-                ), // Profile page (index 3)
+                // Main content with bottom padding for navigation
+                Positioned.fill(
+                  bottom: 64, // Height of bottom navigation
+                  child: SafeArea(
+                    bottom: false,
+                    child: Stack(
+                      children: [
+                        IndexedStack(
+                          index: _selectedIndex,
+                          children: [
+                            _buildMainContent(), // Home page (index 0)
+                            MyHabitsIntegratedView(
+                              onHabitCreated: () {
+                                // Recargar datos del dashboard cuando se crea un nuevo hábito
+                                _loadUserHabits();
+                              },
+                            ), // My Habits page (index 1)
+                            const ProgressMainScreen(), // Progress page (index 2)
+                            BlocProvider(
+                              create: (context) =>
+                                  ProfileBloc(supabaseClient: Supabase.instance.client),
+                              child: const ProfileView(),
+                            ), // Profile page (index 3)
+                          ],
+                        ),
+                        if (_showBottomTab && _selectedIndex == 0)
+                          _buildBottomSelectionTab(),
+                      ],
+                    ),
+                  ),
+                ),
+                // Bottom navigation positioned at bottom
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: MainBottomNavigation(
+                    currentIndex: _selectedIndex,
+                    onTap: _onBottomNavTap,
+                  ),
+                ),
               ],
             ),
-            if (_showBottomTab && _selectedIndex == 0)
-              _buildBottomSelectionTab(),
-          ],
-        ),
-      ),
-      bottomNavigationBar: MainBottomNavigation(
-        currentIndex: _selectedIndex,
-        onTap: _onBottomNavTap,
-        onMicPressed: _onMicPressed,
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildMainContent() {
-    return BlocBuilder<HabitBloc, HabitState>(
+    return BlocBuilder<DashboardBloc, DashboardState>(
       builder: (context, state) {
-        if (state is HabitLoaded) {
-          // Update tab controller length when categories change
-          final categoriesCount =
-              state.categories.length + 1; // +1 for "Todos" tab
-          if (_tabController.length != categoriesCount && categoriesCount > 0) {
-            // Schedule controller recreation after the current frame
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                // Dispose previous controllers properly
-                _sliverController.dispose();
-                _tabController.dispose();
+        return BlocListener<DashboardBloc, DashboardState>(
+          listener: (context, state) {
+            print('🔍 [DEBUG] BlocListener received state: ${state.runtimeType}');
+            if (state is DashboardLoaded) {
+              print('🔍 [DEBUG] DashboardLoaded state detected, calling _getCategoriesWithHabits');
+              // Filter categories that have associated user habits for TabController
+              final categoriesWithHabits = _getCategoriesWithHabits(
+                state.categories,
+                state.userHabits,
+                state.habits,
+                state.habitLogs.values.expand((e) => e).toList(),
+              );
 
-                // Create new controllers with correct length
-                _tabController = TabController(
-                  length: categoriesCount,
-                  vsync: this,
-                );
-                _sliverController = SliverScrollController(
-                  tabController: _tabController,
-                  context: context,
-                  onCategoryChanged: _onCategorySelected,
-                );
+              // Update TabController with filtered categories count
+              final totalTabs =
+                  categoriesWithHabits.length + 1; // +1 for "Todos" tab
+              _updateTabController(totalTabs);
 
-                // Update categories in the controller
-                _sliverController.updateCategories(state.categories);
-
-                // Trigger rebuild
+              // Update categories in SliverScrollController with filtered categories
+              _sliverController.updateCategories(categoriesWithHabits);
+            } else if (state is DashboardSyncError && state.shouldAutoRefresh) {
+              print('🔍 [DEBUG] DashboardSyncError detected, triggering auto-refresh');
+              // Auto-refresh after a short delay
+              Future.delayed(const Duration(seconds: 2), () {
                 if (mounted) {
-                  setState(() {});
+                  final authState = context.read<AuthBloc>().state;
+                  if (authState is AuthAuthenticated) {
+                    context.read<DashboardBloc>().add(
+                      RefreshDashboardData(
+                        userId: authState.user.id,
+                        date: DateTime.now(),
+                      ),
+                    );
+                  }
                 }
-              }
-            });
-          } else if (categoriesCount > 0) {
-            // Update categories in the controller if length is the same
-            _sliverController.updateCategories(state.categories);
-          }
-        }
-
-        return SliverMainContent(
-          controller: _sliverController,
-          onHabitToggle: _onHabitToggle,
-          onProgressTap: _onProgressTap,
-          selectedHabits: _selectedHabits,
-          onHabitSelected: _onHabitSelected,
+              });
+            } else {
+              print('🔍 [DEBUG] State is not DashboardLoaded: ${state.runtimeType}');
+            }
+          },
+          child: Stack(
+            children: [
+              SliverMainContent(
+                controller: _sliverController,
+                onHabitToggle: _onHabitToggle,
+                selectedHabits: _selectedHabits,
+                onHabitSelected: _onHabitSelected,
+                firstHabitOfCategoryId: _firstHabitOfCategoryId,
+                onAnimationError: _onAnimationError,
+                onTabsCountRequired: (count) {
+                  _updateTabController(count);
+                },
+              ),
+              // Loading overlay
+              if (state is DashboardLoading || state is DashboardInitial)
+                Container(
+                  color: Colors.white.withOpacity(0.8),
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Cargando hábitos...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              // Sync error overlay with auto-refresh
+              if (state is DashboardSyncError)
+                Container(
+                  color: Colors.white.withOpacity(0.9),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          margin: const EdgeInsets.symmetric(horizontal: 32),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 20,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CircularProgressIndicator(
+                                strokeWidth: 3,
+                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF9800)),
+                              ),
+                              const SizedBox(height: 16),
+                              const Icon(
+                                Icons.sync_problem,
+                                size: 48,
+                                color: Color(0xFFFF9800),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                state.message,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF6B7280),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Sincronizando datos...',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF9CA3AF),
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -261,7 +686,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
 
   Widget _buildBottomSelectionTab() {
     return Positioned(
-      bottom: 80, // Position above navbar to avoid overflow
+      bottom: 10,
       left: 12,
       right: 12,
       child: Container(

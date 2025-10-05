@@ -4,7 +4,7 @@ CREATE TABLE categories (
     name VARCHAR(100) NOT NULL,
     description TEXT,
     color VARCHAR(7) NOT NULL DEFAULT '#4CAF50', -- Hex color
-    icon VARCHAR(50) NOT NULL DEFAULT 'heart',
+    icon VARCHAR(50) NOT NULL DEFAULT 'star',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     created_by UUID REFERENCES auth.users(id)

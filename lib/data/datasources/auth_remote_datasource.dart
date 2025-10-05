@@ -67,8 +67,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     required String lastName,
   }) async {
     try {
-      print('🔄 Iniciando registro de usuario: $email');
-      print('✅ Usando Supabase Auth oficial con trigger automático');
       
       final response = await supabaseClient.auth.signUp(
         email: email,
@@ -80,8 +78,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       );
 
       if (response.user != null) {
-        print('✅ Usuario creado en Supabase Auth: ${response.user!.id}');
-        print('✅ Perfil y rol asignados automáticamente por trigger');
         
         // Esperar un momento para que el trigger procese
         await Future.delayed(Duration(milliseconds: 500));
@@ -90,7 +86,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         final profile = await _getUserProfile(response.user!.id);
         final userModel = UserModel.fromSupabaseUser(response.user!, profile: profile);
         
-        print('✅ Usuario registrado exitosamente con Supabase Auth');
         
         return AuthResultModel.success(
           user: userModel,
@@ -101,10 +96,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return AuthResultModel.failure('Error al crear usuario');
       }
     } on AuthException catch (e) {
-      print('❌ AuthException durante registro: ${e.message}');
       return AuthResultModel.failure(e.message);
     } catch (e) {
-      print('❌ Error inesperado durante registro: $e');
       return AuthResultModel.failure('Error inesperado al registrar usuario');
     }
   }
@@ -164,7 +157,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     required String email,
   }) async {
     try {
-      print('🔄 Creando perfil para usuario: $userId');
       
       // Crear perfil
       await supabaseClient.from('profiles').insert({
@@ -187,19 +179,15 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
           'user_id': userId,
           'role_id': roleResponse['id'],
         });
-        print('✅ Rol asignado correctamente');
       }
       
-      print('✅ Perfil creado exitosamente');
     } catch (e) {
-      print('❌ Error al crear perfil: $e');
       throw Exception('Error al crear perfil del usuario: $e');
     }
   }
 
   Future<Map<String, dynamic>?> _getUserProfile(String userId) async {
     try {
-      print('🔍 Buscando perfil para usuario: $userId');
       
       // Primero obtener el perfil básico
       final profileResponse = await supabaseClient
@@ -209,7 +197,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
           .maybeSingle();
       
       if (profileResponse == null) {
-        print('⚠️ Perfil no encontrado para usuario: $userId');
         return null;
       }
       
@@ -230,14 +217,11 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       response['user_roles'] = rolesResponse;
 
       if (response != null) {
-        print('✅ Perfil encontrado: ${response['first_name']} ${response['last_name']}');
       } else {
-        print('⚠️ Perfil no encontrado para usuario: $userId');
       }
       
       return response;
     } catch (e) {
-      print('❌ Error al obtener perfil del usuario $userId: $e');
       throw Exception('Error al obtener perfil del usuario: $e');
     }
   }

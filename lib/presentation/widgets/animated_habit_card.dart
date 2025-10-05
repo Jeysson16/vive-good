@@ -346,7 +346,7 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
     if (widget.userHabit.habit?.iconColor != null) {
       try {
         // Convertir string hexadecimal a int
-        String colorString = widget.userHabit.habit!.iconColor!;
+        String colorString = widget.userHabit.habit?.iconColor ?? '#6366F1';
         // Si no tiene el prefijo 0x, agregarlo
         if (!colorString.startsWith('0x')) {
           colorString = '0x$colorString';
@@ -364,7 +364,7 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
     if (widget.userHabit.habit?.iconName == null) return Icons.star;
 
     // Map icon names to Flutter icons
-    switch (widget.userHabit.habit!.iconName!.toLowerCase()) {
+    switch ((widget.userHabit.habit?.iconName ?? 'star').toLowerCase()) {
       // Iconos de las categorías de la base de datos
       case 'utensils':
       case 'restaurant':
@@ -382,6 +382,8 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
       case 'water_drop':
       case 'water':
         return Icons.water_drop;
+      case 'local_drink':
+        return Icons.local_drink;
       case 'brain':
       case 'psychology':
       case 'mental':
@@ -390,8 +392,29 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
       case 'track_changes':
       case 'productivity':
         return Icons.track_changes;
+      // Iconos específicos de la base de datos
+      case 'apple':
+        return Icons.apple;
+      case 'directions_walk':
+        return Icons.directions_walk;
+      case 'accessibility_new':
+        return Icons.accessibility_new;
+      case 'bedtime':
+        return Icons.bedtime;
+      case 'phone_iphone':
+        return Icons.phone_iphone;
+      case 'self_improvement':
+        return Icons.self_improvement;
+      case 'edit':
+        return Icons.edit;
+      case 'menu_book':
+        return Icons.menu_book;
+      case 'event_note':
+        return Icons.event_note;
       // Iconos adicionales
       case 'favorite':
+        return Icons
+            .fitness_center; // Cambiar de corazón a fitness para hábitos generales
       case 'heart':
         return Icons.favorite;
       case 'work':
@@ -412,7 +435,6 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
       case 'palette':
       case 'creative':
         return Icons.palette;
-      case 'self_improvement':
       case 'spiritual':
         return Icons.self_improvement;
       case 'movie':
@@ -422,6 +444,8 @@ class _AnimatedHabitCardState extends State<AnimatedHabitCard>
       case 'money':
       case 'finance':
         return Icons.attach_money;
+      case 'fastfood':
+        return Icons.fastfood;
       case 'general':
         return Icons.track_changes;
       default:

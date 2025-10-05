@@ -1,15 +1,18 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../domain/usecases/user/is_first_time_user.dart';
-import '../../../domain/usecases/user/has_completed_onboarding.dart';
-import '../../../domain/usecases/user/get_current_user.dart';
-import '../../../domain/usecases/user/save_user.dart';
+
 import '../../../core/usecases/usecase.dart';
-import '../habit/habit_bloc.dart';
-import '../habit/habit_event.dart';
+import '../../../domain/usecases/user/get_current_user.dart';
+import '../../../domain/usecases/user/has_completed_onboarding.dart';
+import '../../../domain/usecases/user/is_first_time_user.dart';
+import '../../../domain/usecases/user/save_user.dart';
 import '../auth/auth_bloc.dart';
+import '../auth/auth_event.dart';
 import '../auth/auth_state.dart' as app_auth;
+import '../habit/habit_bloc.dart';
+import '../dashboard/dashboard_bloc.dart';
+import '../dashboard/dashboard_event.dart';
 
 part 'splash_event.dart';
 part 'splash_state.dart';
@@ -20,6 +23,7 @@ class SplashBloc extends Bloc<SplashEvent, SplashState> {
   final GetCurrentUser getCurrentUser;
   final SaveUser saveUser;
   final HabitBloc? habitBloc;
+  final DashboardBloc? dashboardBloc;
   final AuthBloc? authBloc;
 
   SplashBloc({
@@ -28,6 +32,7 @@ class SplashBloc extends Bloc<SplashEvent, SplashState> {
     required this.getCurrentUser,
     required this.saveUser,
     this.habitBloc,
+    this.dashboardBloc,
     this.authBloc,
   }) : super(SplashInitial()) {
     on<CheckAppStatus>(_onCheckAppStatus);
@@ -40,7 +45,7 @@ class SplashBloc extends Bloc<SplashEvent, SplashState> {
     try {
       // Check if user has an active session
       final session = Supabase.instance.client.auth.currentSession;
-      
+
       if (session != null) {
         // User is authenticated, preload data before navigating to main
         await _preloadDataAndNavigateToMain(emit);
@@ -53,29 +58,39 @@ class SplashBloc extends Bloc<SplashEvent, SplashState> {
       await _checkFirstTimeAndOnboarding(emit);
     }
   }
-  
+
   Future<void> _preloadDataAndNavigateToMain(Emitter<SplashState> emit) async {
     emit(SplashLoading());
-    
+
     try {
       // Simulate splash screen delay
       await Future.delayed(const Duration(seconds: 1));
-      
-      // Preload habits data if blocs are available
-      if (habitBloc != null && authBloc != null) {
+
+      // First, check and load current user data in AuthBloc
+      if (authBloc != null) {
+        authBloc!.add(const AuthCheckRequested());
+
+        // Wait for auth state to be updated
+        await Future.delayed(const Duration(milliseconds: 800));
+
+        // Preload habits data if user is authenticated
         final authState = authBloc!.state;
-        if (authState is app_auth.AuthAuthenticated) {
+        if (authState is app_auth.AuthAuthenticated && dashboardBloc != null) {
           final userId = authState.user.id;
+
           
-          // Load habits and categories
-          habitBloc!.add(LoadDashboardHabits(userId: userId, date: DateTime.now()));
-          habitBloc!.add(LoadCategories());
+          // Preload dashboard data during splash screen
+          dashboardBloc!.add(LoadDashboardData(
+            userId: userId, 
+            date: DateTime.now(),
+          ));
+
+          // Wait for dashboard data to load
+          await Future.delayed(const Duration(milliseconds: 2000));
           
-          // Wait a bit for data to load
-          await Future.delayed(const Duration(milliseconds: 500));
         }
       }
-      
+
       emit(SplashNavigateToMain());
     } catch (e) {
       // If preloading fails, still navigate to main
@@ -86,18 +101,18 @@ class SplashBloc extends Bloc<SplashEvent, SplashState> {
   Future<void> _checkFirstTimeAndOnboarding(Emitter<SplashState> emit) async {
     try {
       final isFirstTime = await isFirstTimeUser(NoParams());
-      
+
       if (isFirstTime.isRight()) {
         final isFirst = isFirstTime.getOrElse(() => false);
-        
+
         if (isFirst) {
           emit(SplashNavigateToOnboarding());
         } else {
           final hasOnboarded = await hasCompletedOnboarding(NoParams());
-          
+
           if (hasOnboarded.isRight()) {
             final completed = hasOnboarded.getOrElse(() => false);
-            
+
             if (completed) {
               emit(SplashNavigateToWelcome());
             } else {

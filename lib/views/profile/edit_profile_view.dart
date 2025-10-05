@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/user_profile.dart';
-import '../../blocs/profile/profile_bloc.dart';
-import '../../blocs/profile/profile_event.dart';
-import '../../blocs/profile/profile_state.dart';
+import '../../presentation/blocs/profile/profile_bloc.dart';
+import '../../presentation/blocs/profile/profile_event.dart';
+import '../../presentation/blocs/profile/profile_state.dart';
 import '../../widgets/common/loading_widget.dart';
 
 /// Vista de edición del perfil del usuario
@@ -680,7 +680,7 @@ class _EditProfileViewState extends State<EditProfileView> {
   }
 
   void _saveProfile() {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState?.validate() == true) {
       // Crear perfil actualizado
       final updatedProfile = widget.profile.copyWith(
         firstName: _firstNameController.text.trim(),

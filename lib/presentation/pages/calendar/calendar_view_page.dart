@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
-import '../../bloc/calendar/calendar_bloc.dart';
+import '../../blocs/calendar/calendar_bloc.dart';
 import '../../../domain/entities/calendar_event.dart' as entity;
 import '../../widgets/calendar/calendar_event_card.dart';
 import '../../widgets/calendar/add_event_dialog.dart';

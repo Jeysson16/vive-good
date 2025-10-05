@@ -52,7 +52,6 @@ class NotificationServiceImpl implements NotificationService {
 
   void _onNotificationTapped(NotificationResponse notificationResponse) {
     // Handle notification tap
-    print('Notification tapped: ${notificationResponse.payload}');
   }
 
   @override
@@ -104,7 +103,6 @@ class NotificationServiceImpl implements NotificationService {
         matchDateTimeComponents: DateTimeComponents.time,
       );
     } catch (e) {
-      print('Error scheduling notification: $e');
     }
   }
 

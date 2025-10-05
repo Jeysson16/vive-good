@@ -4,7 +4,9 @@ import '../../../domain/entities/category.dart' as entities;
 import '../../../domain/entities/habit.dart';
 import '../../../domain/entities/user_habit.dart';
 import '../common/responsive_dimensions.dart';
-import '../main/habit_item.dart';
+import '../main/habit_item.dart' as habit_item;
+import '../main/compact_habit_item.dart';
+import '../figma_habit_card.dart';
 
 class SynchronizedHabitsList extends StatefulWidget {
   final List<UserHabit> userHabits;
@@ -13,6 +15,9 @@ class SynchronizedHabitsList extends StatefulWidget {
   final String? selectedCategoryId;
   final Function(String?) onCategoryChanged;
   final Function(UserHabit) onHabitToggle;
+  final Function(UserHabit)? onEdit;
+  final Function(UserHabit)? onViewProgress;
+  final Function(UserHabit)? onDelete;
 
   const SynchronizedHabitsList({
     Key? key,
@@ -22,22 +27,36 @@ class SynchronizedHabitsList extends StatefulWidget {
     required this.selectedCategoryId,
     required this.onCategoryChanged,
     required this.onHabitToggle,
+    this.onEdit,
+    this.onViewProgress,
+    this.onDelete,
   }) : super(key: key);
 
   @override
   State<SynchronizedHabitsList> createState() => _SynchronizedHabitsListState();
 }
 
-class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
+class _SynchronizedHabitsListState extends State<SynchronizedHabitsList>
+    with TickerProviderStateMixin {
   late ScrollController _scrollController;
   final Map<String, GlobalKey> _categoryKeys = {};
   String? _lastVisibleCategory;
+  String? _previousSelectedCategoryId;
+  String? _highlightedHabitId;
+  AnimationController? _highlightController;
+  Animation<double>? _highlightAnimation;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    // Ya no necesitamos el listener del scroll interno
+    _highlightController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _highlightAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _highlightController!, curve: Curves.easeInOut),
+    );
     _initializeCategoryKeys();
   }
 
@@ -52,12 +71,51 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _highlightController?.dispose();
     super.dispose();
   }
 
-  void _onScrollChanged() {
-    // El scroll ahora es manejado por el SingleChildScrollView padre
-    // Esta función se mantiene para compatibilidad pero no hace nada
+  void _scrollToFirstHabitOfCategory(String categoryId) {
+    final categoryHabits = _getHabitsForCategory(categoryId);
+
+    if (categoryHabits.isNotEmpty) {
+      final firstHabit = categoryHabits.first;
+      _highlightHabit(firstHabit.id);
+
+      // Scroll to category section
+      final categoryKey = _categoryKeys[categoryId];
+      if (categoryKey?.currentContext != null) {
+        Scrollable.ensureVisible(
+          categoryKey!.currentContext!,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeInOut,
+          alignment: 0.1, // Show category title at top
+        );
+      }
+    }
+  }
+
+  void _highlightHabit(String habitId) {
+    // Verificar que el controlador esté inicializado
+    if (_highlightController == null) {
+      return;
+    }
+
+    setState(() {
+      _highlightedHabitId = habitId;
+    });
+
+    _highlightController!.reset();
+    _highlightController!.forward().then((_) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted && _highlightController != null) {
+          setState(() {
+            _highlightedHabitId = null;
+          });
+          _highlightController!.reset();
+        }
+      });
+    });
   }
 
   String? _findVisibleCategory(double scrollOffset, double viewportHeight) {
@@ -100,32 +158,8 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
   }
 
   Habit _getHabitForUserHabit(UserHabit userHabit) {
-    // Debug: Verificar si el habit está llegando correctamente
-    print('🔍 DEBUG _getHabitForUserHabit: userHabit.id = ${userHabit.id}');
-    print(
-      '🔍 DEBUG _getHabitForUserHabit: userHabit.habit = ${userHabit.habit}',
-    );
-    print(
-      '🔍 DEBUG _getHabitForUserHabit: userHabit.habitId = ${userHabit.habitId}',
-    );
-    print(
-      '🔍 DEBUG _getHabitForUserHabit: userHabit.customName = ${userHabit.customName}',
-    );
-
     // Si el userHabit tiene un habit asociado (del stored procedure), usarlo
     if (userHabit.habit != null) {
-      print(
-        '🔍 DEBUG _getHabitForUserHabit: Usando habit del stored procedure',
-      );
-      print(
-        '🔍 DEBUG _getHabitForUserHabit: habit.iconName = ${userHabit.habit!.iconName}',
-      );
-      print(
-        '🔍 DEBUG _getHabitForUserHabit: habit.iconColor = ${userHabit.habit!.iconColor}',
-      );
-      print(
-        '🔍 DEBUG _getHabitForUserHabit: habit.categoryId = ${userHabit.habit!.categoryId}',
-      );
       return userHabit.habit!;
     }
 
@@ -133,7 +167,7 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
     if (userHabit.customName != null && userHabit.customName!.isNotEmpty) {
       return Habit(
         id: userHabit.habitId ?? userHabit.id,
-        name: userHabit.customName!,
+        name: userHabit.customName ?? 'Hábito personalizado',
         description: userHabit.customDescription ?? '',
         categoryId: '',
         iconName: 'star',
@@ -152,7 +186,7 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
       } catch (e) {
         // Si no se encuentra, crear un hábito genérico
         return Habit(
-          id: userHabit.habitId!,
+          id: userHabit.habitId ?? userHabit.id,
           name: 'Hábito personalizado',
           description: '',
           categoryId: '',
@@ -198,11 +232,24 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
 
   @override
   Widget build(BuildContext context) {
+    // Check if category selection changed and trigger scroll
+    if (widget.selectedCategoryId != null &&
+        widget.selectedCategoryId != _previousSelectedCategoryId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToFirstHabitOfCategory(widget.selectedCategoryId!);
+      });
+      _previousSelectedCategoryId = widget.selectedCategoryId;
+    }
+
     // Agrupar hábitos por categoría
     final groupedHabits = <String?, List<UserHabit>>{};
 
-    // Agrupar por categorías específicas
-    for (final category in widget.categories) {
+    // Si hay categoría seleccionada, mostrar SOLO esa categoría
+    final categoriesToRender = widget.selectedCategoryId != null
+        ? widget.categories.where((c) => c.id == widget.selectedCategoryId).toList()
+        : widget.categories;
+
+    for (final category in categoriesToRender) {
       final categoryHabits = _getHabitsForCategory(category.id);
       if (categoryHabits.isNotEmpty) {
         groupedHabits[category.id] = categoryHabits;
@@ -252,15 +299,55 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList> {
                 ...habits.map((userHabit) {
                   final habit = _getHabitForUserHabit(userHabit);
                   final category = _getCategoryForHabit(habit);
-                  return HabitItem(
+                  final isHighlighted = _highlightedHabitId == userHabit.id;
+
+                  Widget habitItem = CompactHabitItem(
                     userHabit: userHabit,
                     habit: habit,
                     category: category,
                     isCompleted: userHabit.isCompletedToday,
-                    isSelected:
-                        false, // Default value since this widget doesn't handle selection
-                    onTap: () => widget.onHabitToggle(userHabit),
+                    isHighlighted: isHighlighted,
+                    onTap: () {
+                      widget.onHabitToggle(userHabit);
+                    },
+                    onHighlightComplete: () {
+                      if (mounted) {
+                        setState(() {
+                          _highlightedHabitId = null;
+                        });
+                      }
+                    },
+                    onEdit: widget.onEdit,
+                    onViewProgress: widget.onViewProgress,
+                    onDelete: widget.onDelete,
                   );
+
+                  // Wrap with AnimatedBuilder for highlight effect
+                  if (isHighlighted && _highlightAnimation != null) {
+                    habitItem = AnimatedBuilder(
+                      animation: _highlightAnimation!,
+                      builder: (context, child) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFF10B981,
+                                ).withOpacity(0.4 * _highlightAnimation!.value),
+                                blurRadius: 20 * _highlightAnimation!.value,
+                                spreadRadius: 5 * _highlightAnimation!.value,
+                              ),
+                            ],
+                          ),
+                          child: child,
+                        );
+                      },
+                      child: habitItem,
+                    );
+                  }
+
+                  return habitItem;
                 }).toList(),
               ],
             ),

@@ -1,8 +1,9 @@
 import 'package:equatable/equatable.dart';
+
 import '../../../domain/entities/category.dart';
 import '../../../domain/entities/habit.dart';
-import '../../../domain/entities/user_habit.dart';
 import '../../../domain/entities/habit_log.dart';
+import '../../../domain/entities/user_habit.dart';
 
 enum AnimationState {
   idle,
@@ -95,7 +96,9 @@ class HabitLoaded extends HabitState {
       categories: categories ?? this.categories,
       habits: habits ?? this.habits,
       habitLogs: habitLogs ?? this.habitLogs,
-      selectedCategoryId: resetSelectedCategory ? null : (selectedCategoryId ?? this.selectedCategoryId),
+      selectedCategoryId: resetSelectedCategory
+          ? null
+          : (selectedCategoryId ?? this.selectedCategoryId),
       pendingCount: pendingCount ?? this.pendingCount,
       completedCount: completedCount ?? this.completedCount,
       habitSuggestions: habitSuggestions ?? this.habitSuggestions,
@@ -114,10 +117,15 @@ class HabitLoaded extends HabitState {
     }).toList();
   }
 
-  // Get only categories that have related habits
+  // Get all categories to ensure tabs are always visible
   List<Category> get filteredCategories {
-    final habitCategoryIds = habits.map((habit) => habit.categoryId).toSet();
-    return categories.where((category) => habitCategoryIds.contains(category.id)).toList();
+    // Mostrar solo categorías que tienen al menos un hábito del usuario
+    final categoryIdsWithHabits = userHabits.map((uh) {
+      final habit = habits.firstWhere((h) => h.id == uh.habitId);
+      return habit.categoryId;
+    }).toSet();
+
+    return categories.where((cat) => categoryIdsWithHabits.contains(cat.id)).toList();
   }
 }
 
@@ -128,4 +136,33 @@ class HabitError extends HabitState {
 
   @override
   List<Object?> get props => [message];
+}
+
+class UserHabitDetailLoading extends HabitState {
+  const UserHabitDetailLoading();
+}
+
+class UserHabitDetailLoaded extends HabitState {
+  final UserHabit userHabit;
+
+  const UserHabitDetailLoaded(this.userHabit);
+
+  @override
+  List<Object?> get props => [userHabit];
+}
+
+class UserHabitUpdating extends HabitState {
+  const UserHabitUpdating();
+}
+
+class UserHabitUpdated extends HabitState {
+  const UserHabitUpdated();
+}
+
+class UserHabitDeleting extends HabitState {
+  const UserHabitDeleting();
+}
+
+class UserHabitDeleted extends HabitState {
+  const UserHabitDeleted();
 }

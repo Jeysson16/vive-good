@@ -64,7 +64,7 @@ class ResponsiveDimensions {
     if (screenWidth < 360) {
       return 8.0;
     } else if (screenWidth < 600) {
-      return 12.0;
+      return 8.0; // Reducido para compactar grilla en móviles
     } else if (screenWidth < 900) {
       return 16.0;
     } else {
@@ -78,7 +78,7 @@ class ResponsiveDimensions {
     if (screenWidth < 360) {
       return 4.0;
     } else if (screenWidth < 600) {
-      return 6.0;
+      return 4.0; // Reducido para compactar separación vertical en móviles
     } else if (screenWidth < 900) {
       return 8.0;
     } else {

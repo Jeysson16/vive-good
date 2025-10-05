@@ -1,7 +1,7 @@
 -- Actualizar tabla habits para incluir campos faltantes que espera el stored procedure
 
 -- Agregar columnas faltantes a la tabla habits
-ALTER TABLE habits ADD COLUMN IF NOT EXISTS icon_name VARCHAR(50) DEFAULT 'heart';
+ALTER TABLE habits ADD COLUMN IF NOT EXISTS icon_name VARCHAR(50) DEFAULT 'star';
 ALTER TABLE habits ADD COLUMN IF NOT EXISTS icon_color VARCHAR(20) DEFAULT '#4CAF50';
 ALTER TABLE habits ADD COLUMN IF NOT EXISTS difficulty_level VARCHAR(20) DEFAULT 'easy';
 ALTER TABLE habits ADD COLUMN IF NOT EXISTS estimated_duration INTEGER DEFAULT 15; -- en minutos
@@ -23,7 +23,7 @@ UPDATE habits SET
         WHEN name LIKE '%diario%' OR name LIKE '%escribir%' THEN 'edit'
         WHEN name LIKE '%leer%' THEN 'menu_book'
         WHEN name LIKE '%planificar%' THEN 'event_note'
-        ELSE 'favorite'
+        ELSE 'star'
     END,
     icon_color = CASE 
         WHEN category_id = (SELECT id FROM categories WHERE name = 'Hidratación') THEN '#00BCD4'
@@ -66,7 +66,7 @@ UPDATE habits SET
         WHEN name LIKE '%leer%' THEN ARRAY['Lleva un libro contigo', 'Lee antes de dormir', 'Únete a un club de lectura']
         ELSE ARRAY['Sé constante', 'Empieza poco a poco']
     END
-WHERE icon_name IS NULL OR icon_name = 'heart';
+WHERE icon_name IS NULL OR icon_name = 'heart' OR icon_name = 'star';
 
 -- Crear índice para mejorar el rendimiento de las consultas
 CREATE INDEX IF NOT EXISTS idx_habits_is_active ON habits(is_active);

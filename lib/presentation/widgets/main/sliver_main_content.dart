@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:vive_good_app/domain/entities/habit.dart';
+import 'package:vive_good_app/domain/entities/user_habit.dart';
+import '../../blocs/dashboard/dashboard_bloc.dart';
+import '../../blocs/dashboard/dashboard_state.dart';
+import '../../blocs/dashboard/dashboard_event.dart';
 import '../../blocs/habit/habit_bloc.dart';
 import '../../blocs/habit/habit_state.dart';
 import '../../blocs/habit/habit_event.dart';
@@ -13,42 +18,114 @@ import 'tabs_section.dart';
 import 'habit_list.dart';
 import 'sliver_persistent_header.dart';
 import '../../../domain/entities/category.dart';
+import '../../../domain/entities/habit_log.dart';
 
 class SliverMainContent extends StatelessWidget {
   final SliverScrollController controller;
   final Function(String, bool) onHabitToggle;
-  final Function() onProgressTap;
   final Set<String> selectedHabits;
   final Function(String, bool) onHabitSelected;
+  final String? firstHabitOfCategoryId;
+  final VoidCallback? onAnimationError;
+  final void Function(int)? onTabsCountRequired;
 
   const SliverMainContent({
     super.key,
     required this.controller,
     required this.onHabitToggle,
-    required this.onProgressTap,
     required this.selectedHabits,
     required this.onHabitSelected,
+    this.firstHabitOfCategoryId,
+    this.onAnimationError,
+    this.onTabsCountRequired,
   });
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<HabitBloc, HabitState>(
+    return BlocBuilder<DashboardBloc, DashboardState>(
       buildWhen: (previous, current) {
-        // Only rebuild when state type changes or categories change
+        // Only rebuild when state type changes or data actually changes
         if (previous.runtimeType != current.runtimeType) return true;
-        if (previous is HabitLoaded && current is HabitLoaded) {
-          return previous.filteredCategories.length !=
-              current.filteredCategories.length;
+        if (previous is DashboardLoaded && current is DashboardLoaded) {
+          // Rebuild when structural lengths change OR when counters/selection/animation change
+          return previous.categories.length != current.categories.length ||
+              previous.userHabits.length != current.userHabits.length ||
+              previous.habitLogs.length != current.habitLogs.length ||
+              previous.pendingCount != current.pendingCount ||
+              previous.completedCount != current.completedCount ||
+              previous.filteredHabits.length != current.filteredHabits.length ||
+              previous.selectedCategoryId != current.selectedCategoryId ||
+              previous.animatedHabitId != current.animatedHabitId ||
+              previous.animationState != current.animationState;
         }
         return true;
       },
-      builder: (context, state) {
+      builder: (context, dashboardState) {
+        // Show single loading spinner when data is not loaded
+        if (dashboardState is DashboardLoading) {
+          return const Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
+            ),
+          );
+        }
+
+        // Show error state if needed
+        if (dashboardState is DashboardError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: Color(0xFFEF4444),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Error al cargar los datos',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  dashboardState.message,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
         List<Category> categories = [];
-        if (state is HabitLoaded) {
-          categories = state.filteredCategories;
-          // Update controller with new categories
+        if (dashboardState is DashboardLoaded) {
+          // Filter categories that have associated habits
+          categories = _getCategoriesWithHabits(
+            dashboardState.categories,
+            dashboardState.userHabits,
+            dashboardState.habits,
+            dashboardState.habitLogs.values.expand((e) => e).toList(),
+          );
+          // Update controller with new categories and handle TabController length
           WidgetsBinding.instance.addPostFrameCallback((_) {
             controller.updateCategories(categories);
+
+            // Update tab controller length when categories change
+            final categoriesCount = categories.length + 1; // +1 for "Todos" tab
+            final safeTabCount = categoriesCount > 0 ? categoriesCount : 1;
+
+            if (controller.tabController.length != safeTabCount) {
+              // Notify parent that TabController needs recreation
+              onTabsCountRequired?.call(safeTabCount);
+            }
           });
         }
 
@@ -58,213 +135,294 @@ class SliverMainContent extends StatelessWidget {
             parent: AlwaysScrollableScrollPhysics(),
           ),
           slivers: [
-            // App Bar with header content
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-              pinned: false,
-              floating: true,
-              snap: true,
-              expandedHeight: 240,
-              automaticallyImplyLeading: false,
-              stretch: false,
-              stretchTriggerOffset: 100.0,
-              flexibleSpace: FlexibleSpaceBar(
-                collapseMode: CollapseMode.parallax,
-                stretchModes: const [
-                  StretchMode.zoomBackground,
-                  StretchMode.blurBackground,
-                ],
-                background: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Column(
-                    children: [
-                      // Main Header
-                      Expanded(
-                        flex: 3,
-                        child: BlocBuilder<AuthBloc, app_auth.AuthState>(
-                          builder: (context, authState) {
-                            String userName = 'Usuario';
-                            if (authState is app_auth.AuthAuthenticated) {
-                              userName = authState.user.name;
-                            }
-                            return MainHeader(userName: userName);
-                          },
-                        ),
+            // Header content that scrolls normally
+            SliverToBoxAdapter(
+              child: Container(
+                height: 300,
+                decoration: const BoxDecoration(color: Colors.white),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Column(
+                  children: [
+                    // Main Header
+                    Expanded(
+                      flex: 3,
+                      child: BlocBuilder<AuthBloc, app_auth.AuthState>(
+                        builder: (context, authState) {
+                          String userName = 'Usuario';
+                          if (authState is app_auth.AuthAuthenticated) {
+                            userName = authState.user.name;
+                          }
+                          return MainHeader(userName: userName);
+                        },
                       ),
+                    ),
 
-                      // Daily Register Section
-                      Expanded(
-                        flex: 4,
-                        child: BlocBuilder<HabitBloc, HabitState>(
-                          builder: (context, state) {
-                            int pendingCount = 0;
-                            if (state is HabitLoaded) {
-                              pendingCount = state.pendingCount;
-                            }
-                            return DailyRegisterSection(
-                              date: DateFormat(
-                                'EEEE, d MMMM yyyy',
-                                'es_ES',
-                              ).format(DateTime.now()),
-                              pendingCount: pendingCount,
-                              onProgressTap: onProgressTap,
-                            );
-                          },
-                        ),
+                    // Daily Register Section
+                    Expanded(
+                      flex: 4,
+                      child: Builder(
+                        builder: (context) {
+                          // Use the pendingCount from DashboardBloc instead of calculating locally
+                          int pendingCount = 0;
+                          if (dashboardState is DashboardLoaded) {
+                            pendingCount = dashboardState.pendingCount;
+                            print('🔍 [DEBUG] SliverMainContent - Using pendingCount from DashboardBloc: $pendingCount');
+                          }
+                          
+                          return DailyRegisterSection(
+                            date: DateFormat(
+                              'EEEE, d MMMM yyyy',
+                              'es_ES',
+                            ).format(DateTime.now()),
+                            pendingCount: pendingCount,
+                          );
+                        },
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
 
             // Persistent Header with Tabs
-            BlocBuilder<HabitBloc, HabitState>(
-              builder: (context, state) {
-                if (state is HabitLoaded) {
+            if (dashboardState is DashboardLoaded) ...[
+              Builder(
+                builder: (context) {
+                  // Filter categories that have associated habits
+                  final categoriesWithHabits = _getCategoriesWithHabits(
+                    dashboardState.categories,
+                    dashboardState.userHabits,
+                    dashboardState.habits,
+                    dashboardState.habitLogs.values.expand((e) => e).toList(),
+                  );
+
                   return SliverPersistentHeader(
                     pinned: true,
-                    floating: true,
+                    floating: false,
                     delegate: SliverPersistentHeaderWidget(
                       controller: controller,
-                      categories: state.categories,
+                      categories: categoriesWithHabits,
                       tabController: controller.tabController,
                     ),
                   );
-                }
-                return SliverPersistentHeader(
-                  pinned: true,
-                  floating: false,
-                  delegate: _SliverAppBarDelegate(
-                    minHeight: 48,
-                    maxHeight: 48,
-                    child: Container(
-                      height: 48,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Color(0xFFE5E7EB),
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Cargando categorías...',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
+                },
+              ),
+            ],
 
-            // Habit List Content
-            BlocBuilder<HabitBloc, HabitState>(
-              buildWhen: (previous, current) {
-                // Only rebuild when habits data actually changes
-                if (previous.runtimeType != current.runtimeType) return true;
-                if (previous is HabitLoaded && current is HabitLoaded) {
-                  return previous.filteredHabits.length !=
-                          current.filteredHabits.length ||
-                      previous.habitLogs.length != current.habitLogs.length;
-                }
-                return true;
-              },
-              builder: (context, state) {
-                if (state is HabitLoading) {
-                  return const SliverFillRemaining(
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF4CAF50),
-                      ),
-                    ),
+            // Habit List
+            if (dashboardState is DashboardLoaded) ...[
+              Builder(
+                builder: (context) {
+                  // Filter categories that have associated habits
+                  final categoriesWithHabits = _getCategoriesWithHabits(
+                    dashboardState.categories,
+                    dashboardState.userHabits,
+                    dashboardState.habits,
+                    dashboardState.habitLogs.values.expand((e) => e).toList(),
                   );
-                }
 
-                if (state is HabitError) {
-                  return SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.error_outline,
-                            size: 64,
-                            color: Colors.red,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Error: ${state.message}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.red,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () {
-                              // Reload habits
-                              final authState = context.read<AuthBloc>().state;
-                              if (authState is app_auth.AuthAuthenticated) {
-                                final userId = authState.user.id;
-                                context.read<HabitBloc>().add(
-                                  LoadDashboardHabits(
-                                    userId: userId,
-                                    date: DateTime.now(),
-                                  ),
-                                );
-                              }
-                            },
-                            child: const Text('Reintentar'),
-                          ),
-                        ],
-                      ),
-                    ),
+                  // Use filtered habits if available, otherwise use all user habits
+                  final habitsToUse =
+                      dashboardState.filteredHabits ??
+                      dashboardState.userHabits;
+                  final sortedHabits = _sortHabitsByCategory(
+                    habitsToUse,
+                    dashboardState.habits,
+                    categoriesWithHabits,
                   );
-                }
 
-                if (state is HabitLoaded) {
                   return HabitList(
-                    userHabits:
-                        state.userHabits, // Use all habits instead of filtered
-                    habits: state.habits,
-                    categories: state.categories,
-                    habitLogs: state.habitLogs,
+                    categories: categoriesWithHabits,
+                    // Pasa todos los userHabits para chequeos globales de pendientes/completados
+                    userHabits: dashboardState.userHabits,
+                    // Pasa la lista filtrada/ordenada para la grilla visible
+                    filteredHabits: sortedHabits,
+                    habits: dashboardState.habits,
+                    habitLogs: dashboardState.habitLogs,
                     onHabitToggle: onHabitToggle,
                     selectedHabits: selectedHabits,
                     onHabitSelected: onHabitSelected,
-                    selectedCategoryId: state.selectedCategoryId,
+                    selectedCategoryId: dashboardState.selectedCategoryId,
+                    animatedHabitId: dashboardState.animatedHabitId,
+                    animationState: dashboardState.animationState.toString(),
+                    scrollController: controller,
+                    firstHabitOfCategoryId: firstHabitOfCategoryId,
+                    onAnimationError: onAnimationError,
                   );
-                }
+                },
+              ),
+            ],
 
-                return const SliverFillRemaining(
-                  child: Center(
-                    child: Text(
-                      'No hay hábitos disponibles',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  ),
-                );
-              },
-            ),
-            
             // Bottom padding to prevent overlap with bottom navigation
-            const SliverPadding(
-              padding: EdgeInsets.only(bottom: 100),
-            ),
+            const SliverPadding(padding: EdgeInsets.only(bottom: 100)),
           ],
         );
       },
     );
+  }
+
+  /// Sort habits by category order to match the tabs order
+  List<UserHabit> _sortHabitsByCategory(
+    List<UserHabit> userHabits,
+    List<Habit> habits,
+    List<Category> categories,
+  ) {
+    // Create a map of category ID to its index in the categories list
+    final categoryOrderMap = <String, int>{};
+    for (int i = 0; i < categories.length; i++) {
+      categoryOrderMap[categories[i].id] = i;
+    }
+
+    // Sort user habits based on their category order
+    final sortedHabits = List<UserHabit>.from(userHabits);
+    sortedHabits.sort((a, b) {
+      // Find the habits for comparison - manejo seguro
+      final habitA = habits.firstWhere(
+        (h) => h.id == a.habitId,
+        orElse: () => Habit(
+          id: a.id,
+          name: a.customName ?? 'Hábito personalizado',
+          description: '',
+          categoryId: 'fallback',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      final habitB = habits.firstWhere(
+        (h) => h.id == b.habitId,
+        orElse: () => Habit(
+          id: b.id,
+          name: b.customName ?? 'Hábito personalizado',
+          description: '',
+          categoryId: 'fallback',
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      // Get category order indices (default to high number if not found) - safe null handling
+      final categoryIdA = habitA.categoryId ?? '';
+      final categoryIdB = habitB.categoryId ?? '';
+      final orderA = categoryIdA.isNotEmpty
+          ? (categoryOrderMap[categoryIdA] ?? 999)
+          : 999;
+      final orderB = categoryIdB.isNotEmpty
+          ? (categoryOrderMap[categoryIdB] ?? 999)
+          : 999;
+
+      // Sort by category order first, then by habit name
+      if (orderA != orderB) {
+        return orderA.compareTo(orderB);
+      }
+      return habitA.name.compareTo(habitB.name);
+    });
+
+    return sortedHabits;
+  }
+
+  /// Get categories that should be displayed in tabs
+  List<Category> _getCategoriesWithHabits(
+    List<Category> categories,
+    List<UserHabit> userHabits,
+    List<Habit> habits,
+    List<HabitLog> habitLogs,
+  ) {
+    // Mostrar solo categorías que tienen hábitos visibles hoy en la grilla:
+    // hábitos no completados y activos hoy (coincide con la lógica de Dashboard).
+    final today = DateTime.now();
+    final visibleCategoryIds = <String>{};
+
+    for (final uh in userHabits) {
+      final isNotCompleted = !uh.isCompletedToday;
+      final isActiveToday = _shouldHabitBeActiveToday(uh, today);
+      if (!isNotCompleted || !isActiveToday) {
+        continue; // Solo categorías con hábitos visibles hoy
+      }
+
+      final h = habits.firstWhere(
+        (hh) => hh.id == uh.habitId,
+        orElse: () => Habit(
+          id: uh.habitId ?? uh.id,
+          name: uh.customName ?? 'Hábito',
+          description: '',
+          categoryId: null,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      final catId = h.categoryId;
+      if (catId != null && catId.isNotEmpty) {
+        visibleCategoryIds.add(catId);
+      }
+    }
+
+    final categoriesWithHabits = categories
+        .where((c) => visibleCategoryIds.contains(c.id))
+        .toList();
+
+    return categoriesWithHabits;
+  }
+  
+  bool _isHabitCompletedToday(UserHabit userHabit, List<HabitLog> logs) {
+    final now = DateTime.now();
+    bool sameDay(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+    return logs.any((log) =>
+        log.userHabitId == userHabit.id && sameDay(log.completedAt, now));
+  }
+  
+  /// Check if a habit should be active today based on its frequency
+  bool _shouldHabitBeActiveToday(UserHabit userHabit, DateTime today) {
+    print('🔍 [DEBUG] _shouldHabitBeActiveToday - Habit ${userHabit.id}: isActive=${userHabit.isActive}, frequency=${userHabit.frequency}');
+    
+    if (!userHabit.isActive) {
+      print('  -> Habit is not active, returning false');
+      return false;
+    }
+    
+    switch (userHabit.frequency.toLowerCase()) {
+      case 'daily':
+      case 'diario':
+        print('  -> Daily habit, returning true');
+        return true;
+      case 'weekly':
+      case 'semanal':
+        // Check if today is one of the selected days for weekly habits
+        if (userHabit.frequencyDetails != null && 
+            userHabit.frequencyDetails!.containsKey('days_of_week')) {
+          final selectedDays = userHabit.frequencyDetails!['days_of_week'] as List<dynamic>?;
+          if (selectedDays != null && selectedDays.isNotEmpty) {
+            // Convert today's weekday (1=Monday, 7=Sunday) to match the stored format
+            final todayWeekday = today.weekday;
+            final result = selectedDays.contains(todayWeekday);
+            print('  -> Weekly habit with specific days: $selectedDays, today=$todayWeekday, result=$result');
+            return result;
+          }
+        }
+        // If no specific days are set, default to all days
+        print('  -> Weekly habit with no specific days, returning true');
+        return true;
+      case 'monthly':
+      case 'mensual':
+        // For monthly habits, check if today matches the target day
+        if (userHabit.frequencyDetails != null && 
+            userHabit.frequencyDetails!.containsKey('day_of_month')) {
+          final targetDay = userHabit.frequencyDetails!['day_of_month'] as int?;
+          if (targetDay != null) {
+            final result = today.day == targetDay;
+            print('  -> Monthly habit with target day $targetDay, today=${today.day}, result=$result');
+            return result;
+          }
+        }
+        // If no specific day is set, default to first day of month
+        final result = today.day == 1;
+        print('  -> Monthly habit with no specific day, today=${today.day}, result=$result');
+        return result;
+      default:
+        print('  -> Unknown frequency, returning true');
+        return true; // Default to active for unknown frequencies
+    }
   }
 }
 
@@ -291,17 +449,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    final progress = shrinkOffset / maxExtent;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOutCubic,
-      child: SizedBox.expand(
-        child: Transform.translate(
-          offset: Offset(0, -shrinkOffset * 0.1),
-          child: child,
-        ),
-      ),
-    );
+    return Container(height: maxExtent, child: child);
   }
 
   @override

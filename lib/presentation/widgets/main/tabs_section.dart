@@ -54,9 +54,9 @@ class TabsSection extends StatelessWidget {
             ),
           ),
           child: const Center(
-            child: Text(
-              'Cargando categorías...',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50)),
             ),
           ),
         );

@@ -18,4 +18,8 @@ abstract class ProgressRepository {
   /// Obtiene el progreso diario de la semana actual
   /// Retorna un mapa con los nombres de los días y sus porcentajes de completitud
   Future<Either<Failure, Map<String, double>>> getDailyWeekProgress(String userId);
+  
+  /// Obtiene la racha actual del usuario
+  /// Retorna el número de días consecutivos con al menos un hábito completado
+  Future<Either<Failure, int>> getUserStreak(String userId);
 }

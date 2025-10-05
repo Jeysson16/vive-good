@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
 import '../../../domain/entities/category.dart' as entities;
 import '../../blocs/category_scroll/category_scroll_bloc.dart';
 import '../../blocs/category_scroll/category_scroll_event.dart';
@@ -32,7 +33,7 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
     super.initState();
     _scrollController = ScrollController();
     _initializeBounceAnimations();
-    
+
     // Inicializar el BLoC
     context.read<CategoryScrollBloc>().add(InitializeCategoryScroll());
   }
@@ -40,7 +41,7 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
   void _initializeBounceAnimations() {
     _bounceControllers = {};
     _bounceAnimations = {};
-    
+
     // Crear animaciones para cada categoría
     for (final category in widget.categories) {
       _createBounceAnimation(category.id);
@@ -52,15 +53,12 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
       duration: const Duration(milliseconds: 600),
       vsync: this,
     );
-    
+
     final animation = Tween<double>(
       begin: 0.0,
       end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: controller,
-      curve: Curves.elasticOut,
-    ));
-    
+    ).animate(CurvedAnimation(parent: controller, curve: Curves.elasticOut));
+
     _bounceControllers[categoryId] = controller;
     _bounceAnimations[categoryId] = animation;
   }
@@ -77,8 +75,11 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
   void _scrollToCategory(int index) {
     if (_scrollController.hasClients) {
       final itemWidth = 120.0; // Ancho aproximado de cada tab
-      final targetOffset = (index * itemWidth) - (MediaQuery.of(context).size.width / 2) + (itemWidth / 2);
-      
+      final targetOffset =
+          (index * itemWidth) -
+          (MediaQuery.of(context).size.width / 2) +
+          (itemWidth / 2);
+
       _scrollController.animateTo(
         targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
         duration: const Duration(milliseconds: 300),
@@ -92,13 +93,10 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
     if (controller != null) {
       controller.reset();
       controller.forward();
-      
+
       // Notificar al BLoC sobre el rebote
       context.read<CategoryScrollBloc>().add(
-        TriggerCategoryBounce(
-          categoryId: categoryId,
-          bounceLeft: bounceLeft,
-        ),
+        TriggerCategoryBounce(categoryId: categoryId, bounceLeft: bounceLeft),
       );
     }
   }
@@ -110,7 +108,7 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
         if (state is CategoryScrollAnimating) {
           _scrollToCategory(state.targetCategoryIndex);
         }
-        
+
         if (state is CategoryScrollLoaded) {
           // Activar animaciones de rebote según el estado
           for (final entry in state.categoryBounceStates.entries) {
@@ -153,7 +151,7 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
     int index,
   ) {
     final animation = _bounceAnimations[categoryId];
-    
+
     return AnimatedBuilder(
       animation: animation ?? const AlwaysStoppedAnimation(0.0),
       builder: (context, child) {
@@ -162,7 +160,7 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
           (bounceValue * 10 * (index % 2 == 0 ? 1 : -1)), // Alternar dirección
           0,
         );
-        
+
         return Transform.translate(
           offset: bounceOffset,
           child: AnimatedScale(
@@ -170,25 +168,34 @@ class _AnimatedCategoryTabsState extends State<AnimatedCategoryTabs>
             duration: const Duration(milliseconds: 200),
             child: GestureDetector(
               onTap: () {
-                widget.onCategorySelected(categoryId == 'all' ? null : categoryId);
+                final selectedId = categoryId == 'all' ? null : categoryId;
+
+                widget.onCategorySelected(selectedId);
+
                 _triggerBounce(categoryId, index % 2 == 0);
-                
+
                 // Notificar al BLoC sobre el scroll
                 context.read<CategoryScrollBloc>().add(
                   ScrollToCategory(
-                    categoryId: categoryId == 'all' ? null : categoryId,
+                    categoryId: selectedId,
                     categoryIndex: index,
                   ),
                 );
+                // ScrollToCategory event dispatched
               },
               child: Container(
                 margin: const EdgeInsets.only(right: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected ? const Color(0xFF219540) : Colors.white,
                   borderRadius: BorderRadius.circular(25),
                   border: Border.all(
-                    color: isSelected ? const Color(0xFF219540) : const Color(0xFFE5E7EB),
+                    color: isSelected
+                        ? const Color(0xFF219540)
+                        : const Color(0xFFE5E7EB),
                     width: 1.5,
                   ),
                   boxShadow: isSelected

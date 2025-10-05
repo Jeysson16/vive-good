@@ -9,8 +9,11 @@ class User extends Equatable {
   final String firstName;
   final String lastName;
   final String? role;
+  final String? avatarUrl;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
-  const User({
+  User({
     required this.id,
     required this.name,
     required this.email,
@@ -19,7 +22,11 @@ class User extends Equatable {
     this.firstName = '',
     this.lastName = '',
     this.role,
-  });
+    this.avatarUrl,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) : createdAt = createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+       updatedAt = updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   User copyWith({
     String? id,
@@ -30,6 +37,9 @@ class User extends Equatable {
     String? firstName,
     String? lastName,
     String? role,
+    String? avatarUrl,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return User(
       id: id ?? this.id,
@@ -40,8 +50,13 @@ class User extends Equatable {
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
       role: role ?? this.role,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  String get fullName => '$firstName $lastName'.trim();
 
   @override
   List<Object?> get props => [
@@ -53,5 +68,8 @@ class User extends Equatable {
         firstName,
         lastName,
         role,
+        avatarUrl,
+        createdAt,
+        updatedAt,
       ];
 }

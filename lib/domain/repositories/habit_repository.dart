@@ -7,6 +7,7 @@ import 'package:vive_good_app/domain/entities/habit_breakdown.dart';
 
 abstract class HabitRepository {
   Future<Either<Failure, List<UserHabit>>> getUserHabits(String userId);
+  Future<Either<Failure, UserHabit>> getUserHabitById(String userHabitId);
   Future<Either<Failure, List<Category>>> getHabitCategories();
   Future<Either<Failure, List<Habit>>> getHabitSuggestions({
     String? userId,
@@ -15,6 +16,8 @@ abstract class HabitRepository {
   });
   Future<Either<Failure, void>> addHabit(Habit habit);
   Future<Either<Failure, void>> deleteHabit(String habitId);
+  Future<Either<Failure, void>> updateUserHabit(String userHabitId, Map<String, dynamic> updates);
+  Future<Either<Failure, void>> deleteUserHabit(String userHabitId);
   Future<Either<Failure, void>> logHabitCompletion(
     String habitId,
     DateTime date,

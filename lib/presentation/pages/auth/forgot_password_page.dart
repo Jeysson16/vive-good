@@ -28,17 +28,16 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
   void _validateForm() {
     setState(() {
-      _isFormValid = _emailController.text.isNotEmpty &&
+      _isFormValid =
+          _emailController.text.isNotEmpty &&
           _emailController.text.contains('@');
     });
   }
 
   void _resetPassword() {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState?.validate() == true) {
       context.read<AuthBloc>().add(
-        AuthResetPasswordRequested(
-          email: _emailController.text.trim(),
-        ),
+        AuthResetPasswordRequested(email: _emailController.text.trim()),
       );
     }
   }
@@ -55,7 +54,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     final isSmallScreen = screenSize.width < 360;
     final isLargeScreen = screenSize.width > 600;
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-    
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -75,7 +74,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           if (state is AuthPasswordResetSent) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Se ha enviado un enlace de recuperación a tu email'),
+                content: Text(
+                  'Se ha enviado un enlace de recuperación a tu email',
+                ),
                 backgroundColor: Colors.green,
               ),
             );
@@ -99,9 +100,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             ),
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                minHeight: screenSize.height - 
-                    MediaQuery.of(context).padding.top - 
-                    kToolbarHeight - 
+                minHeight:
+                    screenSize.height -
+                    MediaQuery.of(context).padding.top -
+                    kToolbarHeight -
                     keyboardHeight,
                 maxWidth: isLargeScreen ? 400 : double.infinity,
               ),
@@ -117,7 +119,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                       Text(
                         'Recuperar\nContraseña',
                         style: TextStyle(
-                          fontSize: isSmallScreen ? 28 : (isLargeScreen ? 36 : 32),
+                          fontSize: isSmallScreen
+                              ? 28
+                              : (isLargeScreen ? 36 : 32),
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF1A1D29),
                           height: 1.2,

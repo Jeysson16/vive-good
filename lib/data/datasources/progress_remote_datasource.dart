@@ -30,6 +30,12 @@ abstract class ProgressRemoteDataSource {
   /// Returns a map with day names as keys and completion percentages as values
   /// Throws [ServerException] for all error codes
   Future<Map<String, double>> getDailyWeekProgress(String userId);
+  
+  /// Gets user streak from the database
+  /// 
+  /// Returns the current streak count
+  /// Throws [ServerException] for all error codes
+  Future<int> getUserStreak(String userId);
 }
 
 class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
@@ -86,7 +92,6 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
       
       return ProgressModel.fromJson(responseWithDaily);
     } on PostgrestException catch (e) {
-      print('Supabase error getting user progress: ${e.message}');
       if (e.code == 'PGRST116') {
         // No rows returned - user doesn't exist
         throw const ServerException('No se encontraron datos de progreso para este usuario');
@@ -97,10 +102,8 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
         throw const ServerException('Error al cargar datos de progreso');
       }
     } on AuthException catch (e) {
-      print('Auth error getting user progress: ${e.message}');
       throw const ServerException('Sin conexión a internet');
     } catch (e) {
-      print('Unexpected error getting user progress: $e');
       if (e.toString().contains('SocketException') || e.toString().contains('TimeoutException')) {
         throw const ServerException('Problema de autenticación');
       } else {
@@ -128,7 +131,6 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
       
       return ProgressModel.fromJson(response);
     } catch (e) {
-      print('Error updating user progress: $e');
       throw const ServerException('Error al actualizar progreso');
     }
   }
@@ -139,7 +141,6 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
       // Use the same method as getUserProgress since it calculates weekly data
       return await getUserProgress(userId);
     } catch (e) {
-      print('Error getting weekly progress: $e');
       throw const ServerException('Error al obtener progreso semanal');
     }
   }
@@ -152,7 +153,6 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
       final currentProgress = await getUserProgress(userId);
       return [currentProgress];
     } catch (e) {
-      print('Error getting monthly progress: $e');
       throw const ServerException('Error al obtener progreso mensual');
     }
   }
@@ -228,7 +228,6 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
       
       return dailyProgress;
     } catch (e) {
-      print('Error getting daily week progress: $e');
       // Return empty progress if error occurs
       return {
         'Lun': 0.0,
@@ -237,6 +236,21 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
         'Jue': 0.0,
         'Vie': 0.0,
       };
+    }
+  }
+
+  @override
+  Future<int> getUserStreak(String userId) async {
+    try {
+      // Call the calculate_user_streak function from the database
+      final response = await supabaseClient.rpc('calculate_user_streak', params: {
+        'p_user_id': userId,
+      });
+      
+      return response as int? ?? 0;
+    } catch (e) {
+      // Return 0 if error occurs
+      return 0;
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 
@@ -17,17 +18,28 @@ import '../../../data/datasources/notification_service.dart';
 import '../../../data/datasources/ai_advice_remote_datasource.dart';
 import '../../../data/models/ai_advice_model.dart';
 import '../../../domain/entities/ai_advice.dart';
+import '../../../domain/entities/user_habit.dart';
+import '../../blocs/dashboard/dashboard_bloc.dart';
+import '../../blocs/dashboard/dashboard_event.dart';
+import '../../blocs/auth/auth_bloc.dart';
+import '../../blocs/auth/auth_state.dart';
 
 class NewHabitScreen extends StatefulWidget {
   final String? prefilledHabitName;
   final String? prefilledCategoryId;
   final String? prefilledDescription;
+  final String? habitId; // ID del hábito a editar
+  final bool isEditMode; // Indica si está en modo edición
+  final UserHabit? userHabitToEdit; // Datos del hábito a editar
 
   const NewHabitScreen({
     Key? key,
     this.prefilledHabitName,
     this.prefilledCategoryId,
     this.prefilledDescription,
+    this.habitId,
+    this.isEditMode = false,
+    this.userHabitToEdit,
   }) : super(key: key);
 
   @override
@@ -67,6 +79,8 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
   final TextEditingController _endDateController = TextEditingController();
   bool _isLoading = false;
   bool _isDescriptionEditable = true;
+  bool _isLoadingHabitData = false; // Para mostrar overlay de carga
+  String? _editingHabitId; // ID del hábito que se está editando
 
   // Gemini AI variables
   late final GeminiAIDataSource _geminiDataSource;
@@ -78,6 +92,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
 
   // Calendar integration with notifications
   CalendarService? _calendarService;
+  bool _isInitializingCalendarService = false;
 
   final List<String> _frequencyOptions = [
     'Diario',
@@ -99,20 +114,80 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
     );
     _initializeCalendarService();
     _loadData();
-    _setupPrefilledData();
+    
+    // Si está en modo edición, cargar los datos del hábito
+    if (widget.isEditMode && widget.userHabitToEdit != null) {
+      _editingHabitId = widget.userHabitToEdit!.id;
+      _loadHabitDataFromUserHabit(widget.userHabitToEdit!);
+    } else if (widget.isEditMode && widget.habitId != null) {
+      _editingHabitId = widget.habitId;
+      _loadHabitForEditing(widget.habitId!);
+    } else {
+      _setupPrefilledData();
+    }
+    
     _habitNameController.addListener(_onHabitNameChanged);
   }
 
   Future<void> _initializeCalendarService() async {
-    final calendarDataSource = CalendarRemoteDataSourceImpl();
-    final notificationService = NotificationServiceImpl();
+    setState(() {
+      _isInitializingCalendarService = true;
+    });
+    
+    try {
+      print('DEBUG: Inicializando CalendarService...');
+      
+      final calendarDataSource = CalendarRemoteDataSourceImpl();
+      final notificationService = NotificationServiceImpl();
 
-    _calendarService = CalendarServiceImpl(
-      calendarDataSource: calendarDataSource,
-      notificationService: notificationService,
-    );
+      _calendarService = CalendarServiceImpl(
+        calendarDataSource: calendarDataSource,
+        notificationService: notificationService,
+      );
 
-    await _calendarService!.initialize();
+      await _calendarService!.initialize().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Timeout al inicializar el servicio de calendario');
+        },
+      );
+      
+      print('DEBUG: CalendarService inicializado correctamente');
+    } catch (e) {
+      print('DEBUG: Error al inicializar CalendarService: $e');
+      _calendarService = null; // Asegurar que quede como null si falla
+      
+      // No lanzar el error para no interrumpir la carga de la pantalla
+      // El usuario verá que las funciones de IA están deshabilitadas
+    } finally {
+      setState(() {
+        _isInitializingCalendarService = false;
+      });
+    }
+  }
+
+  /// Verifica si el CalendarService está disponible y listo para usar
+  bool _isCalendarServiceAvailable() {
+    try {
+      // Verificar que el servicio no sea null
+      if (_calendarService == null) {
+        print('DEBUG: CalendarService es null');
+        return false;
+      }
+
+      // Verificar que el usuario esté autenticado (requisito para el servicio)
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        print('DEBUG: Usuario no autenticado - CalendarService no disponible');
+        return false;
+      }
+
+      print('DEBUG: CalendarService disponible y usuario autenticado');
+      return true;
+    } catch (e) {
+      print('DEBUG: Error al verificar CalendarService: $e');
+      return false;
+    }
   }
 
   void _setupPrefilledData() {
@@ -124,6 +199,128 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
     }
     if (widget.prefilledDescription != null) {
       _descriptionController.text = widget.prefilledDescription!;
+    }
+  }
+
+  Future<void> _loadHabitForEditing(String habitId) async {
+    setState(() {
+      _isLoadingHabitData = true;
+    });
+
+    try {
+      // Cargar datos del hábito específico desde user_habits
+      final response = await Supabase.instance.client
+          .from('user_habits')
+          .select('''
+            *,
+            habits!inner(*),
+            categories!inner(*)
+          ''')
+          .eq('id', habitId)
+          .single();
+
+      if (response != null) {
+        final habitData = response['habits'];
+        final categoryData = response['categories'];
+        
+        // Poblar los campos con los datos del hábito
+        setState(() {
+          _habitNameController.text = habitData['name'] ?? '';
+          _descriptionController.text = habitData['description'] ?? '';
+          _selectedCategoryId = habitData['category_id'];
+          _selectedFrequency = response['frequency'] ?? 'Diario';
+          _selectedDifficulty = habitData['difficulty'] ?? 'Fácil';
+          _estimatedDuration = response['duration_minutes'] ?? 15;
+          _isPublic = habitData['is_public'] ?? false;
+          
+          // Configurar fechas si existen
+          if (response['start_date'] != null) {
+            _startDate = DateTime.parse(response['start_date']);
+            _startDateController.text = '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}';
+          }
+          if (response['end_date'] != null) {
+            _endDate = DateTime.parse(response['end_date']);
+            _endDateController.text = '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}';
+          }
+          
+          // Configurar hora de recordatorio si existe
+          if (response['reminder_time'] != null) {
+            final timeString = response['reminder_time'] as String;
+            final timeParts = timeString.split(':');
+            if (timeParts.length >= 2) {
+              _selectedTime = TimeOfDay(
+                hour: int.parse(timeParts[0]),
+                minute: int.parse(timeParts[1]),
+              );
+            }
+          }
+          
+          // Configurar días de la semana si existen
+          if (response['selected_days'] != null) {
+            final daysData = response['selected_days'] as List<dynamic>;
+            _selectedDays = List.generate(7, (index) => daysData.contains(index));
+          }
+        });
+      }
+    } catch (e) {
+      _showErrorSnackBar('Error al cargar datos del hábito: $e');
+    } finally {
+      setState(() {
+        _isLoadingHabitData = false;
+      });
+    }
+  }
+
+  void _loadHabitDataFromUserHabit(UserHabit userHabit) {
+    setState(() {
+      _isLoadingHabitData = true;
+    });
+
+    try {
+      // Poblar los campos con los datos del UserHabit
+      setState(() {
+        _habitNameController.text = userHabit.habit?.name ?? userHabit.customName ?? '';
+        _descriptionController.text = userHabit.habit?.description ?? '';
+        _selectedCategoryId = userHabit.habit?.categoryId;
+        _selectedFrequency = userHabit.frequency;
+        _selectedDifficulty = 'Fácil'; // Valor por defecto
+        _estimatedDuration = 15; // Valor por defecto
+        _isPublic = userHabit.habit?.isPublic ?? false;
+        
+        // Configurar fechas
+        _startDate = userHabit.startDate;
+        _startDateController.text = '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}';
+        
+        if (userHabit.endDate != null) {
+          _endDate = userHabit.endDate;
+          _endDateController.text = '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}';
+        }
+        
+        // Configurar hora de recordatorio si existe
+        if (userHabit.scheduledTime != null) {
+          final timeString = userHabit.scheduledTime!;
+          final timeParts = timeString.split(':');
+          if (timeParts.length >= 2) {
+            _selectedTime = TimeOfDay(
+              hour: int.parse(timeParts[0]),
+              minute: int.parse(timeParts[1]),
+            );
+          }
+        }
+        
+        // Para días de la semana, usar configuración por defecto basada en frecuencia
+        if (_selectedFrequency == 'Diario') {
+          _selectedDays = List.generate(7, (index) => true);
+        } else {
+          _selectedDays = List.generate(7, (index) => false);
+        }
+      });
+    } catch (e) {
+      _showErrorSnackBar('Error al cargar datos del hábito: $e');
+    } finally {
+      setState(() {
+        _isLoadingHabitData = false;
+      });
     }
   }
 
@@ -216,8 +413,10 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
 
   Future<String> _getOptimizedCalendarData() async {
     try {
+      // Validación más robusta del servicio de calendario
       if (_calendarService == null) {
-        return 'Calendario no disponible.';
+        print('DEBUG: CalendarService es null');
+        return 'Calendario no disponible. Servicio no inicializado.';
       }
 
       final now = DateTime.now();
@@ -225,14 +424,23 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
 
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
+        print('DEBUG: Usuario no autenticado en _getOptimizedCalendarData');
         return 'Usuario no autenticado.';
       }
 
+      print('DEBUG: Obteniendo eventos del calendario para usuario: ${user.id}');
       final events = await _calendarService!.getCalendarEvents(
         user.id,
         startDate: now,
         endDate: endDate,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Timeout al obtener eventos del calendario');
+        },
       );
+      
+      print('DEBUG: Eventos obtenidos: ${events.length}');
 
       if (events.isEmpty) {
         return 'Calendario disponible: Sin eventos programados en los próximos 7 días.';
@@ -272,13 +480,70 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       final result = summary.toString();
       return result.length > 200 ? '${result.substring(0, 200)}...' : result;
     } catch (e) {
-      return 'Calendario no disponible.';
+      print('DEBUG: Error en _getOptimizedCalendarData: $e');
+      
+      // Manejo específico de diferentes tipos de errores
+      if (e.toString().contains('Timeout')) {
+        return 'Calendario no disponible. Tiempo de espera agotado.';
+      } else if (e.toString().contains('permission')) {
+        return 'Calendario no disponible. Sin permisos de acceso.';
+      } else if (e.toString().contains('network') || e.toString().contains('connection')) {
+        return 'Calendario no disponible. Problema de conexión.';
+      } else {
+        return 'Calendario no disponible. Error: ${e.toString().length > 50 ? e.toString().substring(0, 50) + '...' : e.toString()}';
+      }
     }
   }
 
-  Future<void> _generateGeminiSuggestions() async {
-    if (_habitNameController.text.isEmpty) return;
+  Future<void> _generateGeminiSuggestionsWithValidation() async {
+    print('DEBUG: Iniciando validaciones para sugerencias de IA');
+    
+    // Validaciones completas antes de generar sugerencias
+    if (_habitNameController.text.trim().isEmpty) {
+      print('DEBUG: Validación fallida - nombre del hábito vacío');
+      setState(() {
+        _geminiError = 'Por favor ingresa un nombre para el hábito antes de generar sugerencias';
+        // No desactivar el switch automáticamente, solo mostrar el error
+      });
+      return;
+    }
 
+    if (_startDate == null) {
+      print('DEBUG: Validación fallida - fecha de inicio no seleccionada');
+      setState(() {
+        _geminiError = 'Por favor selecciona una fecha de inicio antes de generar sugerencias';
+        // No desactivar el switch automáticamente, solo mostrar el error
+      });
+      return;
+    }
+
+    if (!_isCalendarServiceAvailable()) {
+      print('DEBUG: Validación fallida - CalendarService no disponible');
+      setState(() {
+        _geminiError = 'Servicio de calendario no disponible. Intenta reiniciar la aplicación';
+        // No desactivar el switch automáticamente, solo mostrar el error
+      });
+      return;
+    }
+
+    print('DEBUG: Todas las validaciones pasaron, generando sugerencias...');
+    // Limpiar errores previos antes de generar sugerencias
+    setState(() {
+      _geminiError = null;
+    });
+    
+    // Si todas las validaciones pasan, generar sugerencias
+    await _generateGeminiSuggestions();
+  }
+
+  Future<void> _generateGeminiSuggestions() async {
+    print('DEBUG: Iniciando _generateGeminiSuggestions');
+    if (_habitNameController.text.isEmpty) {
+      print('DEBUG: Nombre del hábito vacío, saliendo de _generateGeminiSuggestions');
+      return;
+    }
+
+    print('DEBUG: Configurando estado de carga para sugerencias');
     setState(() {
       _isLoadingGeminiSuggestions = true;
       _isGeneratingSuggestions = true;
@@ -286,6 +551,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
     });
 
     try {
+      print('DEBUG: Obteniendo categoría seleccionada');
       final categoryName = _selectedCategoryId != null
           ? _categories.where((c) => c.id == _selectedCategoryId).isNotEmpty
                 ? _categories
@@ -293,15 +559,20 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
                       .name
                 : null
           : null;
+      print('DEBUG: Categoría: $categoryName');
 
       // Obtener datos optimizados del calendario
+      print('DEBUG: Obteniendo datos del calendario...');
       final calendarData = await _getOptimizedCalendarData();
+      print('DEBUG: Datos del calendario obtenidos: ${calendarData.length} caracteres');
 
       // Incluir información del calendario en la descripción para la IA
       final enhancedDescription = _descriptionController.text.isNotEmpty
           ? '${_descriptionController.text}. $calendarData'
           : calendarData;
+      print('DEBUG: Descripción mejorada preparada');
 
+      print('DEBUG: Llamando a Gemini AI para generar sugerencias...');
       final suggestions = await _geminiDataSource.generateHabitSuggestions(
         habitName: _habitNameController.text,
         category: categoryName,
@@ -309,12 +580,15 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         userGoals:
             'Mejorar bienestar y crear hábitos saludables considerando horarios disponibles',
       );
+      print('DEBUG: Sugerencias recibidas de Gemini AI');
 
       // Validar que la respuesta sea un Map válido
       if (suggestions == null || suggestions is! Map<String, dynamic>) {
+        print('DEBUG: Error - Respuesta inválida de Gemini AI');
         throw Exception('Respuesta inválida de la IA: formato no reconocido');
       }
 
+      print('DEBUG: Aplicando sugerencias a los campos del formulario...');
       setState(() {
         _geminiSuggestionData = suggestions;
         _isLoadingGeminiSuggestions = false;
@@ -396,8 +670,11 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       });
 
       // Guardar el consejo en la base de datos
+      print('DEBUG: Guardando consejo en la base de datos...');
       await _saveAdviceToDatabase(suggestions);
+      print('DEBUG: Sugerencias aplicadas exitosamente');
     } catch (e) {
+      print('DEBUG: Error en _generateGeminiSuggestions: $e');
       setState(() {
         // Formatear el error de manera más amigable para el usuario
         String errorMessage = 'Error al generar sugerencias';
@@ -425,7 +702,6 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       });
 
       // Log del error completo para debugging (solo en desarrollo)
-      print('Error completo de Gemini: $e');
     }
   }
 
@@ -454,12 +730,11 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       await _aiAdviceDataSource.saveAdvice(advice);
     } catch (e) {
       // Error silencioso - no interrumpir el flujo principal
-      print('Error al guardar consejo: $e');
     }
   }
 
   Future<void> _saveHabit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_formKey.currentState?.validate() != true) return;
 
     setState(() => _isLoading = true);
 
@@ -469,6 +744,84 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         _showErrorSnackBar('Usuario no autenticado');
         return;
       }
+
+      if (widget.isEditMode && _editingHabitId != null) {
+        await _updateExistingHabit(user.id);
+      } else {
+        await _createNewHabit(user.id);
+      }
+    } catch (e) {
+      _handleSaveError(e);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _updateExistingHabit(String userId) async {
+    // Actualizar el user_habit existente
+    final userHabitData = {
+      'frequency': _selectedFrequency.toLowerCase(),
+      'frequency_details': _buildFrequencyDetails(),
+      'scheduled_time': _selectedTime != null
+          ? '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}:00'
+          : null,
+      'notifications_enabled': true,
+      'notification_time': _selectedTime != null
+          ? '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}:00'
+          : '09:00:00',
+      'start_date':
+          _startDate?.toIso8601String().split('T')[0] ??
+          DateTime.now().toIso8601String().split('T')[0],
+      'end_date': _endDate?.toIso8601String().split('T')[0],
+      'custom_reminder': _customReminderController.text.isNotEmpty
+          ? _customReminderController.text
+          : null,
+    };
+
+    await Supabase.instance.client
+        .from('user_habits')
+        .update(userHabitData)
+        .eq('id', _editingHabitId!);
+
+    // Actualizar el hábito base si es necesario
+    final habitData = {
+      'name': _habitNameController.text,
+      'description': _descriptionController.text.isNotEmpty
+          ? _descriptionController.text
+          : null,
+      'category_id': _selectedCategoryId,
+      'difficulty_level': _selectedDifficulty.toLowerCase(),
+      'estimated_duration': _estimatedDuration,
+    };
+
+    // Obtener el habit_id del user_habit
+    final userHabitResponse = await Supabase.instance.client
+        .from('user_habits')
+        .select('habit_id')
+        .eq('id', _editingHabitId!)
+        .single();
+
+    final habitId = userHabitResponse['habit_id'] as String;
+
+    await Supabase.instance.client
+        .from('habits')
+        .update(habitData)
+        .eq('id', habitId);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Hábito actualizado exitosamente'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  Future<void> _createNewHabit(String userId) async {
 
       // Buscar si el hábito ya existe en la tabla habits
       final matchingHabits = _availableHabits
@@ -486,18 +839,20 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       if (existingHabit != null) {
         // Usar hábito existente
         habitId = existingHabit.id;
-        
+
         // Verificar si el usuario ya tiene este hábito
         final existingUserHabit = await Supabase.instance.client
             .from('user_habits')
             .select('id')
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
             .eq('habit_id', habitId)
             .eq('is_active', true)
             .maybeSingle();
-            
+
         if (existingUserHabit != null) {
-          _showErrorSnackBar('Ya tienes este hábito en tu lista. No puedes agregar hábitos duplicados.');
+          _showErrorSnackBar(
+            'Ya tienes este hábito en tu lista. No puedes agregar hábitos duplicados.',
+          );
           return;
         }
       } else {
@@ -505,16 +860,18 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         final existingUserHabitByName = await Supabase.instance.client
             .from('user_habits')
             .select('id, habit_id, habits!inner(name)')
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
             .eq('is_active', true)
             .eq('habits.name', _habitNameController.text)
             .maybeSingle();
-            
+
         if (existingUserHabitByName != null) {
-          _showErrorSnackBar('Ya tienes un hábito con este nombre. Elige un nombre diferente.');
+          _showErrorSnackBar(
+            'Ya tienes un hábito con este nombre. Elige un nombre diferente.',
+          );
           return;
         }
-        
+
         // Crear nuevo hábito custom en la tabla habits
         final habitData = {
           'name': _habitNameController.text,
@@ -522,7 +879,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
               ? _descriptionController.text
               : null,
           'category_id': _selectedCategoryId,
-          'created_by': user.id, // Marcar quién creó este hábito
+          'created_by': userId, // Marcar quién creó este hábito
           'is_public': _isPublic, // Si el usuario quiere que sea público
           'difficulty_level': _selectedDifficulty.toLowerCase(),
           'estimated_duration': _estimatedDuration,
@@ -540,11 +897,11 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
 
       // Crear el user_habit (relación usuario-hábito)
       final userHabitData = {
-        'user_id': user.id,
+        'user_id': userId,
         'habit_id': habitId,
         'frequency': _selectedFrequency.toLowerCase(),
         'frequency_details': _buildFrequencyDetails(),
-        'scheduled_time': _suggestedSchedule && _selectedTime != null
+        'scheduled_time': _selectedTime != null
             ? '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}:00'
             : null,
         'notifications_enabled': true,
@@ -569,10 +926,22 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
 
       final userHabitId = userHabitResponse['id'] as String;
 
-      // Crear eventos de calendario si se seleccionaron fechas
-      await _createCalendarEvents(habitId, userHabitId, user.id);
+      // NOTA: Ya no creamos múltiples eventos en calendar_events
+      // Los eventos se generan dinámicamente desde user_habits usando la frecuencia
+      // await _createCalendarEvents(habitId, userHabitId, userId);
 
       if (mounted) {
+        // Actualizar el dashboard después de crear el hábito
+        final authState = context.read<AuthBloc>().state;
+        if (authState is AuthAuthenticated) {
+          context.read<DashboardBloc>().add(
+            RefreshDashboardData(
+              userId: authState.user.id,
+              date: DateTime.now(),
+            ),
+          );
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Hábito y calendario guardados exitosamente'),
@@ -581,20 +950,25 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         );
         Navigator.of(context).pop(true); // Retorna true para indicar éxito
       }
-    } catch (e) {
-      // Manejo específico para errores de duplicación
-      if (e.toString().contains('duplicate key value violates unique constraint') ||
-          e.toString().contains('user_habits_user_id_habit_id_key')) {
-        _showErrorSnackBar('Ya tienes este hábito en tu lista. No puedes agregar hábitos duplicados.');
-      } else if (e.toString().contains('PostgrestException')) {
-        _showErrorSnackBar('Error de base de datos. Por favor, intenta nuevamente.');
-      } else {
-        _showErrorSnackBar('Error al guardar hábito. Por favor, verifica tu conexión e intenta nuevamente.');
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+  }
+
+  void _handleSaveError(dynamic e) {
+    // Manejo específico para errores de duplicación
+    if (e.toString().contains(
+          'duplicate key value violates unique constraint',
+        ) ||
+        e.toString().contains('user_habits_user_id_habit_id_key')) {
+      _showErrorSnackBar(
+        'Ya tienes este hábito en tu lista. No puedes agregar hábitos duplicados.',
+      );
+    } else if (e.toString().contains('PostgrestException')) {
+      _showErrorSnackBar(
+        'Error de base de datos. Por favor, intenta nuevamente.',
+      );
+    } else {
+      _showErrorSnackBar(
+        'Error al guardar hábito. Por favor, verifica tu conexión e intenta nuevamente.',
+      );
     }
   }
 
@@ -616,7 +990,15 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
     String userHabitId,
     String userId,
   ) async {
-    if (_startDate == null) return;
+    print('DEBUG: Iniciando _createCalendarEvents con habitId: $habitId, userHabitId: $userHabitId, userId: $userId');
+    
+    if (_startDate == null) {
+      print('DEBUG: _startDate es null, saliendo de _createCalendarEvents');
+      return;
+    }
+
+    print('DEBUG: _startDate: $_startDate, _endDate: $_endDate, _selectedFrequency: $_selectedFrequency');
+    print('DEBUG: _calendarService disponible: ${_calendarService != null}');
 
     try {
       final endDate =
@@ -656,6 +1038,31 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         }
 
         if (shouldCreateEvent) {
+          // Create proper DateTime objects for start and end times
+          final startDateTime = _selectedTime != null
+              ? DateTime(
+                  iterDate.year,
+                  iterDate.month,
+                  iterDate.day,
+                  _selectedTime!.hour,
+                  _selectedTime!.minute,
+                )
+              : DateTime(
+                  iterDate.year,
+                  iterDate.month,
+                  iterDate.day,
+                  9,
+                  0,
+                );
+          
+          final endDateTime = _selectedTime != null
+              ? _calculateEndTimeAsDateTime(iterDate, _selectedTime!, _estimatedDuration)
+              : _calculateEndTimeAsDateTime(
+                  iterDate,
+                  const TimeOfDay(hour: 9, minute: 0),
+                  _estimatedDuration,
+                );
+
           final eventData = {
             'user_id': userId,
             'habit_id': habitId,
@@ -663,16 +1070,10 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
             'description': _descriptionController.text.isNotEmpty
                 ? _descriptionController.text
                 : null,
-            'start_date': iterDate.toIso8601String().split('T')[0],
-            'start_time': _selectedTime != null
-                ? '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}:00'
-                : '09:00:00',
-            'end_time': _selectedTime != null
-                ? _calculateEndTime(_selectedTime!, _estimatedDuration)
-                : _calculateEndTime(
-                    const TimeOfDay(hour: 9, minute: 0),
-                    _estimatedDuration,
-                  ),
+            'start_date': iterDate.toIso8601String().split('T')[0], // Only date part
+            'start_time': startDateTime.toIso8601String(), // Full datetime
+            'end_time': endDateTime.toIso8601String(), // Full datetime
+            'event_type': 'habit',
             'recurrence_type': _mapFrequencyToRecurrenceType(
               _selectedFrequency,
             ),
@@ -704,21 +1105,35 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         }
       }
 
+      print('DEBUG: Eventos generados: ${events.length}');
+      
       // Create events with notifications using the calendar service
       if (events.isNotEmpty && _calendarService != null) {
-        for (final eventData in events) {
+        print('DEBUG: Creando ${events.length} eventos en el calendario');
+        for (int i = 0; i < events.length; i++) {
+          final eventData = events[i];
           try {
+            print('DEBUG: Creando evento ${i + 1}/${events.length}: ${eventData['title']} - ${eventData['start_date']}');
             await _calendarService!.createCalendarEventWithNotification(
               eventData,
             );
+            print('DEBUG: Evento ${i + 1} creado exitosamente');
           } catch (e) {
-            print('Error creating calendar event: $e');
+            print('DEBUG: Error al crear evento ${i + 1}: $e');
             // Continue with other events even if one fails
           }
         }
+        print('DEBUG: Proceso de creación de eventos completado');
+      } else {
+        if (events.isEmpty) {
+          print('DEBUG: No se generaron eventos para crear');
+        }
+        if (_calendarService == null) {
+          print('DEBUG: CalendarService no está disponible');
+        }
       }
     } catch (e) {
-      print('Error creating calendar events: $e');
+      print('DEBUG: Error en _createCalendarEvents: $e');
       // Don't throw error to avoid breaking the habit creation
     }
   }
@@ -729,6 +1144,20 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
     final endHour = (endMinutes ~/ 60) % 24;
     final endMinute = endMinutes % 60;
     return '${endHour.toString().padLeft(2, '0')}:${endMinute.toString().padLeft(2, '0')}:00';
+  }
+
+  DateTime _calculateEndTimeAsDateTime(DateTime date, TimeOfDay startTime, int durationMinutes) {
+    final startMinutes = startTime.hour * 60 + startTime.minute;
+    final endMinutes = startMinutes + durationMinutes;
+    final endHour = (endMinutes ~/ 60) % 24;
+    final endMinute = endMinutes % 60;
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      endHour,
+      endMinute,
+    );
   }
 
   String _mapFrequencyToRecurrenceType(String frequency) {
@@ -838,7 +1267,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Nuevo Hábito',
+          widget.isEditMode ? 'Editar Hábito' : 'Nuevo Hábito',
           style: AppTextStyles.headingMedium.copyWith(color: Colors.black),
         ),
         centerTitle: false,
@@ -851,11 +1280,13 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
           ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
+      body: Stack(
+        children: [
+          Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHabitNameField(),
@@ -872,8 +1303,8 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
               const SizedBox(height: 24),
               _buildAISuggestionsSection(),
               const SizedBox(height: 24),
-              if (!_suggestedSchedule) _buildTimePickerField(),
-              if (!_suggestedSchedule) const SizedBox(height: 20),
+              _buildTimePickerField(),
+              const SizedBox(height: 20),
               if (!_suggestedSchedule) _buildDurationField(),
               if (!_suggestedSchedule) const SizedBox(height: 24),
               _buildDifficultySection(),
@@ -882,13 +1313,39 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
               const SizedBox(height: 28),
               _buildSaveButton(),
             ],
+              ),
+            ),
           ),
-        ),
-      ),
-    );
-  }
+          // Overlay de carga
+          if (_isLoadingHabitData)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Cargando datos del hábito...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+       ),
+     );
+   }
 
-  Widget _buildHabitNameField() {
+   Widget _buildHabitNameField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1152,7 +1609,9 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
   }
 
   Widget _buildScheduleToggle() {
-    final bool canEnableAI = _startDate != null;
+    final bool canEnableAI = _startDate != null && 
+                            _habitNameController.text.trim().isNotEmpty && 
+                            _isCalendarServiceAvailable();
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1161,18 +1620,37 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Horario sugerido por IA',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: canEnableAI ? Colors.grey[600] : Colors.grey[400],
-                  fontWeight: FontWeight.w500,
-                ),
+              Row(
+                children: [
+                  Text(
+                    'Horario sugerido',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: canEnableAI ? Colors.grey[600] : Colors.grey[400],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (_isInitializingCalendarService) ...[
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 4),
               Text(
-                canEnableAI
-                    ? 'La IA sugerirá horarios y duración automáticamente'
-                    : 'Selecciona una fecha de inicio para habilitar la IA',
+                _isInitializingCalendarService
+                    ? 'Inicializando servicio de calendario...'
+                    : canEnableAI
+                        ? 'Sugerir horarios y duración automáticamente'
+                        : 'Selecciona una fecha de inicio para habilitar la sugerencia automática',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: canEnableAI ? Colors.grey[500] : Colors.grey[400],
                 ),
@@ -1182,15 +1660,26 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         ),
         Switch(
           value: _suggestedSchedule && canEnableAI,
-          onChanged: canEnableAI
+          onChanged: canEnableAI && !_isInitializingCalendarService
               ? (value) {
+                  print('DEBUG: Switch horario sugerido cambiado a: $value');
+                  print('DEBUG: canEnableAI: $canEnableAI');
+                  print('DEBUG: _startDate: $_startDate');
+                  print('DEBUG: habitName: ${_habitNameController.text.trim()}');
+                  print('DEBUG: calendarService disponible: ${_isCalendarServiceAvailable()}');
+                  
                   setState(() {
                     _suggestedSchedule = value;
                     if (value) {
+                      print('DEBUG: Activando horario sugerido y sugerencias IA');
                       // Si se activa horario sugerido, también activar sugerencias IA
                       _geminiSuggestions = true;
-                      // Generar sugerencias automáticamente
-                      _generateGeminiSuggestions();
+                      // Validar condiciones antes de generar sugerencias
+                      _generateGeminiSuggestionsWithValidation();
+                    } else {
+                      print('DEBUG: Desactivando horario sugerido');
+                      // Limpiar errores previos al desactivar
+                      _geminiError = null;
                     }
                   });
                 }
@@ -2068,7 +2557,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
                 ],
               )
             : Text(
-                'Guardar hábito',
+                widget.isEditMode ? 'Actualizar hábito' : 'Guardar hábito',
                 style: AppTextStyles.bodyLarge.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,

@@ -70,22 +70,24 @@ class CalendarServiceImpl implements CalendarService {
       final createdEventData = await _calendarDataSource.createCalendarEvent(eventData);
       final eventModel = CalendarEventModel.fromJson(createdEventData);
       final event = CalendarEvent(
-        id: eventModel.id,
-        userId: eventModel.userId,
-        habitId: eventModel.habitId,
-        title: eventModel.title,
-        description: eventModel.description,
-        eventType: eventModel.eventType,
-        startDate: eventModel.startDate,
-        startTime: eventModel.startTime,
-        endTime: eventModel.endTime,
-        recurrenceType: eventModel.recurrenceType,
-        notificationEnabled: eventModel.notificationEnabled,
-        notificationMinutes: eventModel.notificationMinutes,
-        isCompleted: eventModel.isCompleted,
-        createdAt: eventModel.createdAt,
-        updatedAt: eventModel.updatedAt,
-      );
+          id: eventModel.id,
+          userId: eventModel.userId,
+          habitId: eventModel.habitId,
+          title: eventModel.title,
+          description: eventModel.description,
+          eventType: eventModel.eventType,
+          startDate: eventModel.startDate,
+          endDate: eventModel.startDate,
+          startTime: eventModel.startTime,
+          endTime: eventModel.endTime,
+          recurrenceType: eventModel.recurrenceType,
+          notificationEnabled: eventModel.notificationEnabled,
+          notificationMinutes: eventModel.notificationMinutes,
+          isCompleted: eventModel.isCompleted,
+          completedAt: eventModel.isCompleted ? eventModel.createdAt : null,
+          createdAt: eventModel.createdAt,
+          updatedAt: eventModel.updatedAt,
+        );
       
       // Schedule notification if enabled
       if (event.notificationEnabled && event.notificationMinutes != null) {
@@ -207,7 +209,6 @@ class CalendarServiceImpl implements CalendarService {
         );
       }
     } catch (e) {
-      print('Error scheduling notification for event ${event.id}: $e');
     }
   }
 
@@ -218,7 +219,6 @@ class CalendarServiceImpl implements CalendarService {
       final notificationId = eventId.hashCode;
       await _notificationService.cancelNotification(notificationId);
     } catch (e) {
-      print('Error canceling notification for event $eventId: $e');
     }
   }
 
@@ -298,7 +298,6 @@ class CalendarServiceImpl implements CalendarService {
         }
       }
     } catch (e) {
-      print('Error scheduling recurring notifications for event ${event.id}: $e');
     }
   }
 }

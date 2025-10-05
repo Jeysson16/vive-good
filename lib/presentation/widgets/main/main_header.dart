@@ -10,7 +10,12 @@ class MainHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(top: 10, left: 10, right: 10, bottom: 5),
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 10,
+        left: 16,
+        right: 16,
+        bottom: 10,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -33,24 +38,21 @@ class MainHeader extends StatelessWidget {
               ],
             ),
           ),
-          // Calendar button
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            child: IconButton(
-              onPressed: () {
-                context.go(AppRoutes.calendar);
-              },
-              icon: const Icon(
-                Icons.calendar_today,
-                color: Color(0xFF4CAF50),
-                size: 24,
-              ),
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFFF0F9FF),
-                padding: const EdgeInsets.all(12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+          // Calendar button only - sync and connectivity work automatically in background
+          IconButton(
+            onPressed: () {
+              context.go(AppRoutes.calendar);
+            },
+            icon: const Icon(
+              Icons.calendar_today,
+              color: Color(0xFF4CAF50),
+              size: 24,
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFF0F9FF),
+              padding: const EdgeInsets.all(12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
