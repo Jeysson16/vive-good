@@ -18,30 +18,33 @@ class NotificationLogModelAdapter extends TypeAdapter<NotificationLogModel> {
     };
     return NotificationLogModel(
       id: fields[0] as String,
-      notificationId: fields[1] as String,
-      action: fields[2] as String,
-      timestamp: fields[3] as DateTime,
-      details: fields[4] as String?,
-      errorMessage: fields[5] as String?,
+      notificationScheduleId: fields[1] as String,
+      scheduledFor: fields[2] as DateTime,
+      sentAt: fields[3] as DateTime?,
+      status: fields[4] as NotificationStatus,
+      actionTaken: fields[5] as NotificationAction?,
+      createdAt: fields[6] as DateTime,
     );
   }
 
   @override
   void write(BinaryWriter writer, NotificationLogModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
-      ..write(obj.notificationId)
+      ..write(obj.notificationScheduleId)
       ..writeByte(2)
-      ..write(obj.action)
+      ..write(obj.scheduledFor)
       ..writeByte(3)
-      ..write(obj.timestamp)
+      ..write(obj.sentAt)
       ..writeByte(4)
-      ..write(obj.details)
+      ..write(obj.status)
       ..writeByte(5)
-      ..write(obj.errorMessage);
+      ..write(obj.actionTaken)
+      ..writeByte(6)
+      ..write(obj.createdAt);
   }
 
   @override

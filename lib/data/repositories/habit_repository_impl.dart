@@ -5,6 +5,8 @@ import 'package:vive_good_app/domain/entities/habit.dart';
 import 'package:vive_good_app/domain/entities/category.dart';
 import 'package:vive_good_app/domain/entities/user_habit.dart';
 import 'package:vive_good_app/domain/entities/habit_breakdown.dart';
+import 'package:vive_good_app/domain/entities/habit_statistics.dart';
+import 'package:vive_good_app/domain/entities/category_evolution.dart';
 import 'package:vive_good_app/domain/repositories/habit_repository.dart';
 import 'package:vive_good_app/data/datasources/habit_remote_datasource.dart';
 import 'package:vive_good_app/data/datasources/habit_local_datasource.dart';
@@ -383,6 +385,42 @@ class HabitRepositoryImpl implements HabitRepository {
       return Right(remoteBreakdown.map((model) => model.toEntity()).toList());
     } on custom_exceptions.ServerException {
       return Left(ServerFailure('Failed to get monthly habits breakdown'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<HabitStatistics>>> getHabitStatistics({
+    required String userId,
+    required int year,
+    required int month,
+  }) async {
+    try {
+      final remoteStatistics = await remoteDataSource.getHabitStatistics(
+        userId: userId,
+        year: year,
+        month: month,
+      );
+      return Right(remoteStatistics.map((model) => model.toEntity()).toList());
+    } on custom_exceptions.ServerException {
+      return Left(ServerFailure('Failed to get habit statistics'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<CategoryEvolution>>> getCategoryEvolution({
+    required String userId,
+    required int year,
+    required int month,
+  }) async {
+    try {
+      final remoteEvolution = await remoteDataSource.getCategoryEvolution(
+        userId: userId,
+        year: year,
+        month: month,
+      );
+      return Right(remoteEvolution.map((model) => model.toEntity()).toList());
+    } on custom_exceptions.ServerException {
+      return Left(ServerFailure('Failed to get category evolution'));
     }
   }
 }

@@ -55,15 +55,17 @@ class SendMessage extends ChatEvent {
   final String sessionId;
   final String content;
   final MessageType type;
+  final Map<String, dynamic>? metadata;
   
   const SendMessage({
     required this.sessionId,
     required this.content,
     this.type = MessageType.user,
+    this.metadata,
   });
   
   @override
-  List<Object?> get props => [sessionId, content, type];
+  List<Object?> get props => [sessionId, content, type, metadata];
 }
 
 /// Evento para enviar mensaje del usuario y generar respuesta automática

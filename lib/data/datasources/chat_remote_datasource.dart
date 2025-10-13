@@ -1,14 +1,17 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../domain/entities/chat_session.dart';
+
 import '../../domain/entities/chat/chat_message.dart';
+import '../../domain/entities/chat_session.dart';
+import '../../core/error/exceptions.dart';
+import '../../services/supabase_realtime_service.dart';
 
 /// Excepción personalizada para errores del datasource de chat
 class ChatDataSourceException implements Exception {
   final String message;
   final String? code;
-  
+
   const ChatDataSourceException(this.message, {this.code});
-  
+
   @override
   String toString() => 'ChatDataSourceException: $message';
 }
@@ -16,8 +19,9 @@ class ChatDataSourceException implements Exception {
 /// Datasource remoto para operaciones de chat con Supabase
 class ChatRemoteDataSource {
   final SupabaseClient _client;
-  
-  ChatRemoteDataSource(this._client);
+  final SupabaseRealtimeService _realtimeService;
+
+  ChatRemoteDataSource(this._client) : _realtimeService = SupabaseRealtimeService();
 
   /// Obtiene todas las sesiones de chat de un usuario
   Future<List<ChatSession>> getUserSessions(String userId) async {
@@ -27,7 +31,7 @@ class ChatRemoteDataSource {
           .select()
           .eq('user_id', userId)
           .order('created_at', ascending: false);
-      
+
       return (response as List)
           .map((json) => ChatSession.fromMap(json))
           .toList();
@@ -43,18 +47,13 @@ class ChatRemoteDataSource {
     try {
       final response = await _client
           .from('chat_sessions')
-          .insert({
-            'user_id': userId,
-            'title': title ?? 'Nueva conversación',
-          })
+          .insert({'user_id': userId, 'title': title ?? 'Nueva conversación'})
           .select()
           .single();
-      
+
       return ChatSession.fromMap(response);
     } catch (e) {
-      throw ChatDataSourceException(
-        'Error al crear sesión: ${e.toString()}',
-      );
+      throw ChatDataSourceException('Error al crear sesión: ${e.toString()}');
     }
   }
 
@@ -66,7 +65,7 @@ class ChatRemoteDataSource {
           .select()
           .eq('session_id', sessionId)
           .order('created_at', ascending: true);
-      
+
       return (response as List)
           .map((json) => ChatMessage.fromMap(json))
           .toList();
@@ -81,8 +80,9 @@ class ChatRemoteDataSource {
   Future<ChatMessage> sendMessage(
     String sessionId,
     String content,
-    MessageType messageType,
-  ) async {
+    MessageType messageType, {
+    Map<String, dynamic>? metadata
+  }) async {
     try {
       final response = await _client
           .from('chat_messages')
@@ -90,15 +90,14 @@ class ChatRemoteDataSource {
             'session_id': sessionId,
             'content': content,
             'message_type': messageType.name,
+            if (metadata != null) 'metadata': metadata,
           })
           .select()
           .single();
-      
+
       return ChatMessage.fromMap(response);
     } catch (e) {
-      throw ChatDataSourceException(
-        'Error al enviar mensaje: ${e.toString()}',
-      );
+      throw ChatDataSourceException('Error al enviar mensaje: ${e.toString()}');
     }
   }
 
@@ -107,24 +106,22 @@ class ChatRemoteDataSource {
     try {
       final response = await _client
           .from('chat_messages')
-          .update({
-            'content': newContent,
-            'is_editing': false,
-          })
+          .update({'content': newContent, 'is_editing': false})
           .eq('id', messageId)
           .select()
           .single();
-      
+
       return ChatMessage.fromMap(response);
     } catch (e) {
-      throw ChatDataSourceException(
-        'Error al editar mensaje: ${e.toString()}',
-      );
+      throw ChatDataSourceException('Error al editar mensaje: ${e.toString()}');
     }
   }
 
   /// Actualiza el título de una sesión
-  Future<ChatSession> updateSessionTitle(String sessionId, String newTitle) async {
+  Future<ChatSession> updateSessionTitle(
+    String sessionId,
+    String newTitle,
+  ) async {
     try {
       final response = await _client
           .from('chat_sessions')
@@ -132,7 +129,7 @@ class ChatRemoteDataSource {
           .eq('id', sessionId)
           .select()
           .single();
-      
+
       return ChatSession.fromMap(response);
     } catch (e) {
       throw ChatDataSourceException(
@@ -144,10 +141,7 @@ class ChatRemoteDataSource {
   /// Elimina una sesión de chat
   Future<void> deleteSession(String sessionId) async {
     try {
-      await _client
-          .from('chat_sessions')
-          .delete()
-          .eq('id', sessionId);
+      await _client.from('chat_sessions').delete().eq('id', sessionId);
     } catch (e) {
       throw ChatDataSourceException(
         'Error al eliminar sesión: ${e.toString()}',
@@ -158,10 +152,7 @@ class ChatRemoteDataSource {
   /// Elimina un mensaje específico
   Future<void> deleteMessage(String messageId) async {
     try {
-      await _client
-          .from('chat_messages')
-          .delete()
-          .eq('id', messageId);
+      await _client.from('chat_messages').delete().eq('id', messageId);
     } catch (e) {
       throw ChatDataSourceException(
         'Error al eliminar mensaje: ${e.toString()}',
@@ -170,7 +161,10 @@ class ChatRemoteDataSource {
   }
 
   /// Actualiza el estado de actividad de una sesión
-  Future<ChatSession> updateSessionStatus(String sessionId, bool isActive) async {
+  Future<ChatSession> updateSessionStatus(
+    String sessionId,
+    bool isActive,
+  ) async {
     try {
       final response = await _client
           .from('chat_sessions')
@@ -178,7 +172,7 @@ class ChatRemoteDataSource {
           .eq('id', sessionId)
           .select()
           .single();
-      
+
       return ChatSession.fromMap(response);
     } catch (e) {
       throw ChatDataSourceException(
@@ -196,7 +190,7 @@ class ChatRemoteDataSource {
           .eq('user_id', userId)
           .eq('is_active', true)
           .maybeSingle();
-      
+
       return response != null ? ChatSession.fromMap(response) : null;
     } catch (e) {
       throw ChatDataSourceException(
@@ -213,9 +207,10 @@ class ChatRemoteDataSource {
           .stream(primaryKey: ['id'])
           .eq('session_id', sessionId)
           .order('created_at')
-          .map((data) => data
-              .map((json) => ChatMessage.fromMap(json))
-              .toList());
+          .map((data) => data.map((json) => ChatMessage.fromMap(json)).toList())
+          .handleError((error) {
+            _realtimeService.handleStreamError(error, 'mensajes de sesión');
+          });
     } catch (e) {
       throw ChatDataSourceException(
         'Error al suscribirse a mensajes: ${e.toString()}',
@@ -223,17 +218,18 @@ class ChatRemoteDataSource {
     }
   }
 
-  /// Suscripción en tiempo real a las sesiones de un usuario
+  /// Suscripción en tiempo real a las sesiones del usuario
   Stream<List<ChatSession>> watchUserSessions(String userId) {
     try {
       return _client
           .from('chat_sessions')
           .stream(primaryKey: ['id'])
           .eq('user_id', userId)
-          .order('created_at', ascending: false)
-          .map((data) => data
-              .map((json) => ChatSession.fromMap(json))
-              .toList());
+          .order('updated_at', ascending: false)
+          .map((data) => data.map((json) => ChatSession.fromMap(json)).toList())
+          .handleError((error) {
+            _realtimeService.handleStreamError(error, 'sesiones de usuario');
+          });
     } catch (e) {
       throw ChatDataSourceException(
         'Error al suscribirse a sesiones: ${e.toString()}',

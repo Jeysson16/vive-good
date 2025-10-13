@@ -190,7 +190,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
   ) async {
     final box = await Hive.openBox<NotificationLogModel>(_notificationLogsBox);
     return box.values
-        .where((log) => log.notificationId == notificationId)
+        .where((log) => log.notificationScheduleId == notificationId)
         .toList();
   }
 

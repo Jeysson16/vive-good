@@ -45,26 +45,23 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    final isSmallScreen = screenSize.width < 360;
-    final isLargeScreen = screenSize.width > 600;
-    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-    
+    final isSmallScreen = screenSize.height < 700;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(
-            left: isLargeScreen ? 48.0 : (isSmallScreen ? 16.0 : 24.0),
-            right: isLargeScreen ? 48.0 : (isSmallScreen ? 16.0 : 24.0),
-            bottom: keyboardHeight > 0 ? 16.0 : 0,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: screenSize.height - MediaQuery.of(context).padding.top - (keyboardHeight > 0 ? 16.0 : 0),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: isSmallScreen ? 20 : 40,
+              ),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                const SizedBox(height: 20),
                // Back button
               GestureDetector(
@@ -86,7 +83,7 @@ class _LoginPageState extends State<LoginPage> {
               Text(
                 'Inicia\nSesión',
                 style: TextStyle(
-                  fontSize: isSmallScreen ? 28 : (isLargeScreen ? 36 : 32),
+                  fontSize: isSmallScreen ? 28 : 32,
                   fontWeight: FontWeight.w600,
                   color: const Color(0xFF090D3A),
                   fontFamily: 'Poppins',
@@ -94,43 +91,35 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               SizedBox(height: isSmallScreen ? 40 : 60),
-              // Form
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    // Email field
-                    CustomTextField(
-                      controller: _emailController,
-                      hintText: 'Correo electrónico',
-                      prefixIcon: Icons.email_outlined,
-                      keyboardType: TextInputType.emailAddress,
-                      isEmpty: _emailController.text.isEmpty,
-                    ),
-                    SizedBox(height: isSmallScreen ? 16 : 20),
-                    // Password field
-                    CustomTextField(
-                      controller: _passwordController,
-                      hintText: 'Contraseña',
-                      prefixIcon: Icons.lock_outline,
-                      obscureText: !_isPasswordVisible,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                          color: const Color(0xFF9CA3AF),
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _isPasswordVisible = !_isPasswordVisible;
-                          });
-                        },
-                      ),
-                      isEmpty: _passwordController.text.isEmpty,
-                    ),
-                  ],
+              // Email field
+              CustomTextField(
+                controller: _emailController,
+                hintText: 'Correo electrónico',
+                prefixIcon: Icons.email_outlined,
+                keyboardType: TextInputType.emailAddress,
+                isEmpty: _emailController.text.isEmpty,
+              ),
+              SizedBox(height: isSmallScreen ? 16 : 20),
+              // Password field
+              CustomTextField(
+                controller: _passwordController,
+                hintText: 'Contraseña',
+                prefixIcon: Icons.lock_outline,
+                obscureText: !_isPasswordVisible,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _isPasswordVisible
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    color: const Color(0xFF9CA3AF),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isPasswordVisible = !_isPasswordVisible;
+                    });
+                  },
                 ),
+                isEmpty: _passwordController.text.isEmpty,
               ),
               const SizedBox(height: 20),
               // Forgot password link
@@ -163,21 +152,27 @@ class _LoginPageState extends State<LoginPage> {
                     );
                   }
                 },
-                child: CustomButton(
-                  text: 'Iniciar Sesión',
-                  onPressed: _isFormValid
-                      ? () {
-                          if (_formKey.currentState?.validate() == true) {
-                            context.read<AuthBloc>().add(
-                                  AuthSignInRequested(
-                                    email: _emailController.text.trim(),
-                                    password: _passwordController.text,
-                                  ),
-                                );
-                          }
-                        }
-                      : null,
-                  isEnabled: _isFormValid,
+                child: BlocBuilder<AuthBloc, AuthState>(
+                  builder: (context, state) {
+                    final isLoading = state is AuthLoading;
+                    return CustomButton(
+                      text: 'Iniciar Sesión',
+                      onPressed: _isFormValid && !isLoading
+                          ? () {
+                              if (_formKey.currentState?.validate() == true) {
+                                context.read<AuthBloc>().add(
+                                      AuthSignInRequested(
+                                        email: _emailController.text.trim(),
+                                        password: _passwordController.text,
+                                      ),
+                                    );
+                              }
+                            }
+                          : null,
+                      isEnabled: _isFormValid && !isLoading,
+                      isLoading: isLoading,
+                    );
+                  },
                 ),
               ),
               SizedBox(height: isSmallScreen ? 16 : 20),
@@ -212,9 +207,27 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               SizedBox(height: isSmallScreen ? 30 : 40),
-              ],
+                  ],
+                ),
+              ),
             ),
-          ),
+            // Loading overlay
+            BlocBuilder<AuthBloc, AuthState>(
+              builder: (context, state) {
+                if (state is AuthLoading) {
+                  return Container(
+                    color: Colors.black.withOpacity(0.5),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF090D3A)),
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+          ],
         ),
       ),
     );

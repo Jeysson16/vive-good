@@ -19,11 +19,15 @@ import 'habit_list.dart';
 import 'sliver_persistent_header.dart';
 import '../../../domain/entities/category.dart';
 import '../../../domain/entities/habit_log.dart';
+import '../tech_acceptance_widget.dart';
+import '../symptoms_knowledge_widget.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class SliverMainContent extends StatelessWidget {
+class SliverMainContent extends StatefulWidget {
   final SliverScrollController controller;
   final Function(String, bool) onHabitToggle;
   final Set<String> selectedHabits;
+  final Set<String> animatingHabitIds;
   final Function(String, bool) onHabitSelected;
   final String? firstHabitOfCategoryId;
   final VoidCallback? onAnimationError;
@@ -34,11 +38,43 @@ class SliverMainContent extends StatelessWidget {
     required this.controller,
     required this.onHabitToggle,
     required this.selectedHabits,
+    this.animatingHabitIds = const {},
     required this.onHabitSelected,
     this.firstHabitOfCategoryId,
     this.onAnimationError,
     this.onTabsCountRequired,
   });
+
+  @override
+  State<SliverMainContent> createState() => _SliverMainContentState();
+}
+
+class _SliverMainContentState extends State<SliverMainContent> {
+  Map<String, bool>? _evaluationsCompleted;
+  bool _isLoadingEvaluations = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEvaluationsStatus();
+  }
+
+  Future<void> _loadEvaluationsStatus() async {
+    final result = await _checkEvaluationsCompleted();
+    if (mounted) {
+      setState(() {
+        _evaluationsCompleted = result;
+        _isLoadingEvaluations = false;
+      });
+    }
+  }
+
+  void _refreshEvaluationsStatus() {
+    setState(() {
+      _isLoadingEvaluations = true;
+    });
+    _loadEvaluationsStatus();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,10 +130,7 @@ class SliverMainContent extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   dashboardState.message,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -116,21 +149,21 @@ class SliverMainContent extends StatelessWidget {
           );
           // Update controller with new categories and handle TabController length
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            controller.updateCategories(categories);
+            widget.controller.updateCategories(categories);
 
             // Update tab controller length when categories change
             final categoriesCount = categories.length + 1; // +1 for "Todos" tab
             final safeTabCount = categoriesCount > 0 ? categoriesCount : 1;
 
-            if (controller.tabController.length != safeTabCount) {
+            if (widget.controller.tabController.length != safeTabCount) {
               // Notify parent that TabController needs recreation
-              onTabsCountRequired?.call(safeTabCount);
+              widget.onTabsCountRequired?.call(safeTabCount);
             }
           });
         }
 
         return CustomScrollView(
-          controller: controller.scrollController,
+          controller: widget.controller.scrollController,
           physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
           ),
@@ -166,9 +199,11 @@ class SliverMainContent extends StatelessWidget {
                           int pendingCount = 0;
                           if (dashboardState is DashboardLoaded) {
                             pendingCount = dashboardState.pendingCount;
-                            print('🔍 [DEBUG] SliverMainContent - Using pendingCount from DashboardBloc: $pendingCount');
+                            print(
+                              '🔍 [DEBUG] SliverMainContent - Using pendingCount from DashboardBloc: $pendingCount',
+                            );
                           }
-                          
+
                           return DailyRegisterSection(
                             date: DateFormat(
                               'EEEE, d MMMM yyyy',
@@ -182,6 +217,66 @@ class SliverMainContent extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+
+            // Evaluation Widgets Section - Only show if not completed
+            SliverToBoxAdapter(
+              child: _isLoadingEvaluations
+                  ? const SizedBox.shrink()
+                  : Builder(
+                      builder: (context) {
+                        final completedEvaluations = _evaluationsCompleted ?? {};
+                        final showTechAcceptance =
+                            !(completedEvaluations['tech_acceptance'] ?? false);
+                        final showSymptomsKnowledge =
+                            !(completedEvaluations['symptoms_knowledge'] ?? false);
+
+                        // If both are completed, don't show the section
+                        if (!showTechAcceptance && !showSymptomsKnowledge) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Column(
+                          children: [
+                            if (showTechAcceptance)
+                              TechAcceptanceWidget(
+                                onCompleted: () {
+                                  // Refresh dashboard data when evaluation is completed
+                                  final authState = context.read<AuthBloc>().state;
+                                  if (authState is app_auth.AuthAuthenticated) {
+                                    context.read<DashboardBloc>().add(
+                                      RefreshDashboardData(
+                                        userId: authState.user.id,
+                                        date: DateTime.now(),
+                                      ),
+                                    );
+                                  }
+                                  // Refresh evaluations status
+                                  _refreshEvaluationsStatus();
+                                },
+                              ),
+                            if (showSymptomsKnowledge)
+                              SymptomsKnowledgeWidget(
+                                onCompleted: () {
+                                  // Refresh dashboard data when evaluation is completed
+                                  final authState = context.read<AuthBloc>().state;
+                                  if (authState is app_auth.AuthAuthenticated) {
+                                    context.read<DashboardBloc>().add(
+                                      RefreshDashboardData(
+                                        userId: authState.user.id,
+                                        date: DateTime.now(),
+                                      ),
+                                    );
+                                  }
+                                  // Refresh evaluations status
+                                  _refreshEvaluationsStatus();
+                                },
+                              ),
+                            const SizedBox(height: 16),
+                          ],
+                        );
+                      },
+                    ),
             ),
 
             // Persistent Header with Tabs
@@ -200,9 +295,9 @@ class SliverMainContent extends StatelessWidget {
                     pinned: true,
                     floating: false,
                     delegate: SliverPersistentHeaderWidget(
-                      controller: controller,
+                      controller: widget.controller,
                       categories: categoriesWithHabits,
-                      tabController: controller.tabController,
+                      tabController: widget.controller.tabController,
                     ),
                   );
                 },
@@ -239,15 +334,16 @@ class SliverMainContent extends StatelessWidget {
                     filteredHabits: sortedHabits,
                     habits: dashboardState.habits,
                     habitLogs: dashboardState.habitLogs,
-                    onHabitToggle: onHabitToggle,
-                    selectedHabits: selectedHabits,
-                    onHabitSelected: onHabitSelected,
+                    onHabitToggle: widget.onHabitToggle,
+                    selectedHabits: widget.selectedHabits,
+                    animatingHabitIds: widget.animatingHabitIds,
+                    onHabitSelected: widget.onHabitSelected,
                     selectedCategoryId: dashboardState.selectedCategoryId,
                     animatedHabitId: dashboardState.animatedHabitId,
                     animationState: dashboardState.animationState.toString(),
-                    scrollController: controller,
-                    firstHabitOfCategoryId: firstHabitOfCategoryId,
-                    onAnimationError: onAnimationError,
+                    scrollController: widget.controller,
+                    firstHabitOfCategoryId: widget.firstHabitOfCategoryId,
+                    onAnimationError: widget.onAnimationError,
                   );
                 },
               ),
@@ -363,24 +459,27 @@ class SliverMainContent extends StatelessWidget {
 
     return categoriesWithHabits;
   }
-  
+
   bool _isHabitCompletedToday(UserHabit userHabit, List<HabitLog> logs) {
     final now = DateTime.now();
     bool sameDay(DateTime a, DateTime b) =>
         a.year == b.year && a.month == b.month && a.day == b.day;
-    return logs.any((log) =>
-        log.userHabitId == userHabit.id && sameDay(log.completedAt, now));
+    return logs.any(
+      (log) => log.userHabitId == userHabit.id && sameDay(log.completedAt, now),
+    );
   }
-  
+
   /// Check if a habit should be active today based on its frequency
   bool _shouldHabitBeActiveToday(UserHabit userHabit, DateTime today) {
-    print('🔍 [DEBUG] _shouldHabitBeActiveToday - Habit ${userHabit.id}: isActive=${userHabit.isActive}, frequency=${userHabit.frequency}');
-    
+    print(
+      '🔍 [DEBUG] _shouldHabitBeActiveToday - Habit ${userHabit.id}: isActive=${userHabit.isActive}, frequency=${userHabit.frequency}',
+    );
+
     if (!userHabit.isActive) {
       print('  -> Habit is not active, returning false');
       return false;
     }
-    
+
     switch (userHabit.frequency.toLowerCase()) {
       case 'daily':
       case 'diario':
@@ -389,14 +488,17 @@ class SliverMainContent extends StatelessWidget {
       case 'weekly':
       case 'semanal':
         // Check if today is one of the selected days for weekly habits
-        if (userHabit.frequencyDetails != null && 
+        if (userHabit.frequencyDetails != null &&
             userHabit.frequencyDetails!.containsKey('days_of_week')) {
-          final selectedDays = userHabit.frequencyDetails!['days_of_week'] as List<dynamic>?;
+          final selectedDays =
+              userHabit.frequencyDetails!['days_of_week'] as List<dynamic>?;
           if (selectedDays != null && selectedDays.isNotEmpty) {
             // Convert today's weekday (1=Monday, 7=Sunday) to match the stored format
             final todayWeekday = today.weekday;
             final result = selectedDays.contains(todayWeekday);
-            print('  -> Weekly habit with specific days: $selectedDays, today=$todayWeekday, result=$result');
+            print(
+              '  -> Weekly habit with specific days: $selectedDays, today=$todayWeekday, result=$result',
+            );
             return result;
           }
         }
@@ -406,22 +508,60 @@ class SliverMainContent extends StatelessWidget {
       case 'monthly':
       case 'mensual':
         // For monthly habits, check if today matches the target day
-        if (userHabit.frequencyDetails != null && 
+        if (userHabit.frequencyDetails != null &&
             userHabit.frequencyDetails!.containsKey('day_of_month')) {
           final targetDay = userHabit.frequencyDetails!['day_of_month'] as int?;
           if (targetDay != null) {
             final result = today.day == targetDay;
-            print('  -> Monthly habit with target day $targetDay, today=${today.day}, result=$result');
+            print(
+              '  -> Monthly habit with target day $targetDay, today=${today.day}, result=$result',
+            );
             return result;
           }
         }
         // If no specific day is set, default to first day of month
         final result = today.day == 1;
-        print('  -> Monthly habit with no specific day, today=${today.day}, result=$result');
+        print(
+          '  -> Monthly habit with no specific day, today=${today.day}, result=$result',
+        );
         return result;
       default:
         print('  -> Unknown frequency, returning true');
         return true; // Default to active for unknown frequencies
+    }
+  }
+
+  /// Check if evaluations have been completed by the current user
+  Future<Map<String, bool>> _checkEvaluationsCompleted() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        return {'tech_acceptance': false, 'symptoms_knowledge': false};
+      }
+
+      // Check tech acceptance evaluation
+      final techAcceptanceResponse = await supabase
+          .from('tech_acceptance_evaluations')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      // Check symptoms knowledge evaluation
+      final symptomsKnowledgeResponse = await supabase
+          .from('symptoms_knowledge_evaluations')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      return {
+        'tech_acceptance': techAcceptanceResponse != null,
+        'symptoms_knowledge': symptomsKnowledgeResponse != null,
+      };
+    } catch (e) {
+      print('Error checking evaluations: $e');
+      return {'tech_acceptance': false, 'symptoms_knowledge': false};
     }
   }
 }

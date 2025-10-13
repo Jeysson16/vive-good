@@ -26,17 +26,17 @@ class MigrationRepositoryImpl implements MigrationRepository {
   Future<MigrationStatus> verifyMigrationsStatus() async {
     try {
       // Verificar existencia de tablas de métricas
-      final symptomsExists = await _checkTableExists('user_symptoms_knowledge');
-      final eatingHabitsExists = await _checkTableExists('user_eating_habits');
-      final healthyHabitsExists = await _checkTableExists('user_healthy_habits');
+      final symptomsExists = await _checkTableExists('user_symptoms');
+      final eatingHabitsExists = await _checkTableExists('user_habits');
+      final healthyHabitsExists = await _checkTableExists('user_habits');
       final techAcceptanceExists = await _checkTableExists('user_tech_acceptance');
       final chatSessionsExists = await _checkTableExists('chat_sessions');
       final chatMessagesExists = await _checkTableExists('chat_messages');
 
       final missingTables = <String>[];
-      if (!symptomsExists) missingTables.add('user_symptoms_knowledge');
-      if (!eatingHabitsExists) missingTables.add('user_eating_habits');
-      if (!healthyHabitsExists) missingTables.add('user_healthy_habits');
+      if (!symptomsExists) missingTables.add('user_symptoms');
+      if (!eatingHabitsExists) missingTables.add('user_habits');
+      if (!healthyHabitsExists) missingTables.add('user_habits');
       if (!techAcceptanceExists) missingTables.add('user_tech_acceptance');
       if (!chatSessionsExists) missingTables.add('chat_sessions');
       if (!chatMessagesExists) missingTables.add('chat_messages');
@@ -140,7 +140,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
     required Map<String, dynamic> analysisResult,
   }) async {
     final habits = analysisResult['eating_habits'] as Map<String, dynamic>;
-    await _supabase.from('user_eating_habits').insert({
+    await _supabase.from('user_habits').insert({
       'user_id': userId,
       'session_id': sessionId,
       'habit_type': habits['type'] ?? 'general',
@@ -158,16 +158,13 @@ class MigrationRepositoryImpl implements MigrationRepository {
     required Map<String, dynamic> analysisResult,
   }) async {
     final habits = analysisResult['healthy_habits'] as Map<String, dynamic>;
-    await _supabase.from('user_healthy_habits').insert({
+    final habitData = <String, dynamic>{
       'user_id': userId,
-      'session_id': sessionId,
-      'habit_category': habits['category'] ?? 'general',
-      'current_level': habits['current_level'] ?? 'beginner',
-      'target_level': habits['target_level'] ?? 'intermediate',
-      'habits_tracked': habits['tracked'] ?? [],
-      'progress_indicators': habits['progress'] ?? {},
-      'metadata': habits,
-    });
+      // No incluir habit_id para evitar problemas de UUID con null
+      'frequency': 'daily', // Valor por defecto
+      'notes': 'Migrado automáticamente: ${habits['category'] ?? 'general'}',
+    };
+    await _supabase.from('user_habits').insert(habitData);
   }
 
   Future<void> _recordTechAcceptance({
@@ -210,7 +207,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
   Future<List<EatingHabitsMetric>> getUserEatingHabits(String userId) async {
     try {
       final response = await _supabase
-          .from('user_eating_habits')
+          .from('user_habits')
           .select()
           .eq('user_id', userId)
           .order('created_at', ascending: false);
@@ -228,7 +225,7 @@ class MigrationRepositoryImpl implements MigrationRepository {
   Future<List<HealthyHabitsMetric>> getUserHealthyHabits(String userId) async {
     try {
       final response = await _supabase
-          .from('user_healthy_habits')
+          .from('user_habits')
           .select()
           .eq('user_id', userId)
           .order('created_at', ascending: false);

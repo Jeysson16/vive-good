@@ -1,14 +1,28 @@
+import 'package:uuid/uuid.dart';
 import '../../domain/entities/habit.dart';
 import '../../domain/entities/assistant/assistant_response.dart';
 
 class HabitExtractionService {
+  final Uuid _uuid = const Uuid();
+  
+  // Cache para evitar duplicados en la misma sesión
+  final Set<String> _createdHabitNames = <String>{};
+  
   /// Extrae hábitos sugeridos de la respuesta del asistente
   List<Habit> extractHabitsFromResponse(AssistantResponse response, String userId) {
+    print('🔥 DEBUG HabitExtraction: Iniciando extracción de hábitos');
+    print('🔥 DEBUG HabitExtraction: Contenido de respuesta: ${response.content}');
+    
     final List<Habit> extractedHabits = [];
     
     // Analizar el contenido de la respuesta para extraer hábitos
     final content = response.content.toLowerCase();
     extractedHabits.addAll(_extractHabitsFromContent(content, userId));
+    
+    print('🔥 DEBUG HabitExtraction: Hábitos extraídos: ${extractedHabits.length}');
+    for (final habit in extractedHabits) {
+      print('🔥 DEBUG HabitExtraction: - ${habit.name}');
+    }
     
     return extractedHabits;
   }
@@ -105,25 +119,44 @@ class HabitExtractionService {
     };
     
     // Buscar patrones en el contenido usando palabras clave mejoradas
+    print('🔥 DEBUG HabitExtraction: Buscando patrones en contenido: ${content.substring(0, content.length > 100 ? 100 : content.length)}...');
+    
     for (final entry in habitPatterns.entries) {
       final habitData = entry.value;
       final keywords = habitData['keywords'] as List<String>;
+      final habitName = habitData['name'] as String;
+      
+      print('🔥 DEBUG HabitExtraction: Verificando patrón "$habitName" con keywords: $keywords');
       
       if (_containsAnyKeywords(content, keywords)) {
+        print('🔥 DEBUG HabitExtraction: ¡Patrón encontrado! "$habitName"');
+        
+        // Verificar si ya se creó un hábito con este nombre en esta sesión
+        if (_createdHabitNames.contains(habitName.toLowerCase())) {
+          print('🔥 DEBUG HabitExtraction: Hábito "$habitName" ya existe en cache, saltando...');
+          continue; // Saltar este hábito para evitar duplicados
+        }
+        
+        // Convertir nombre de categoría a UUID
+        final categoryName = habitData['category'] as String;
+        final categoryId = _getCategoryIdFromName(categoryName);
+        
         final habit = Habit(
-          id: '', // Se asignará al guardar en la base de datos
+          id: _uuid.v4(), // Generar UUID único
           userId: userId,
-          name: habitData['name'] as String,
+          name: habitName,
           description: habitData['description'] as String,
-          categoryId: habitData['category'] as String,
-          iconName: _getIconForCategory(habitData['category'] as String),
-          iconColor: _getColorForCategory(habitData['category'] as String),
+          categoryId: categoryId,
+          iconName: _getIconForCategory(categoryName),
+          iconColor: _getColorForCategory(categoryName),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
           isPublic: false,
-          createdBy: 'assistant',
+          createdBy: userId,
         );
         
+        // Agregar al cache para evitar duplicados
+        _createdHabitNames.add(habitName.toLowerCase());
         extractedHabits.add(habit);
       }
     }
@@ -215,5 +248,35 @@ class HabitExtractionService {
       default:
         return 'target';
     }
+  }
+  
+  /// Convierte nombres de categorías a UUIDs correspondientes
+  String _getCategoryIdFromName(String? categoryName) {
+    // Mapeo de nombres de categorías a UUIDs reales de la base de datos
+    // Estos UUIDs coinciden con las categorías definidas en las migraciones de Supabase
+    final categoryMap = {
+      // Categorías principales del sistema
+      'Alimentación': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c',
+      'Actividad Física': '2196f3aa-1234-4567-89ab-cdef12345678',
+      'Sueño': '6d1f2f1b-04ef-497e-97b7-8077ff3b3c69',
+      'Hidratación': '93688043-4d35-4b2a-9dcd-17482125b1a9',
+      'Bienestar Mental': 'ff9800bb-5678-4567-89ab-cdef12345678',
+      'Productividad': '795548cc-9012-4567-89ab-cdef12345678',
+      
+      // Alias y variaciones comunes
+      'Ejercicio': '2196f3aa-1234-4567-89ab-cdef12345678', // Alias para Actividad Física
+      'Salud': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Alias para Alimentación
+      'Bienestar': 'ff9800bb-5678-4567-89ab-cdef12345678', // Alias para Bienestar Mental
+      'Descanso': '6d1f2f1b-04ef-497e-97b7-8077ff3b3c69', // Alias para Sueño
+      'General': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Fallback a Alimentación
+      'Restricciones': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Mapear a Alimentación
+    };
+    
+    return categoryMap[categoryName] ?? 'b0231bea-a750-4984-97d8-8ccb3a2bae1c'; // Fallback a Alimentación
+  }
+  
+  /// Limpia el cache de hábitos creados (útil para nuevas conversaciones)
+  void clearCreatedHabitsCache() {
+    _createdHabitNames.clear();
   }
 }

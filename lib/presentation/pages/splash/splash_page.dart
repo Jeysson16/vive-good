@@ -96,21 +96,26 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
 
   void _startAnimationSequence() async {
     // Phase 1: Logo appears and bounces (2 seconds)
+    if (!mounted) return;
     await _logoController.forward();
 
     // Wait for logo phase to complete (total 2 seconds)
+    if (!mounted) return;
     await Future.delayed(const Duration(milliseconds: 500));
 
     // Phase 2: Hide logo and show text (2 seconds)
+    if (!mounted) return;
     setState(() {
       _showLogo = false;
       _showText = true;
     });
 
     // Start text animation from bottom
+    if (!mounted) return;
     await _textController.forward();
 
     // Wait for text phase to complete (total 2 seconds)
+    if (!mounted) return;
     await Future.delayed(const Duration(milliseconds: 1000));
 
     // Phase 3: Navigation will be handled by SplashBloc after 4 seconds total

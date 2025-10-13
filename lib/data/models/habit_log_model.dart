@@ -22,7 +22,7 @@ class HabitLogModel extends HabitLog {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'user_habit_id': userHabitId,
+      'user_habit_id': (userHabitId.isNotEmpty) ? userHabitId : null,
       'completed_at': completedAt.toIso8601String(),
       'notes': notes,
       'created_at': createdAt.toIso8601String(),

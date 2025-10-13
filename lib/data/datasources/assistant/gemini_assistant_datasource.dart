@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../domain/entities/assistant/assistant_response.dart';
 import '../../../domain/entities/chat/chat_message.dart';
-import '../deep_learning_datasource.dart';
+import 'deep_learning_datasource.dart';
 import '../../../domain/entities/deep_learning_analysis.dart';
 import '../../models/assistant/assistant_response_model.dart';
 import '../../services/habit_auto_creation_service.dart';
+import '../../services/gemini_response_processor_service.dart';
 
 class GeminiAssistantDatasource {
   final String _apiKey;
@@ -15,16 +17,23 @@ class GeminiAssistantDatasource {
   final http.Client _httpClient;
   final DeepLearningDatasource? _deepLearningDatasource;
   final HabitAutoCreationService _habitAutoCreationService;
+  final GeminiResponseProcessorService? _responseProcessor;
+  
+  // Mapeo interno para mantener relación nombre -> datos completos
+  Map<String, Map<String, dynamic>> _habitNameToDataMap = {};
+  Map<String, Map<String, dynamic>> _similarHabitsMap = {};
 
   GeminiAssistantDatasource({
     String? apiKey,
     http.Client? httpClient,
     DeepLearningDatasource? deepLearningDatasource,
     required HabitAutoCreationService habitAutoCreationService,
+    GeminiResponseProcessorService? responseProcessor,
   }) : _apiKey = apiKey ?? 'AIzaSyAJ0SdbXQTyxjQ9IpPjKD97rNzFB2zJios',
        _httpClient = httpClient ?? http.Client(),
        _deepLearningDatasource = deepLearningDatasource,
-       _habitAutoCreationService = habitAutoCreationService;
+       _habitAutoCreationService = habitAutoCreationService,
+       _responseProcessor = responseProcessor;
 
   Future<AssistantResponseModel> sendMessage({
     required String message,
@@ -45,6 +54,125 @@ class GeminiAssistantDatasource {
         geminiAvailable = false;
         geminiResponse = _createGeminiFallbackResponse(message, userId, e.toString());
       }
+      
+      // CAMBIO: Devolver SOLO la respuesta de Gemini primero
+      // El Deep Learning se procesará en segundo plano desde assistant_bloc.dart
+      print('🔥 DEBUG: Devolviendo respuesta de Gemini sin Deep Learning para procesamiento inmediato');
+      
+      // Procesar respuesta estructurada de Gemini si está disponible el procesador
+      String finalMessage = geminiResponse;
+      Map<String, dynamic> processedActions = {};
+      List<Map<String, dynamic>> suggestedHabits = [];
+      
+      if (_responseProcessor != null) {
+        try {
+          print('🔥 DEBUG: Procesando respuesta estructurada de Gemini');
+          final processedResponse = await _responseProcessor!.processGeminiResponse(
+            geminiResponse,
+            userId,
+          );
+          
+          processedResponse.fold(
+            (failure) {
+              print('❌ Error procesando respuesta estructurada: $failure');
+              // Usar respuesta original como fallback
+              finalMessage = _formatGeminiResponse(geminiResponse);
+            },
+            (processed) {
+              print('✅ Respuesta estructurada procesada exitosamente');
+              finalMessage = processed.message;
+              processedActions = processed.actions;
+              
+              // Extraer hábitos sugeridos de las acciones procesadas
+              if (processedActions.containsKey('new_habits')) {
+                suggestedHabits = List<Map<String, dynamic>>.from(
+                  processedActions['new_habits'] as List<dynamic>
+                );
+              }
+            },
+          );
+        } catch (e) {
+          print('❌ Error en procesamiento estructurado: $e');
+          finalMessage = _formatGeminiResponse(geminiResponse);
+        }
+      } else {
+        // Fallback al procesamiento tradicional
+        finalMessage = _formatGeminiResponse(geminiResponse);
+        
+        // Crear objeto AssistantResponse temporal para creación de hábitos
+        final tempResponse = AssistantResponseModel(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          sessionId: sessionId ?? '',
+          content: finalMessage,
+          type: ResponseType.text,
+          timestamp: DateTime.now(),
+        );
+        
+        // Extraer hábitos sugeridos para mostrar en desplegable (sin crear automáticamente)
+        try {
+          print('🔥 DEBUG GEMINI: Iniciando extracción de hábitos sugeridos (método tradicional)');
+          
+          final extractedHabits = await _habitAutoCreationService.extractSuggestedHabits(
+            assistantResponse: tempResponse,
+            userMessage: message,
+            userId: userId,
+          );
+          suggestedHabits = extractedHabits.map((habit) => habit.toMap()).toList();
+          
+          print('🔥 DEBUG GEMINI: Se extrajeron ${suggestedHabits.length} hábitos sugeridos para desplegable');
+        } catch (e) {
+          print('🔥 ERROR GEMINI: Error extracting suggested habits: $e');
+        }
+      }
+      
+      return AssistantResponseModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        sessionId: sessionId ?? '',
+        content: finalMessage,
+        type: ResponseType.text,
+        timestamp: DateTime.now(),
+        confidence: 0.8, // Confianza base de Gemini
+        suggestions: [], // Se llenarán con Deep Learning en segundo plano
+        extractedHabits: _extractHabitsFromResponse(finalMessage),
+        analysisData: null, // Se llenará con Deep Learning en segundo plano
+        suggestedHabits: suggestedHabits,
+        dlChatResponse: null, // Se llenará con Deep Learning en segundo plano
+        processedActions: processedActions, // Acciones procesadas de Gemini
+      );
+    } catch (e) {
+      throw Exception('Error al enviar mensaje: $e');
+    }
+  }
+
+  Future<AssistantResponseModel> processVoiceMessage({
+    required String audioPath,
+    required String sessionId,
+    required String userId,
+    List<ChatMessage>? conversationHistory,
+  }) async {
+    try {
+      // Primero convertir audio a texto (esto requeriría integración con Speech-to-Text)
+      final transcribedText = await _speechToText(audioPath);
+      
+      // Luego procesar el texto con Gemini
+      return await sendMessage(
+          message: transcribedText,
+          userId: userId,
+          conversationHistory: conversationHistory ?? [],
+        );
+    } catch (e) {
+      throw Exception('Error al procesar mensaje de voz: $e');
+    }
+  }
+
+  /// Procesa Deep Learning por separado y devuelve el análisis
+  Future<Map<String, dynamic>> processDeepLearningAnalysis({
+    required String message,
+    required String userId,
+    String? sessionId,
+  }) async {
+    try {
+      print('🔥 DEBUG: ===== INICIANDO PROCESAMIENTO DE DEEP LEARNING =====');
       
       // Obtener respuesta del backend de deep learning con manejo robusto de errores
       Map<String, dynamic>? dlChatResponse;
@@ -93,73 +221,21 @@ class GeminiAssistantDatasource {
         dlChatResponse = _createEnhancedFallbackResponse(message, userId, 'Servicio no configurado');
       }
       
-      // Combinar respuestas
-      final combinedContent = _combineAllResponses(geminiResponse, dlChatResponse, deepLearningAnalysis);
+      print('🔥 DEBUG: ===== DEEP LEARNING PROCESAMIENTO COMPLETADO =====');
       
-      // Extraer hábitos sugeridos para creación automática
-      final suggestedHabits = _extractHabitsFromGeminiResponse(geminiResponse);
-      
-      // Crear objeto AssistantResponse temporal para creación de hábitos
-      final tempResponse = AssistantResponseModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        sessionId: sessionId ?? '',
-        content: combinedContent,
-        type: ResponseType.text,
-        timestamp: DateTime.now(),
-      );
-      
-      // Crear hábitos automáticamente basados en la respuesta
-      try {
-        await _habitAutoCreationService.createContextualHabits(
-          assistantResponse: tempResponse,
-          userMessage: message,
-          userId: userId,
-        );
-      } catch (e) {
-        // Log error pero no fallar la respuesta
-        print('Error creating automatic habits: $e');
-      }
-      
-      return AssistantResponseModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        sessionId: sessionId ?? '',
-        content: combinedContent,
-        type: ResponseType.text,
-        timestamp: DateTime.now(),
-        confidence: dlChatResponse?['confidence_score']?.toDouble() ?? 0.8,
-        suggestions: _extractSuggestions(dlChatResponse, deepLearningAnalysis),
-        extractedHabits: _extractHabitsFromResponse(combinedContent),
-        analysisData: deepLearningAnalysis != null ? {
-          'identifiedRiskFactors': deepLearningAnalysis.identifiedRiskFactors,
-          'recommendations': deepLearningAnalysis.recommendations,
-          'confidence': deepLearningAnalysis.confidence,
-        } : null,
-        suggestedHabits: suggestedHabits,
-        dlChatResponse: dlChatResponse,
-      );
+      return {
+        'dlChatResponse': dlChatResponse,
+        'deepLearningAnalysis': deepLearningAnalysis,
+        'serviceAvailable': dlServiceAvailable,
+      };
     } catch (e) {
-      throw Exception('Error al enviar mensaje: $e');
-    }
-  }
-
-  Future<AssistantResponseModel> processVoiceMessage({
-    required String audioPath,
-    required String sessionId,
-    required String userId,
-    List<ChatMessage>? conversationHistory,
-  }) async {
-    try {
-      // Primero convertir audio a texto (esto requeriría integración con Speech-to-Text)
-      final transcribedText = await _speechToText(audioPath);
-      
-      // Luego procesar el texto con Gemini
-      return await sendMessage(
-          message: transcribedText,
-          userId: userId,
-          conversationHistory: conversationHistory ?? [],
-        );
-    } catch (e) {
-      throw Exception('Error al procesar mensaje de voz: $e');
+      print('❌ Error en procesamiento de Deep Learning: $e');
+      return {
+        'dlChatResponse': null,
+        'deepLearningAnalysis': null,
+        'serviceAvailable': false,
+        'error': e.toString(),
+      };
     }
   }
 
@@ -175,7 +251,7 @@ Contexto: "$currentContext"
 Formato: sugerencia1, sugerencia2, sugerencia3''';
 
       final response = await _httpClient.post(
-        Uri.parse('$_baseUrl/models/gemini-2.0-flash-exp:generateContent?key=$_apiKey'),
+        Uri.parse('$_baseUrl/models/gemini-2.5-flash:generateContent?key=$_apiKey'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -213,21 +289,174 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
     }
   }
 
+  /// Obtiene los nombres de hábitos existentes del usuario para evitar duplicados
+  /// Mantiene un mapeo interno de nombres a datos completos para interpretación posterior
+  Future<List<String>> _getUserExistingHabits(String? userId) async {
+    if (userId == null) return [];
+    
+    try {
+      final response = await Supabase.instance.client
+          .from('user_habits')
+          .select('''
+            id,
+            habit_id,
+            custom_name,
+            is_active,
+            habits!inner(
+              id,
+              name,
+              category_id
+            )
+          ''')
+          .eq('user_id', userId)
+          .eq('is_active', true);
+
+      final habitData = List<Map<String, dynamic>>.from(response);
+      final habitNames = <String>[];
+      
+      // Limpiar mapeo anterior
+      _habitNameToDataMap.clear();
+      
+      // Extraer nombres y crear mapeo interno
+      for (final habit in habitData) {
+        final habitName = habit['custom_name'] ?? habit['habits']?['name'] ?? 'Hábito personalizado';
+        habitNames.add(habitName);
+        
+        // Guardar datos completos en el mapeo interno
+        _habitNameToDataMap[habitName] = habit;
+      }
+      
+      return habitNames;
+    } catch (e) {
+      print('Error obteniendo hábitos existentes: $e');
+      return [];
+    }
+  }
+
+  /// Busca nombres de hábitos similares en la tabla habits usando LIKE
+  /// Mantiene un mapeo interno de nombres a datos completos para interpretación posterior
+  Future<List<String>> _findSimilarHabits(String habitName) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('habits')
+          .select('id, name, description, category_id, icon_name, icon_color')
+          .ilike('name', '%$habitName%')
+          .eq('is_active', true)
+          .limit(5);
+
+      final habitData = List<Map<String, dynamic>>.from(response);
+      final habitNames = <String>[];
+      
+      // Extraer nombres y actualizar mapeo interno
+      for (final habit in habitData) {
+        final name = habit['name'] as String;
+        habitNames.add(name);
+        
+        // Guardar datos completos en el mapeo interno
+        _similarHabitsMap[name] = habit;
+      }
+      
+      return habitNames;
+    } catch (e) {
+      print('Error buscando hábitos similares: $e');
+      return [];
+    }
+  }
+
+  /// Obtiene los datos completos de un hábito del usuario por su nombre
+  Map<String, dynamic>? getUserHabitDataByName(String habitName) {
+    return _habitNameToDataMap[habitName];
+  }
+
+  /// Obtiene los datos completos de un hábito similar por su nombre
+  Map<String, dynamic>? getSimilarHabitDataByName(String habitName) {
+    return _similarHabitsMap[habitName];
+  }
+
+  /// Limpia los mapeos internos (útil para testing o reset)
+  void clearInternalMappings() {
+    _habitNameToDataMap.clear();
+    _similarHabitsMap.clear();
+  }
+
+  /// Obtiene hábitos similares disponibles basados en palabras clave del mensaje
+  Future<List<String>> _getSimilarHabitsForMessage(String message) async {
+    final lowerMessage = message.toLowerCase();
+    final allSimilarHabits = <String>[];
+    
+    // Palabras clave para buscar hábitos relacionados
+    final keywords = <String>[];
+    
+    // Detectar categorías de hábitos basadas en el mensaje
+    if (_containsAnyKeyword(lowerMessage, ['agua', 'hidrat', 'beber', 'líquido'])) {
+      keywords.add('agua');
+      keywords.add('hidratación');
+    }
+    
+    if (_containsAnyKeyword(lowerMessage, ['ejercicio', 'actividad', 'caminar', 'deporte', 'físico'])) {
+      keywords.add('ejercicio');
+      keywords.add('actividad');
+      keywords.add('caminar');
+    }
+    
+    if (_containsAnyKeyword(lowerMessage, ['comida', 'alimentación', 'comer', 'dieta', 'nutrición'])) {
+      keywords.add('alimentación');
+      keywords.add('comida');
+      keywords.add('dieta');
+    }
+    
+    if (_containsAnyKeyword(lowerMessage, ['sueño', 'dormir', 'descanso', 'noche'])) {
+      keywords.add('sueño');
+      keywords.add('dormir');
+      keywords.add('descanso');
+    }
+    
+    if (_containsAnyKeyword(lowerMessage, ['estrés', 'ansiedad', 'relajación', 'meditación', 'mental'])) {
+      keywords.add('meditación');
+      keywords.add('relajación');
+      keywords.add('respiración');
+    }
+    
+    // Buscar hábitos similares para cada palabra clave
+    for (final keyword in keywords) {
+      try {
+        final similarHabits = await _findSimilarHabits(keyword);
+        allSimilarHabits.addAll(similarHabits);
+      } catch (e) {
+        print('Error buscando hábitos para keyword "$keyword": $e');
+      }
+    }
+    
+    // Remover duplicados y limitar a 10 hábitos
+    return allSimilarHabits.toSet().take(10).toList();
+  }
+
   Future<String> _buildPrompt({
     required String message,
+    String? userId,
     List<ChatMessage>? conversationHistory,
     Map<String, dynamic>? userContext,
   }) async {
     final buffer = StringBuffer();
     
-    buffer.writeln('Eres "Vive Good", asistente especializado en prevención y manejo de gastritis.');
+    buffer.writeln('Eres "Vive Good", asistente especializado en prevención y manejo de gastritis con enfoque en formación de hábitos saludables.');
     buffer.writeln('');
     
     buffer.writeln('OBJETIVOS PRINCIPALES:');
     buffer.writeln('• Identificar indicadores específicos de gastritis y factores de riesgo');
     buffer.writeln('• Proporcionar recomendaciones personalizadas y accionables');
-    buffer.writeln('• Facilitar la creación automática de hábitos saludables');
+    buffer.writeln('• Analizar cumplimiento de hábitos y sugerir mejoras inteligentes');
     buffer.writeln('• Educar sobre prevención y manejo de síntomas digestivos');
+    buffer.writeln('• Aplicar metodologías científicas de formación de hábitos');
+    buffer.writeln('');
+    
+    buffer.writeln('METODOLOGÍAS DE FORMACIÓN DE HÁBITOS:');
+    buffer.writeln('• **Atomic Habits (James Clear)**: Enfoque en cambios pequeños y consistentes (1% mejor cada día)');
+    buffer.writeln('• **Habit Stacking**: Vincular nuevos hábitos a rutinas existentes');
+    buffer.writeln('• **Regla de los 2 minutos**: Nuevos hábitos deben tomar menos de 2 minutos inicialmente');
+    buffer.writeln('• **Cue-Routine-Reward Loop**: Identificar disparadores, rutinas y recompensas');
+    buffer.writeln('• **Implementation Intentions**: Planes específicos "Si X, entonces Y"');
+    buffer.writeln('• **Progressive Overload**: Incremento gradual de dificultad/duración');
     buffer.writeln('');
     
     buffer.writeln('INDICADORES ESPECÍFICOS DE GASTRITIS A DETECTAR:');
@@ -255,23 +484,78 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
     buffer.writeln('');
     
     buffer.writeln('FORMATO DE RESPUESTA ESTRUCTURADA:');
-    buffer.writeln('1) 🤝 **Validación Empática:** Reconoce y valida la experiencia del usuario');
-    buffer.writeln('2) 🎯 **Análisis de Indicadores:** Identifica síntomas/factores específicos mencionados');
-    buffer.writeln('3) 📋 **Recomendaciones Accionables:** Lista específica con horarios y frecuencias');
-    buffer.writeln('   - Usar formato: "• [Acción específica] - [Horario/Frecuencia] - [Beneficio]"');
-    buffer.writeln('   - Incluir al menos 3-5 recomendaciones concretas');
-    buffer.writeln('   - Especificar horarios cuando sea relevante (ej: "antes del desayuno", "cada 3 horas")');
-    buffer.writeln('4) 💪 **Motivación Personalizada:** Mensaje enfocado en beneficios específicos');
+    buffer.writeln('Responde SIEMPRE en el siguiente formato JSON:');
+    buffer.writeln('{');
+    buffer.writeln('  "message": "Respuesta conversacional y empática para el usuario",');
+    buffer.writeln('  "actions": {');
+    buffer.writeln('    "habit_completion": {');
+    buffer.writeln('      "habit_id": "ID del hábito si aplica",');
+    buffer.writeln('      "status": "complete|partial|none",');
+    buffer.writeln('      "completion_percentage": 0-100,');
+    buffer.writeln('      "notes": "Observaciones sobre el cumplimiento"');
+    buffer.writeln('    },');
+    buffer.writeln('    "habit_modification": {');
+    buffer.writeln('      "habit_id": "ID del hábito a modificar",');
+    buffer.writeln('      "action": "extend|adjust_frequency|modify_schedule",');
+    buffer.writeln('      "suggestion": "Descripción de la modificación sugerida",');
+    buffer.writeln('      "methodology": "Metodología aplicada (atomic_habits, habit_stacking, etc.)"');
+    buffer.writeln('    },');
+    buffer.writeln('    "new_habits": [');
+    buffer.writeln('      {');
+    buffer.writeln('        "name": "Nombre del hábito",');
+    buffer.writeln('        "description": "Descripción detallada",');
+    buffer.writeln('        "frequency": "daily|weekly|custom",');
+    buffer.writeln('        "methodology": "Metodología recomendada"');
+    buffer.writeln('      }');
+    buffer.writeln('    ]');
+    buffer.writeln('  },');
+    buffer.writeln('  "methodology_applied": "Metodología principal utilizada en la respuesta"');
+    buffer.writeln('}');
     buffer.writeln('');
-    buffer.writeln('INSTRUCCIONES PARA CREACIÓN AUTOMÁTICA DE HÁBITOS:');
-    buffer.writeln('• Incluye recomendaciones que puedan convertirse en hábitos trackeable');
-    buffer.writeln('• Especifica frecuencias claras (diario, cada 3 horas, antes de comidas)');
-    buffer.writeln('• Menciona horarios específicos cuando sea apropiado');
-    buffer.writeln('• Usa verbos de acción claros ("tomar", "evitar", "practicar", "consumir")');
-    buffer.writeln('• Prioriza hábitos simples y medibles');
+    buffer.writeln('INSTRUCCIONES PARA MANEJO INTELIGENTE DE HÁBITOS:');
+    buffer.writeln('• **NUEVOS HÁBITOS**: Incluye recomendaciones que puedan convertirse en hábitos trackeable');
+    buffer.writeln('• **REPROGRAMACIONES**: Si el usuario menciona cambios de horario, ajustes o modificaciones de hábitos existentes, indica claramente "REPROGRAMAR:" seguido del hábito y nuevo horario');
+    buffer.writeln('• **FRECUENCIAS**: Especifica frecuencias claras (diario, cada 3 horas, antes de comidas, semanal)');
+    buffer.writeln('• **HORARIOS**: Menciona horarios específicos cuando sea apropiado (7:00 AM, antes del almuerzo, 30 min antes de dormir)');
+    buffer.writeln('• **ACCIONES**: Usa verbos de acción claros ("tomar", "evitar", "practicar", "consumir", "reprogramar", "ajustar")');
+    buffer.writeln('• **PRIORIDAD**: Prioriza hábitos simples, medibles y sostenibles');
+    buffer.writeln('• **FORMATO ESPECIAL**: Para reprogramaciones usa: "REPROGRAMAR: [Nombre del hábito] - Nuevo horario: [hora] - Motivo: [razón]"');
+    buffer.writeln('');
+    buffer.writeln('REGLAS DE FORMATO IMPORTANTES:');
+    buffer.writeln('• NO uses emojis mezclados en medio de las oraciones');
+    buffer.writeln('• Si usas emojis, colócalos SOLO al inicio de secciones principales');
+    buffer.writeln('• Evita símbolos especiales que puedan causar problemas de procesamiento');
+    buffer.writeln('• Usa texto limpio y claro, fácil de procesar por sistemas de voz');
+    buffer.writeln('• Mantén la estructura simple y consistente');
     buffer.writeln('');
     buffer.writeln('LÍMITES: Máximo 200 palabras, tono profesional pero cálido.');
     buffer.writeln('');
+    
+    // Manejo específico de mensajes predefinidos
+    buffer.writeln('MANEJO DE MENSAJES PREDEFINIDOS:');
+    if (message.contains('Quiero registrar mi alimentación de hoy')) {
+      buffer.writeln('• El usuario quiere registrar su alimentación. Responde con: "¿Qué alimentos has consumido hoy? Puedes contarme sobre tu desayuno, almuerzo, cena y cualquier snack que hayas tomado."');
+    } else if (message.contains('Tengo síntomas después de comer')) {
+      buffer.writeln('• El usuario tiene síntomas post-comida. Responde con: "¿Qué síntomas específicos sientes después de comer? ¿Cuándo comenzaron y con qué frecuencia los experimentas?"');
+    } else if (message.contains('Necesito evaluar mis rutinas diarias')) {
+      buffer.writeln('• El usuario quiere evaluar rutinas. Responde con: "¿Podrías contarme sobre tu rutina diaria actual? Me interesa conocer tus horarios de comida, ejercicio, sueño y cualquier hábito que consideres importante."');
+    } else if (message.contains('Quiero consejos para mejorar mi estilo de vida')) {
+      buffer.writeln('• El usuario busca consejos generales. Responde con: "¿En qué área específica te gustaría mejorar? Por ejemplo: alimentación, ejercicio, manejo del estrés, calidad del sueño, o digestión."');
+    }
+    buffer.writeln('');
+    
+    // Obtener nombres de hábitos existentes del usuario para evitar duplicados
+    final existingHabitNames = await _getUserExistingHabits(userId);
+    if (existingHabitNames.isNotEmpty) {
+      buffer.writeln('HÁBITOS EXISTENTES DEL USUARIO (NO SUGERIR DUPLICADOS):');
+      buffer.writeln(existingHabitNames.join(', '));
+      buffer.writeln('');
+      buffer.writeln('IMPORTANTE: NO sugieras hábitos que el usuario ya tiene adoptados. En su lugar:');
+      buffer.writeln('• Sugiere variaciones o mejoras de los hábitos existentes');
+      buffer.writeln('• Propón nuevos hábitos complementarios');
+      buffer.writeln('• Si el usuario quiere modificar un hábito existente, usa el formato REPROGRAMAR');
+      buffer.writeln('');
+    }
     
     // Análisis contextual del mensaje del usuario
     final messageAnalysis = _analyzeUserMessage(message);
@@ -280,6 +564,14 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
       messageAnalysis.forEach((key, value) {
         buffer.writeln('• $key: $value');
       });
+      buffer.writeln('');
+    }
+
+    // Obtener hábitos similares disponibles basados en el mensaje
+    final similarHabits = await _getSimilarHabitsForMessage(message);
+    if (similarHabits.isNotEmpty) {
+      buffer.writeln('HÁBITOS SIMILARES DISPONIBLES (puedes sugerir estos):');
+      buffer.writeln(similarHabits.join(', '));
       buffer.writeln('');
     }
     
@@ -354,8 +646,56 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
     String userId,
     List<ChatMessage> conversationHistory,
   ) async {
+    const maxRetries = 3;
+    const retryDelay = Duration(seconds: 2);
+    
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        print('🚀 Intento $attempt/$maxRetries - Enviando solicitud a Gemini API...');
+        
+        final response = await _makeGeminiRequest(message, userId, conversationHistory);
+        return response;
+        
+      } catch (e) {
+        print('❌ Intento $attempt falló: $e');
+        
+        if (attempt == maxRetries) {
+          print('💥 Todos los intentos fallaron');
+          rethrow;
+        }
+        
+        // Solo reintentar en ciertos tipos de errores
+        if (_shouldRetry(e)) {
+          print('⏳ Esperando ${retryDelay.inSeconds} segundos antes del siguiente intento...');
+          await Future.delayed(retryDelay);
+        } else {
+          print('🚫 Error no recuperable, no se reintentará');
+          rethrow;
+        }
+      }
+    }
+    
+    throw Exception('Error inesperado en el sistema de reintentos');
+  }
+  
+  bool _shouldRetry(dynamic error) {
+    final errorString = error.toString().toLowerCase();
+    return errorString.contains('timeout') ||
+           errorString.contains('socket') ||
+           errorString.contains('connection') ||
+           errorString.contains('500') ||
+           errorString.contains('502') ||
+           errorString.contains('503');
+  }
+  
+  Future<String> _makeGeminiRequest(
+    String message,
+    String userId,
+    List<ChatMessage> conversationHistory,
+  ) async {
     final prompt = await _buildPrompt(
       message: message,
+      userId: userId,
       conversationHistory: conversationHistory,
     );
     
@@ -369,7 +709,7 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
         'temperature': 0.7,
         'topK': 40,
         'topP': 0.95,
-        'maxOutputTokens': 1024,
+        'maxOutputTokens': 2048, // Aumentado para permitir respuestas más largas
       },
       'safetySettings': [
         {
@@ -392,23 +732,33 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
     };
 
     try {
+      print('📝 Prompt length: ${prompt.length} characters');
+      print('🔑 API Key configured: ${_apiKey.isNotEmpty ? "Yes" : "No"}');
+      
       final response = await _httpClient.post(
-        Uri.parse('$_baseUrl/models/gemini-1.5-flash-latest:generateContent?key=$_apiKey'),
+        Uri.parse('$_baseUrl/models/gemini-2.5-flash:generateContent?key=$_apiKey'),
         headers: {
           'Content-Type': 'application/json',
         },
         body: jsonEncode(requestBody),
-      ).timeout(const Duration(seconds: 30));
+      ).timeout(const Duration(seconds: 60));
 
+      print('📡 Gemini API response status: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        return responseData['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? 'Lo siento, no pude procesar tu mensaje.';
+        final geminiText = responseData['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? 'Lo siento, no pude procesar tu mensaje.';
+        print('✅ Gemini response received: ${geminiText.length} characters');
+        return geminiText;
       } else {
          // Logging detallado del error
+         print('❌ Gemini API Error - Status: ${response.statusCode}');
+         print('📄 Response body: ${response.body}');
+         
          _logError('gemini_api', 'generateContent', 'HTTP ${response.statusCode}', {
            'status_code': response.statusCode,
            'response_body': response.body,
-           'api_endpoint': '$_baseUrl/models/gemini-1.5-flash-latest:generateContent',
+           'api_endpoint': '$_baseUrl/models/gemini-2.5-flash:generateContent',
            'has_api_key': _apiKey.isNotEmpty,
          });
          
@@ -433,14 +783,18 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
          }
        }
     } catch (e) {
+       print('💥 Gemini API Exception: $e');
+       
        if (e.toString().contains('TimeoutException')) {
+         print('⏰ Timeout error detected');
          _logError('gemini_api', 'generateContent', 'Timeout', {
            'error_type': 'timeout',
-           'timeout_duration': '30 seconds',
+           'timeout_duration': '60 seconds',
          });
          throw Exception('Timeout al conectar con la API de Gemini. Verifica tu conexión.');
        }
        if (e.toString().contains('SocketException')) {
+         print('🌐 Socket/Connection error detected');
          _logError('gemini_api', 'generateContent', 'Connection Error', {
            'error_type': 'socket_exception',
            'error_details': e.toString(),
@@ -468,13 +822,33 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
     // Extraer información relevante del mensaje para el análisis
     final userHabits = _extractHabitsFromMessage(message);
     
-    return await _deepLearningDatasource!.analyzeGastritisRisk(
+    // Usar el nuevo método predictGastritisRisk en lugar de analyzeGastritisRisk
+    final prediction = await _deepLearningDatasource!.predictGastritisRisk(
       userId: userId,
       userHabits: userHabits,
     );
+    
+    // Convertir GastritisRiskPrediction a DeepLearningAnalysis
+    return DeepLearningAnalysis(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      userId: prediction.userId,
+      type: AnalysisType.gastritisRisk,
+      inputData: userHabits,
+      results: {
+        'risk_level': prediction.riskLevel,
+        'risk_category': prediction.riskCategory,
+        'factor_contributions': prediction.factorContributions,
+        'risk_factors': prediction.riskFactors,
+      },
+      riskLevel: _mapRiskLevel(prediction.riskCategory),
+      confidence: prediction.confidence,
+      recommendations: [], // Se obtendrán por separado
+      timestamp: prediction.timestamp,
+      modelVersion: '1.0.0',
+    );
   }
 
-  /// Obtiene respuesta del backend de deep learning usando el endpoint de chat
+  /// Obtiene respuesta del backend de deep learning usando predicción y recomendaciones
   Future<Map<String, dynamic>?> _getDeepLearningChatResponse(
     String message,
     String userId,
@@ -490,29 +864,48 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
       
       final extractedSymptoms = _extractSymptomsFromMessage(message);
       final extractedHabits = _extractHabitsFromMessage(message);
-      
-      final context = {
-        'message_type': 'gastritis_consultation',
-        'extracted_symptoms': extractedSymptoms,
-        'user_habits': extractedHabits,
-        'message_length': message.length,
-        'timestamp': DateTime.now().toIso8601String(),
-      };
 
       print('📊 Síntomas extraídos: ${extractedSymptoms.keys.join(", ")}');
       print('🔍 Hábitos detectados: ${extractedHabits.keys.join(", ")}');
 
-      // Llamada con timeout para evitar bloqueos
-      final response = await _deepLearningDatasource!.sendChatMessage(
+      // Obtener predicción de riesgo de gastritis
+      final prediction = await _deepLearningDatasource!.predictGastritisRisk(
         userId: userId,
-        message: message,
-        sessionId: sessionId,
-        context: context,
-        includePrediction: true,
+        userHabits: extractedHabits,
       ).timeout(const Duration(seconds: 15));
       
+      // Obtener recomendaciones de hábitos
+      final recommendations = await _deepLearningDatasource!.getHabitRecommendations(
+        userId: userId,
+        currentHabits: extractedHabits,
+        riskLevel: prediction.riskLevel,
+      ).timeout(const Duration(seconds: 10));
+      
       print('✅ Respuesta de Deep Learning recibida exitosamente');
-      return response;
+      
+      // Crear respuesta estructurada similar al formato anterior
+      return {
+        'response_type': 'prediction',
+        'message': 'Análisis de riesgo de gastritis completado',
+        'risk_assessment': {
+          'level': prediction.riskCategory,
+          'score': prediction.riskLevel,
+          'factors': prediction.riskFactors,
+          'confidence': prediction.confidence,
+        },
+        'suggested_actions': recommendations.map((r) => r.title).toList(),
+        'detailed_recommendations': recommendations.map((r) => {
+          'title': r.title,
+          'description': r.description,
+          'category': r.category,
+          'priority': r.priority,
+          'impact_score': r.impactScore,
+          'action_steps': r.actionSteps,
+          'timeframe': r.timeframe,
+        }).toList(),
+        'timestamp': prediction.timestamp.toIso8601String(),
+        'status': 'success',
+      };
       
     } on TimeoutException {
       print('⏰ Timeout en llamada a Deep Learning backend (15s)');
@@ -713,6 +1106,29 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
     };
   }
   
+  /// Convierte la categoría de riesgo string a RiskLevel enum
+  RiskLevel _mapRiskLevel(String riskCategory) {
+    switch (riskCategory.toLowerCase()) {
+      case 'low':
+      case 'bajo':
+        return RiskLevel.low;
+      case 'medium':
+      case 'moderate':
+      case 'moderado':
+      case 'medio':
+        return RiskLevel.medium;
+      case 'high':
+      case 'alto':
+        return RiskLevel.high;
+      case 'critical':
+      case 'critico':
+      case 'crítico':
+        return RiskLevel.critical;
+      default:
+        return RiskLevel.low;
+    }
+  }
+
   /// Registra errores de Deep Learning para métricas y debugging
   void _logDeepLearningError(String operation, String error) {
     _logError('deep_learning', operation, error, {
@@ -852,55 +1268,58 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
 
   /// Formatea la respuesta de Gemini eliminando marcadores markdown y aplicando formato de texto
   String _formatGeminiResponse(String response) {
+    print('🔥 DEBUG FORMATEO: Respuesta original de Gemini:');
+    print('🔥 DEBUG FORMATEO: "$response"');
+    
     // Normalizar el texto primero
     String normalized = response
         .replaceAll(RegExp(r'\n\s*\n\s*\n'), '\n\n') // Máximo 2 saltos de línea consecutivos
         .replaceAll(RegExp(r'[ \t]+'), ' ') // Normalizar espacios
         .replaceAll(RegExp(r'^[•*-]\s*', multiLine: true), '• ') // Unificar bullets
-        .replaceAll(RegExp(r'^\s*\d+\.\s+(.+)$', multiLine: true), '• \$1') // Convertir listas numeradas
-        .replaceAll(RegExp(r'^#{1,3}\s*(.+)', multiLine: true), '\$1') // Limpiar títulos
+        .replaceAllMapped(RegExp(r'^\s*\d+\.\s+(.+)$', multiLine: true), (match) {
+          print('🔥 DEBUG REGEX: Match encontrado: "${match.group(0)}"');
+          print('🔥 DEBUG REGEX: Grupo 1: "${match.group(1)}"');
+          return '• ${match.group(1)}';
+        }) // Convertir listas numeradas
+        .replaceAllMapped(RegExp(r'^#{1,3}\s*(.+)', multiLine: true), (match) => match.group(1)!) // Limpiar títulos
         .trim();
+    
+    print('🔥 DEBUG FORMATEO: Después de normalización:');
+    print('🔥 DEBUG FORMATEO: "$normalized"');
 
     // Eliminar marcadores markdown y aplicar formato de texto
     String formatted = normalized
-        .replaceAll(RegExp(r'\*\*([^*]+?)\*\*'), '\$1') // Eliminar negritas **texto**
-        .replaceAll(RegExp(r'\*([^*]+?)\*'), '\$1') // Eliminar cursivas *texto*
-        .replaceAll(RegExp(r'__([^_]+?)__'), '\$1') // Eliminar negritas __texto__
-        .replaceAll(RegExp(r'_([^_]+?)_'), '\$1'); // Eliminar cursivas _texto_
+        .replaceAllMapped(RegExp(r'\*\*([^*]+?)\*\*'), (match) => match.group(1)!) // Eliminar negritas **texto**
+        .replaceAllMapped(RegExp(r'\*([^*]+?)\*'), (match) => match.group(1)!) // Eliminar cursivas *texto*
+        .replaceAllMapped(RegExp(r'__([^_]+?)__'), (match) => match.group(1)!) // Eliminar negritas __texto__
+        .replaceAllMapped(RegExp(r'_([^_]+?)_'), (match) => match.group(1)!); // Eliminar cursivas _texto_
+
+    print('🔥 DEBUG FORMATEO: Después de eliminar markdown:');
+    print('🔥 DEBUG FORMATEO: "$formatted"');
 
     // Resaltar palabras clave médicas importantes con emojis
     formatted = _highlightMedicalKeywords(formatted);
 
+    print('🔥 DEBUG FORMATEO: Resultado final:');
+    print('🔥 DEBUG FORMATEO: "$formatted"');
+
     return formatted;
   }
 
-  /// Resalta palabras clave médicas importantes con emojis y formato
+  /// Resalta palabras clave médicas importantes con formato limpio
   String _highlightMedicalKeywords(String text) {
-    // Palabras clave médicas importantes
-    final medicalKeywords = {
-      'gastritis': '🔥 GASTRITIS',
-      'dolor de estómago': '⚠️ DOLOR DE ESTÓMAGO',
-      'acidez': '🔥 ACIDEZ',
-      'reflujo': '⬆️ REFLUJO',
-      'úlcera': '🚨 ÚLCERA',
-      'importante': '❗ IMPORTANTE',
-      'recomendación': '💡 RECOMENDACIÓN',
-      'consejo': '💡 CONSEJO',
-      'atención': '⚠️ ATENCIÓN',
-      'evitar': '🚫 EVITAR',
-      'reducir': '📉 REDUCIR',
-      'aumentar': '📈 AUMENTAR',
-      'mejorar': '✅ MEJORAR',
-      'prevenir': '🛡️ PREVENIR',
-      'controlar': '🎯 CONTROLAR',
+    // Solo resaltar palabras clave críticas sin emojis mezclados
+    final criticalKeywords = {
+      'gastritis': 'GASTRITIS',
+      'úlcera': 'ÚLCERA',
     };
 
     String highlighted = text;
     
-    // Aplicar resaltado a palabras clave
-    medicalKeywords.forEach((keyword, replacement) {
+    // Aplicar resaltado solo a palabras críticas, sin emojis mezclados
+    criticalKeywords.forEach((keyword, replacement) {
       final regex = RegExp(r'\b' + RegExp.escape(keyword) + r'\b', caseSensitive: false);
-      highlighted = highlighted.replaceAllMapped(regex, (match) => replacement);
+      highlighted = highlighted.replaceAllMapped(regex, (match) => '**$replacement**');
     });
 
     return highlighted;
@@ -958,8 +1377,8 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
     // Limpiar la línea de marcadores
     String cleanLine = line
         .replaceAll(RegExp(r'^[•*-]\s*'), '')
-        .replaceAll(RegExp(r'\*\*([^*]+)\*\*'), '\$1')
-        .replaceAll(RegExp(r'\*([^*]+)\*'), '\$1')
+        .replaceAll(RegExp(r'\*\*([^*]+)\*\*'), r'$1')
+        .replaceAll(RegExp(r'\*([^*]+)\*'), r'$1')
         .trim();
     
     if (cleanLine.isEmpty) return null;
@@ -1224,6 +1643,111 @@ Nota: El servicio completo de IA se restablecerá pronto. Mientras tanto, puedo 
     // Placeholder para integración con Speech-to-Text
     // Esto requeriría integración con Google Speech-to-Text API o similar
     throw UnimplementedError('Speech-to-Text no implementado aún');
+  }
+
+  /// Genera un título descriptivo para una conversación basado en el primer mensaje
+  Future<String> generateConversationTitle(String firstMessage) async {
+    try {
+      final prompt = '''
+Genera un título corto y descriptivo (máximo 50 caracteres) para una conversación de chat basado en este primer mensaje del usuario:
+
+"$firstMessage"
+
+El título debe:
+- Ser conciso y claro
+- Reflejar el tema principal del mensaje
+- Estar en español
+- No incluir comillas ni caracteres especiales
+- Ser apropiado para mostrar en una lista de conversaciones
+
+Responde SOLO con el título, sin explicaciones adicionales.
+''';
+
+      final requestBody = {
+        'contents': [{
+          'parts': [{
+            'text': prompt
+          }]
+        }],
+        'generationConfig': {
+          'temperature': 0.3,
+          'topK': 20,
+          'topP': 0.8,
+          'maxOutputTokens': 100,
+        },
+        'safetySettings': [
+          {
+            'category': 'HARM_CATEGORY_HARASSMENT',
+            'threshold': 'BLOCK_MEDIUM_AND_ABOVE'
+          },
+          {
+            'category': 'HARM_CATEGORY_HATE_SPEECH',
+            'threshold': 'BLOCK_MEDIUM_AND_ABOVE'
+          },
+          {
+            'category': 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+            'threshold': 'BLOCK_MEDIUM_AND_ABOVE'
+          },
+          {
+            'category': 'HARM_CATEGORY_DANGEROUS_CONTENT',
+            'threshold': 'BLOCK_MEDIUM_AND_ABOVE'
+          }
+        ]
+      };
+
+      final response = await _httpClient.post(
+        Uri.parse('$_baseUrl/models/gemini-2.5-flash:generateContent?key=$_apiKey'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(requestBody),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        final title = responseData['candidates']?[0]?['content']?['parts']?[0]?['text']?.trim() ?? 'Nueva conversación';
+        
+        // Limpiar el título y asegurar que no exceda 50 caracteres
+        String cleanTitle = title.replaceAll(RegExp(r'["\n\r]'), '').trim();
+        if (cleanTitle.length > 50) {
+          cleanTitle = cleanTitle.substring(0, 47) + '...';
+        }
+        
+        return cleanTitle.isEmpty ? 'Nueva conversación' : cleanTitle;
+      } else {
+        print('❌ Error al generar título: ${response.statusCode}');
+        return _generateFallbackTitle(firstMessage);
+      }
+    } catch (e) {
+      print('❌ Error al generar título con Gemini: $e');
+      return _generateFallbackTitle(firstMessage);
+    }
+  }
+
+  /// Genera un título de fallback basado en palabras clave del mensaje
+  String _generateFallbackTitle(String message) {
+    final lowerMessage = message.toLowerCase();
+    
+    // Títulos basados en palabras clave comunes
+    if (lowerMessage.contains('dolor') || lowerMessage.contains('duele')) {
+      return 'Consulta sobre dolor';
+    } else if (lowerMessage.contains('hábito') || lowerMessage.contains('rutina')) {
+      return 'Creación de hábitos';
+    } else if (lowerMessage.contains('síntoma') || lowerMessage.contains('síntomas')) {
+      return 'Registro de síntomas';
+    } else if (lowerMessage.contains('gastritis') || lowerMessage.contains('estómago')) {
+      return 'Consulta digestiva';
+    } else if (lowerMessage.contains('ejercicio') || lowerMessage.contains('actividad')) {
+      return 'Actividad física';
+    } else if (lowerMessage.contains('alimentación') || lowerMessage.contains('comida')) {
+      return 'Consulta nutricional';
+    } else if (lowerMessage.contains('progreso') || lowerMessage.contains('avance')) {
+      return 'Seguimiento de progreso';
+    } else {
+      // Usar las primeras palabras del mensaje
+      final words = message.split(' ').take(4).join(' ');
+      return words.length > 50 ? words.substring(0, 47) + '...' : words;
+    }
   }
 
   void dispose() {

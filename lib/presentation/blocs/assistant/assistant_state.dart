@@ -23,6 +23,8 @@ class AssistantState extends Equatable {
   final double? recordingAmplitude;
   final String partialTranscription;
   final List<Habit> autoCreatedHabits;
+  final bool isTTSEnabled;
+  final bool isTTSMuted;
 
   const AssistantState({
     this.chatSessions = const [],
@@ -43,6 +45,8 @@ class AssistantState extends Equatable {
     this.recordingAmplitude,
     this.partialTranscription = '',
     this.autoCreatedHabits = const [],
+    this.isTTSEnabled = true,
+    this.isTTSMuted = false,
   });
 
   AssistantState copyWith({
@@ -64,6 +68,8 @@ class AssistantState extends Equatable {
     double? recordingAmplitude,
     String? partialTranscription,
     List<Habit>? autoCreatedHabits,
+    bool? isTTSEnabled,
+    bool? isTTSMuted,
     bool clearError = false,
     bool clearCurrentSession = false,
     bool clearDeepLearningAnalysis = false,
@@ -94,6 +100,8 @@ class AssistantState extends Equatable {
       recordingAmplitude: recordingAmplitude ?? this.recordingAmplitude,
       partialTranscription: partialTranscription ?? this.partialTranscription,
       autoCreatedHabits: autoCreatedHabits ?? this.autoCreatedHabits,
+      isTTSEnabled: isTTSEnabled ?? this.isTTSEnabled,
+      isTTSMuted: isTTSMuted ?? this.isTTSMuted,
     );
   }
 
@@ -117,6 +125,8 @@ class AssistantState extends Equatable {
     recordingAmplitude,
     partialTranscription,
     autoCreatedHabits,
+    isTTSEnabled,
+    isTTSMuted,
   ];
 
   // Getters de conveniencia

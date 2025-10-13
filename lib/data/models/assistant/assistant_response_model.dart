@@ -19,6 +19,7 @@ class AssistantResponseModel extends AssistantResponse {
     super.extractedHabits,
     super.suggestedHabits,
     super.dlChatResponse,
+    super.processedActions,
   });
 
   factory AssistantResponseModel.fromJson(Map<String, dynamic> json) {
@@ -56,6 +57,9 @@ class AssistantResponseModel extends AssistantResponse {
       dlChatResponse: json['dl_chat_response'] != null
           ? Map<String, dynamic>.from(json['dl_chat_response'])
           : null,
+      processedActions: json['processed_actions'] != null
+          ? Map<String, dynamic>.from(json['processed_actions'])
+          : null,
     );
   }
 
@@ -78,6 +82,7 @@ class AssistantResponseModel extends AssistantResponse {
       'extracted_habits': extractedHabits,
       'suggested_habits': suggestedHabits,
       'dl_chat_response': dlChatResponse,
+      'processed_actions': processedActions,
     };
   }
 
@@ -116,6 +121,9 @@ class AssistantResponseModel extends AssistantResponse {
       dlChatResponse: data['dl_chat_response'] != null
           ? Map<String, dynamic>.from(data['dl_chat_response'])
           : null,
+      processedActions: data['processed_actions'] != null
+          ? Map<String, dynamic>.from(data['processed_actions'])
+          : null,
     );
   }
 
@@ -138,6 +146,7 @@ class AssistantResponseModel extends AssistantResponse {
       'extracted_habits': extractedHabits,
       'suggested_habits': suggestedHabits,
       'dl_chat_response': dlChatResponse,
+      'processed_actions': processedActions,
     };
   }
 
@@ -180,6 +189,7 @@ class AssistantResponseModel extends AssistantResponse {
     List<Map<String, dynamic>>? extractedHabits,
     List<Map<String, dynamic>>? suggestedHabits,
     Map<String, dynamic>? dlChatResponse,
+    Map<String, dynamic>? processedActions,
   }) {
     return AssistantResponseModel(
       id: id ?? this.id,
@@ -199,6 +209,7 @@ class AssistantResponseModel extends AssistantResponse {
       extractedHabits: extractedHabits ?? this.extractedHabits,
       suggestedHabits: suggestedHabits ?? this.suggestedHabits,
       dlChatResponse: dlChatResponse ?? this.dlChatResponse,
+      processedActions: processedActions ?? this.processedActions,
     );
   }
 }

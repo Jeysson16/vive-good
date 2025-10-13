@@ -7,20 +7,27 @@ import '../../blocs/assistant/assistant_state.dart';
 import '../../blocs/assistant/assistant_event.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_state.dart';
+import '../../blocs/habit/habit_bloc.dart';
+import '../../blocs/habit/habit_state.dart';
 import '../../widgets/assistant/voice_animation_widget.dart';
 import '../../widgets/assistant/enhanced_voice_animation_widget.dart';
 import '../../widgets/assistant/suggestion_chip_widget.dart';
-import '../../widgets/assistant/chat_message_widget.dart';
+import '../../widgets/chat/chat_message_widget.dart';
 import '../../widgets/assistant/assistant_avatar_widget.dart';
+import '../../widgets/assistant/attached_habits_widget.dart';
 import '../chat/chat_intro_page.dart';
 import '../../blocs/chat/chat_bloc.dart';
 import '../../../data/repositories/supabase_chat_repository.dart';
 import '../../../data/datasources/chat_remote_datasource.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/routes/app_routes.dart';
+import '../habits/new_habit_screen.dart';
+import '../../../domain/entities/user_habit.dart';
 
 class AssistantPage extends StatefulWidget {
-  const AssistantPage({super.key});
+  final List<UserHabit>? attachedHabits;
+  
+  const AssistantPage({super.key, this.attachedHabits});
 
   @override
   State<AssistantPage> createState() => _AssistantPageState();
@@ -69,6 +76,9 @@ class _AssistantPageState extends State<AssistantPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userId = _getCurrentUserId(context);
       context.read<AssistantBloc>().add(InitializeAssistant(userId: userId));
+      
+      // Si hay hábitos adjuntados, mostrarlos como contexto pero permitir al usuario escribir su mensaje
+      // Ya no enviamos mensaje automático, solo mostramos los hábitos adjuntados
     });
   }
 
@@ -171,6 +181,43 @@ class _AssistantPageState extends State<AssistantPage>
                 return SafeArea(
                   child: Column(
                     children: [
+                      // Hábitos adjuntados (si existen)
+                      if (widget.attachedHabits != null && widget.attachedHabits!.isNotEmpty)
+                        AttachedHabitsWidget(
+                          attachedHabits: widget.attachedHabits!,
+                          onRemoveAll: () {
+                            // Navegar de vuelta sin hábitos adjuntados
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (context) => const AssistantPage(),
+                              ),
+                            );
+                          },
+                          onRemoveHabit: (habit) {
+                            // Crear nueva lista sin el hábito removido
+                            final updatedHabits = widget.attachedHabits!
+                                .where((h) => h.id != habit.id)
+                                .toList();
+                            
+                            if (updatedHabits.isEmpty) {
+                              // Si no quedan hábitos, navegar sin hábitos adjuntados
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (context) => const AssistantPage(),
+                                ),
+                              );
+                            } else {
+                              // Navegar con la lista actualizada
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (context) => AssistantPage(
+                                    attachedHabits: updatedHabits,
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                        ),
                       
                       // Contenido principal
                       Expanded(
@@ -270,37 +317,6 @@ class _AssistantPageState extends State<AssistantPage>
           ),
           const SizedBox(height: 24),
           
-          // Show transcribed text when available
-          if (state.textInput.isNotEmpty && !state.isRecording)
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8F9FA),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFE5E7EB),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    state.textInput,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Color(0xFF374151),
-                      height: 1.4,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-              ),
-            ),
-          
-          const SizedBox(height: 40),
-          
           // Voice animation and avatar with circular gradient background
           Container(
             height: 250,
@@ -367,25 +383,42 @@ class _AssistantPageState extends State<AssistantPage>
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: ListView.builder(
         controller: _scrollController,
-        itemCount: state.messages.length,
+        itemCount: state.messages.length + (state.isTyping ? 1 : 0),
         itemBuilder: (context, index) {
+          // Mostrar indicador de carga si el asistente está escribiendo
+          if (index == state.messages.length && state.isTyping) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _buildTypingIndicator(),
+            );
+          }
+          
           final message = state.messages[index];
           return Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: ChatMessageWidget(
-              message: message,
-              onPlayAudio: (audioUrl) {
-                context.read<AssistantBloc>().add(
-                  StartVoicePlayback(audioUrl),
+            child: BlocBuilder<HabitBloc, HabitState>(
+              builder: (context, habitState) {
+                final existingUserHabits = habitState is HabitLoaded 
+                    ? habitState.filteredHabits 
+                    : <UserHabit>[];
+                
+                return ChatMessageWidget(
+                  message: message,
+                  existingUserHabits: existingUserHabits,
+                  onCreateHabit: (habitName, habitData) {
+                    // Navegar a NewHabitScreen con los datos del hábito
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => NewHabitScreen(
+                          prefilledHabitName: habitName,
+                          prefilledDescription: habitData['description'] as String?,
+                          prefilledCategoryId: _getCategoryIdFromName(habitData['category'] as String?),
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
-              onStopAudio: () {
-                context.read<AssistantBloc>().add(
-                  const StopVoicePlayback(),
-                );
-              },
-              isPlaying: state.isPlayingAudio && 
-                        state.currentAudioUrl != null,
             ),
           );
         },
@@ -394,100 +427,91 @@ class _AssistantPageState extends State<AssistantPage>
   }
 
   Widget _buildBottomInputArea(BuildContext context, AssistantState state) {
+    // Si hay hábitos adjuntados y no hay mensajes, mostrar campo de texto
+    final bool showTextInput = widget.attachedHabits != null && 
+                               widget.attachedHabits!.isNotEmpty && 
+                               state.messages.isEmpty;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: const BoxDecoration(
         color: Colors.transparent,
       ),
       child: SafeArea(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            // Messages button (left)
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: const Color(0xFF2E7D32).withOpacity(0.3),
-                  width: 1,
-                ),
-              ),
-              child: IconButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => BlocProvider(
-                        create: (context) => ChatBloc(
-                          chatRepository: SupabaseChatRepository(
-                            ChatRemoteDataSource(
-                              Supabase.instance.client,
-                            ),
-                          ),
-                        ),
-                        child: const ChatIntroPage(),
-                      ),
-                    ),
-                  );
-                },
-                icon: Icon(
-                  Icons.chat_bubble_outline,
-                  color: const Color(0xFF2E7D32),
-                  size: 24,
-                ),
-                tooltip: 'Mensajes',
-              ),
+        child: showTextInput 
+          ? _buildTextInputArea(context, state)
+          : _buildVoiceInputArea(context, state),
+      ),
+    );
+  }
+
+  Widget _buildTextInputArea(BuildContext context, AssistantState state) {
+    final habitNames = widget.attachedHabits!
+        .map((habit) => habit.customName ?? habit.habit?.name ?? 'Hábito')
+        .join(', ');
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Campo de texto
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(
+              color: const Color(0xFF2E7D32).withOpacity(0.3),
+              width: 1,
             ),
-            
-            // Voice recording button (center)
-            GestureDetector(
-              onTap: () {
-                if (state.isRecording) {
-                  context.read<AssistantBloc>().add(const StopVoiceRecording());
-                } else {
-                  context.read<AssistantBloc>().add(const StartVoiceRecording());
-                }
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: state.isRecording 
-                    ? const Color(0xFF4CAF50) // Verde cuando está grabando
-                    : Colors.transparent, // Transparente cuando no está grabando
-                  shape: BoxShape.circle,
-                  border: state.isRecording 
-                    ? null 
-                    : Border.all(
-                        color: const Color(0xFF2E7D32).withOpacity(0.3),
-                        width: 2,
-                      ),
-                  boxShadow: state.isRecording ? [
-                    BoxShadow(
-                      color: const Color(0xFF4CAF50).withOpacity(0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 4),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _textController,
+                  decoration: InputDecoration(
+                    hintText: 'Escribe sobre tus hábitos: $habitNames',
+                    hintStyle: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
                     ),
-                  ] : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 15,
+                    ),
+                  ),
+                  maxLines: null,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _sendTextMessage(context, state),
                 ),
-                child: AnimatedScale(
-                  duration: const Duration(milliseconds: 100),
-                  scale: state.isRecording ? 0.9 : 1.0,
-                  child: Icon(
-                    state.isRecording ? Icons.stop : Icons.mic,
-                    color: state.isRecording 
-                      ? Colors.white 
-                      : const Color(0xFF2E7D32),
-                    size: 32,
+              ),
+              // Botón de envío
+              Container(
+                margin: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  onPressed: () => _sendTextMessage(context, state),
+                  icon: const Icon(
+                    Icons.send,
+                    color: Color(0xFF2E7D32),
                   ),
                 ),
               ),
-            ),
-            
-            // Close button (right)
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Botones adicionales
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            // Botón de voz
             Container(
               width: 56,
               height: 56,
@@ -501,20 +525,192 @@ class _AssistantPageState extends State<AssistantPage>
               ),
               child: IconButton(
                 onPressed: () {
-                  context.go('/main');
+                  if (state.isRecording) {
+                    context.read<AssistantBloc>().add(const StopVoiceRecording());
+                  } else {
+                    context.read<AssistantBloc>().add(const StartVoiceRecording());
+                  }
                 },
                 icon: Icon(
-                   Icons.close_rounded,
-                   color: const Color(0xFF2E7D32),
-                   size: 22,
-                 ),
+                  state.isRecording ? Icons.stop : Icons.mic,
+                  color: const Color(0xFF2E7D32),
+                  size: 24,
+                ),
+                tooltip: state.isRecording ? 'Detener grabación' : 'Grabar mensaje',
+              ),
+            ),
+            // Botón de cerrar
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFF2E7D32).withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: IconButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: Color(0xFF2E7D32),
+                  size: 22,
+                ),
                 tooltip: 'Cerrar',
               ),
             ),
           ],
         ),
+      ],
+    );
+  }
+
+  Widget _buildVoiceInputArea(BuildContext context, AssistantState state) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        // Messages button (left)
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: const Color(0xFF2E7D32).withOpacity(0.3),
+              width: 1,
+            ),
+          ),
+          child: IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => BlocProvider(
+                    create: (context) => ChatBloc(
+                      chatRepository: SupabaseChatRepository(
+                        ChatRemoteDataSource(
+                          Supabase.instance.client,
+                        ),
+                      ),
+                    ),
+                    child: ChatIntroPage(
+                      attachedHabits: widget.attachedHabits,
+                    ),
+                  ),
+                ),
+              );
+            },
+            icon: Icon(
+              Icons.chat_bubble_outline,
+              color: const Color(0xFF2E7D32),
+              size: 24,
+            ),
+            tooltip: 'Mensajes',
+          ),
+        ),
+        
+        // Voice recording button (center)
+        GestureDetector(
+          onTap: () {
+            if (state.isRecording) {
+              context.read<AssistantBloc>().add(const StopVoiceRecording());
+            } else {
+              context.read<AssistantBloc>().add(const StartVoiceRecording());
+            }
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: state.isRecording 
+                ? const Color(0xFF4CAF50) // Verde cuando está grabando
+                : Colors.transparent, // Transparente cuando no está grabando
+              shape: BoxShape.circle,
+              border: state.isRecording 
+                ? null 
+                : Border.all(
+                    color: const Color(0xFF2E7D32).withOpacity(0.3),
+                    width: 2,
+                  ),
+              boxShadow: state.isRecording ? [
+                BoxShadow(
+                  color: const Color(0xFF4CAF50).withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ] : null,
+            ),
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 100),
+              scale: state.isRecording ? 0.9 : 1.0,
+              child: Icon(
+                state.isRecording ? Icons.stop : Icons.mic,
+                color: state.isRecording 
+                  ? Colors.white 
+                  : const Color(0xFF2E7D32),
+                size: 32,
+              ),
+            ),
+          ),
+        ),
+        
+        // Close button (right)
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: const Color(0xFF2E7D32).withOpacity(0.3),
+              width: 1,
+            ),
+          ),
+          child: IconButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            icon: Icon(
+               Icons.close_rounded,
+               color: const Color(0xFF2E7D32),
+               size: 22,
+             ),
+            tooltip: 'Cerrar',
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _sendTextMessage(BuildContext context, AssistantState state) {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+
+    final userId = _getCurrentUserId(context);
+    
+    // Incluir información de hábitos adjuntados en el contexto
+    String messageWithContext = text;
+    if (widget.attachedHabits != null && widget.attachedHabits!.isNotEmpty) {
+      final habitNames = widget.attachedHabits!
+          .map((habit) => habit.customName ?? habit.habit?.name ?? 'Hábito')
+          .join(', ');
+      messageWithContext = 'Contexto: Hábitos adjuntados: $habitNames\n\nMensaje del usuario: $text';
+    }
+
+    context.read<AssistantBloc>().add(
+      SendTextMessage(
+        content: messageWithContext,
+        userId: userId,
       ),
     );
+
+    _textController.clear();
   }
 
   void _showOptionsMenu(BuildContext context, state) {
@@ -732,6 +928,148 @@ class _AssistantPageState extends State<AssistantPage>
           ),
         ),
       ),
+    );
+  }
+
+  /// Convierte el nombre de una categoría a su UUID correspondiente
+  String? _getCategoryIdFromName(String? categoryName) {
+    // Mapeo de nombres de categorías a UUIDs reales de la base de datos
+    // Estos UUIDs coinciden con las categorías definidas en las migraciones de Supabase
+    final categoryMap = {
+      // Categorías principales del sistema
+      'Alimentación': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c',
+      'Actividad Física': '2196f3aa-1234-4567-89ab-cdef12345678',
+      'Sueño': '6d1f2f1b-04ef-497e-97b7-8077ff3b3c69',
+      'Hidratación': '93688043-4d35-4b2a-9dcd-17482125b1a9',
+      'Bienestar Mental': 'ff9800bb-5678-4567-89ab-cdef12345678',
+      'Productividad': '795548cc-9012-4567-89ab-cdef12345678',
+      
+      // Alias y variaciones comunes
+      'Ejercicio': '2196f3aa-1234-4567-89ab-cdef12345678', // Alias para Actividad Física
+      'Salud': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Alias para Alimentación
+      'Bienestar': 'ff9800bb-5678-4567-89ab-cdef12345678', // Alias para Bienestar Mental
+      'Descanso': '6d1f2f1b-04ef-497e-97b7-8077ff3b3c69', // Alias para Sueño
+      'General': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Fallback a Alimentación
+    };
+    
+    return categoryMap[categoryName];
+  }
+
+  /// Widget que muestra el indicador de que el asistente está escribiendo
+  Widget _buildTypingIndicator() {
+    return Row(
+      children: [
+        // Avatar del asistente
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF4CAF50),
+                const Color(0xFF81C784),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF4CAF50).withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 18,
+              height: 18,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(
+                  Icons.assistant,
+                  color: Colors.white,
+                  size: 18,
+                );
+              },
+            ),
+          ),
+        ),
+        
+        const SizedBox(width: 8),
+        
+        // Contenedor del indicador de escritura
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: const Color(0xFFE0E0E0),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Procesando respuesta',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF666666),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Animación de puntos
+                SizedBox(
+                  width: 24,
+                  height: 16,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildTypingDot(0),
+                      _buildTypingDot(1),
+                      _buildTypingDot(2),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        
+        // Espaciador para alinear a la izquierda
+        const SizedBox(width: 48),
+      ],
+    );
+  }
+
+  /// Widget para cada punto de la animación de escritura
+  Widget _buildTypingDot(int index) {
+    return AnimatedBuilder(
+      animation: _voiceAnimationController,
+      builder: (context, child) {
+        final animationValue = _voiceAnimationController.value;
+        final delay = index * 0.2;
+        final dotValue = ((animationValue + delay) % 1.0);
+        final opacity = (0.3 + 0.7 * (1 - (dotValue - 0.5).abs() * 2)).clamp(0.3, 1.0);
+        
+        return Container(
+          width: 4,
+          height: 4,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF4CAF50).withOpacity(opacity),
+          ),
+        );
+      },
     );
   }
 }

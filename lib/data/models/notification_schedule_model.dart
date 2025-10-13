@@ -33,6 +33,10 @@ class NotificationScheduleModel extends NotificationSchedule {
   
   @HiveField(6)
   @override
+  final DateTime? lastTriggered;
+  
+  @HiveField(7)
+  @override
   final int platformNotificationId;
 
   const NotificationScheduleModel({
@@ -40,8 +44,9 @@ class NotificationScheduleModel extends NotificationSchedule {
     required this.habitNotificationId,
     required this.dayOfWeek,
     required this.scheduledTime,
-    required this.isActive,
-    required this.snoozeCount,
+    this.isActive = true,
+    this.snoozeCount = 0,
+    this.lastTriggered,
     required this.platformNotificationId,
   }) : super(
           id: id,
@@ -50,6 +55,7 @@ class NotificationScheduleModel extends NotificationSchedule {
           scheduledTime: scheduledTime,
           isActive: isActive,
           snoozeCount: snoozeCount,
+          lastTriggered: lastTriggered,
           platformNotificationId: platformNotificationId,
         );
 
@@ -61,6 +67,7 @@ class NotificationScheduleModel extends NotificationSchedule {
       scheduledTime: schedule.scheduledTime,
       isActive: schedule.isActive,
       snoozeCount: schedule.snoozeCount,
+      lastTriggered: schedule.lastTriggered,
       platformNotificationId: schedule.platformNotificationId,
     );
   }
@@ -71,8 +78,11 @@ class NotificationScheduleModel extends NotificationSchedule {
       habitNotificationId: json['habitNotificationId'] as String,
       dayOfWeek: json['dayOfWeek'] as String,
       scheduledTime: json['scheduledTime'] as String,
-      isActive: json['isActive'] as bool,
-      snoozeCount: json['snoozeCount'] as int,
+      isActive: json['isActive'] as bool? ?? true,
+      snoozeCount: json['snoozeCount'] as int? ?? 0,
+      lastTriggered: json['lastTriggered'] != null 
+        ? DateTime.parse(json['lastTriggered'] as String) 
+        : null,
       platformNotificationId: json['platformNotificationId'] as int,
     );
   }
@@ -85,6 +95,7 @@ class NotificationScheduleModel extends NotificationSchedule {
       'scheduledTime': scheduledTime,
       'isActive': isActive,
       'snoozeCount': snoozeCount,
+      'lastTriggered': lastTriggered?.toIso8601String(),
       'platformNotificationId': platformNotificationId,
     };
   }
@@ -96,6 +107,7 @@ class NotificationScheduleModel extends NotificationSchedule {
     String? scheduledTime,
     bool? isActive,
     int? snoozeCount,
+    DateTime? lastTriggered,
     int? platformNotificationId,
   }) {
     return NotificationScheduleModel(
@@ -105,6 +117,7 @@ class NotificationScheduleModel extends NotificationSchedule {
       scheduledTime: scheduledTime ?? this.scheduledTime,
       isActive: isActive ?? this.isActive,
       snoozeCount: snoozeCount ?? this.snoozeCount,
+      lastTriggered: lastTriggered ?? this.lastTriggered,
       platformNotificationId: platformNotificationId ?? this.platformNotificationId,
     );
   }
@@ -117,6 +130,7 @@ class NotificationScheduleModel extends NotificationSchedule {
         scheduledTime,
         isActive,
         snoozeCount,
+        lastTriggered,
         platformNotificationId,
       ];
 }

@@ -6,6 +6,8 @@ import '../../blocs/dashboard/dashboard_event.dart';
 import '../../blocs/dashboard/dashboard_state.dart';
 import '../../blocs/habit/habit_bloc.dart';
 import '../../blocs/habit/habit_event.dart';
+import '../../blocs/progress/progress_bloc.dart';
+import '../../blocs/progress/progress_event.dart';
 
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_state.dart';
@@ -35,6 +37,7 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   int _selectedIndex = 0;
   Set<String> _selectedHabits = {};
+  Set<String> _bulkAnimatingHabits = {};
   bool _showBottomTab = false;
   String? _selectedCategoryId;
   String?
@@ -42,6 +45,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   late TabController _tabController;
   late SliverScrollController _sliverController;
   Timer? _loadingVerificationTimer;
+  
+  // Instancia persistente de MyHabitsIntegratedView para evitar recreación
+  late Widget _myHabitsView;
 
   @override
   void initState() {
@@ -65,6 +71,14 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       tabController: _tabController,
       context: context,
       onCategoryChanged: _onCategorySelected,
+    );
+
+    // Inicializar instancia persistente de MyHabitsIntegratedView
+    _myHabitsView = MyHabitsIntegratedView(
+      onHabitCreated: () {
+        // Recargar datos del dashboard cuando se crea un nuevo hábito
+        _loadUserHabits();
+      },
     );
 
     // Load dashboard data only if not already loaded
@@ -160,38 +174,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     });
   }
 
-  void _onBackToMain() {
-    setState(() {
-      _selectedIndex = 0;
-    });
-  }
-
-  Widget _buildAssistantPage() {
-    return const AssistantPage();
-  }
-
-  void _handleQuickAction(String action) {
-    switch (action) {
-      case 'mark_done':
-        _showMarkDoneDialog();
-        break;
-      // TODO: Implementar sugerencia IA en interfaz dedicada - mover a otra pantalla
-      // case 'ai_suggestion':
-      //   _showAISuggestion();
-      //   break;
-    }
-  }
-
-  void _showMarkDoneDialog() {
-    // Show dialog to select habit to mark as done
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Función "Marcar como hecho" próximamente'),
-        backgroundColor: Color(0xFF10B981),
-      ),
-    );
-  }
-
   // TODO: Mover a interfaz dedicada de sugerencia IA
   // void _showAISuggestion() {
   //   // Show AI suggestion dialog
@@ -221,6 +203,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         isCompleted: isCompleted,
       ),
     );
+
+    // Refrescar progreso para que la vista de progreso se actualice
+    _refreshProgressAfterChange();
   }
 
   void _onCategorySelected(String? categoryId) {
@@ -312,14 +297,56 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       );
     }
 
+    // Refrescar progreso tras completado masivo
+    _refreshProgressAfterChange(delay: const Duration(milliseconds: 800));
+
     // Mantener la selección visible durante la animación para evitar "dispose" prematuro
     // y luego limpiar cuando hayan terminado las animaciones internas
+    // Activar animación bulk y limpiar selección visual inmediatamente
+    if (!mounted) return;
+    setState(() {
+      _bulkAnimatingHabits = habitsToComplete.toSet();
+      _selectedHabits.clear();
+      _showBottomTab = false;
+    });
+
+    // Limpiar IDs de animación tras finalizar la animación del Bloc
     Future.delayed(const Duration(milliseconds: 2200), () {
       if (!mounted) return;
       setState(() {
-        _selectedHabits.clear();
-        _showBottomTab = false;
+        _bulkAnimatingHabits.clear();
       });
+    });
+  }
+
+  // Dispara RefreshUserProgress con una pequeña espera para evitar carreras
+  void _refreshProgressAfterChange({
+    Duration delay = const Duration(milliseconds: 300),
+  }) {
+    Future.delayed(delay, () {
+      if (!mounted) return;
+      final authState = context.read<AuthBloc>().state;
+      String? userId;
+      if (authState is AuthAuthenticated) {
+        userId = authState.user.id;
+      } else {
+        userId = Supabase.instance.client.auth.currentUser?.id;
+      }
+
+      if (userId != null && userId.isNotEmpty) {
+        context.read<ProgressBloc>().add(
+          RefreshUserProgress(userId: userId),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se pudo refrescar progreso: usuario no autenticado',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     });
   }
 
@@ -328,6 +355,30 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       _selectedHabits.clear();
       _showBottomTab = false;
     });
+  }
+
+  void _onChatWithAssistant() {
+    if (_selectedHabits.isEmpty) return;
+
+    // Obtener los UserHabits seleccionados con sus datos completos
+    final dashboardState = context.read<DashboardBloc>().state;
+    if (dashboardState is! DashboardLoaded) return;
+
+    final selectedUserHabits = dashboardState.userHabits
+        .where((userHabit) => _selectedHabits.contains(userHabit.id))
+        .toList();
+
+    // Navegar a la página del asistente con los hábitos adjuntados
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AssistantPage(
+          attachedHabits: selectedUserHabits,
+        ),
+      ),
+    );
+
+    // Limpiar la selección después de navegar
+    _onClearSelection();
   }
 
   void _onAnimationError() {
@@ -423,11 +474,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   }
 
   bool _isHabitCompletedToday(UserHabit userHabit, List<HabitLog> logs) {
-    final now = DateTime.now();
-    bool sameDay(DateTime a, DateTime b) =>
-        a.year == b.year && a.month == b.month && a.day == b.day;
-    return logs.any((log) =>
-        log.userHabitId == userHabit.id && sameDay(log.completedAt, now));
+    // Use isCompletedToday from UserHabit which comes from stored procedure
+    // This is more efficient and consistent than manually checking logs
+    return userHabit.isCompletedToday;
   }
 
   /// Verifica si el hábito debe estar activo hoy según su frecuencia
@@ -480,6 +529,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       backgroundColor: Colors.white,
       body: Column(
         children: [
+          const SizedBox(height: 4,),
           // Offline banner at the top
           const OfflineBanner(),
           // Main content
@@ -497,12 +547,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                           index: _selectedIndex,
                           children: [
                             _buildMainContent(), // Home page (index 0)
-                            MyHabitsIntegratedView(
-                              onHabitCreated: () {
-                                // Recargar datos del dashboard cuando se crea un nuevo hábito
-                                _loadUserHabits();
-                              },
-                            ), // My Habits page (index 1)
+                            _myHabitsView, // My Habits page (index 1) - Instancia persistente
                             const ProgressMainScreen(), // Progress page (index 2)
                             BlocProvider(
                               create: (context) =>
@@ -584,6 +629,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                 controller: _sliverController,
                 onHabitToggle: _onHabitToggle,
                 selectedHabits: _selectedHabits,
+                animatingHabitIds: _bulkAnimatingHabits,
                 onHabitSelected: _onHabitSelected,
                 firstHabitOfCategoryId: _firstHabitOfCategoryId,
                 onAnimationError: _onAnimationError,
@@ -758,9 +804,11 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                   const SizedBox(height: 16),
 
                   // Action buttons
-                  Row(
+                  Column(
                     children: [
-                      Expanded(
+                      // Primera fila - Marcar como hecho
+                      SizedBox(
+                        width: double.infinity,
                         child: ElevatedButton(
                           onPressed: _onMarkSelectedAsCompleted,
                           style: ElevatedButton.styleFrom(
@@ -789,35 +837,37 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                         ),
                       ),
 
-                      // TODO: Implementar sugerencia IA en interfaz dedicada
-                      // const SizedBox(width: 12),
-                      // Expanded(
-                      //   child: OutlinedButton(
-                      //     onPressed: _onAISuggestion,
-                      //     style: OutlinedButton.styleFrom(
-                      //       foregroundColor: const Color(0xFF6366F1),
-                      //       side: const BorderSide(color: Color(0xFF6366F1)),
-                      //       padding: const EdgeInsets.symmetric(vertical: 16),
-                      //       shape: RoundedRectangleBorder(
-                      //         borderRadius: BorderRadius.circular(12),
-                      //       ),
-                      //     ),
-                      //     child: const Row(
-                      //       mainAxisAlignment: MainAxisAlignment.center,
-                      //       children: [
-                      //         Icon(Icons.auto_awesome, size: 20),
-                      //         SizedBox(width: 8),
-                      //         Text(
-                      //           'Sugerencia IA',
-                      //           style: TextStyle(
-                      //             fontSize: 16,
-                      //             fontWeight: FontWeight.w600,
-                      //           ),
-                      //         ),
-                      //       ],
-                      //     ),
-                      //   ),
-                      // ),
+                      const SizedBox(height: 12),
+
+                      // Segunda fila - Conversar con el asistente
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: _onChatWithAssistant,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF6366F1),
+                            side: const BorderSide(color: Color(0xFF6366F1)),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.chat_bubble_outline, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'Conversar con el asistente',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ],

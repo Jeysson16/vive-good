@@ -27,6 +27,7 @@ class AssistantResponse {
   final List<Map<String, dynamic>>? extractedHabits;
   final List<Map<String, dynamic>>? suggestedHabits;
   final Map<String, dynamic>? dlChatResponse;
+  final Map<String, dynamic>? processedActions;
 
   const AssistantResponse({
     required this.id,
@@ -46,6 +47,7 @@ class AssistantResponse {
     this.extractedHabits,
     this.suggestedHabits,
     this.dlChatResponse,
+    this.processedActions,
   });
 
   AssistantResponse copyWith({
@@ -66,6 +68,7 @@ class AssistantResponse {
     List<Map<String, dynamic>>? extractedHabits,
     List<Map<String, dynamic>>? suggestedHabits,
     Map<String, dynamic>? dlChatResponse,
+    Map<String, dynamic>? processedActions,
   }) {
     return AssistantResponse(
       id: id ?? this.id,
@@ -85,6 +88,7 @@ class AssistantResponse {
       extractedHabits: extractedHabits ?? this.extractedHabits,
       suggestedHabits: suggestedHabits ?? this.suggestedHabits,
       dlChatResponse: dlChatResponse ?? this.dlChatResponse,
+      processedActions: processedActions ?? this.processedActions,
     );
   }
 
@@ -121,6 +125,7 @@ class AssistantResponse {
   bool get hasExtractedHabits => extractedHabits != null && extractedHabits!.isNotEmpty;
   bool get hasSuggestedHabits => suggestedHabits != null && suggestedHabits!.isNotEmpty;
   bool get hasDlChatResponse => dlChatResponse != null && dlChatResponse!.isNotEmpty;
+  bool get hasProcessedActions => processedActions != null && processedActions!.isNotEmpty;
 
   @override
   bool operator ==(Object other) {

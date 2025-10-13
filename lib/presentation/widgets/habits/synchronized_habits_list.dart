@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../domain/entities/category.dart' as entities;
 import '../../../domain/entities/habit.dart';
 import '../../../domain/entities/user_habit.dart';
+import '../../../services/habits_service.dart';
+import '../../blocs/habit/habit_bloc.dart';
+import '../../blocs/habit/habit_state.dart';
 import '../common/responsive_dimensions.dart';
 import '../main/habit_item.dart' as habit_item;
 import '../main/compact_habit_item.dart';
@@ -45,10 +49,15 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList>
   String? _highlightedHabitId;
   AnimationController? _highlightController;
   Animation<double>? _highlightAnimation;
+  
+  // Variable para almacenar los IDs de hábitos completados hoy
+  Set<String> _completedTodayHabitIds = {};
 
   @override
   void initState() {
     super.initState();
+    print('🔍 DEBUG SYNC HABITS - initState() ejecutado, cargando hábitos completados...');
+    
     _scrollController = ScrollController();
     _highlightController = AnimationController(
       duration: const Duration(milliseconds: 1500),
@@ -58,6 +67,14 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList>
       CurvedAnimation(parent: _highlightController!, curve: Curves.easeInOut),
     );
     _initializeCategoryKeys();
+    
+    print('🔍 DEBUG SYNC HABITS - Inicializando SynchronizedHabitsList');
+    
+    // Cargar hábitos completados al inicializar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      print('🔍 DEBUG SYNC HABITS - PostFrameCallback ejecutado, llamando _loadCompletedTodayHabits()');
+      _loadCompletedTodayHabits();
+    });
   }
 
   void _initializeCategoryKeys() {
@@ -68,8 +85,50 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList>
     }
   }
 
-  @override
-  void dispose() {
+  /// Carga los hábitos completados hoy desde el backend
+  Future<void> _loadCompletedTodayHabits() async {
+    print('🔍 DEBUG SYNC HABITS - Cargando hábitos completados hoy...');
+    
+    try {
+      print('🔍 DEBUG SYNC HABITS - Llamando a HabitsService.getTodayCompletedHabits()...');
+      final completedHabits = await HabitsService.getTodayCompletedHabits();
+      
+      print('🔍 DEBUG SYNC HABITS - Respuesta recibida: ${completedHabits.length} hábitos');
+      print('🔍 DEBUG SYNC HABITS - Datos completos: $completedHabits');
+      
+      setState(() {
+        _completedTodayHabitIds = completedHabits
+            .map((habit) => habit['user_habit_id'] as String)
+            .toSet();
+      });
+      
+      print('🔍 DEBUG SYNC HABITS - Hábitos completados hoy cargados: ${_completedTodayHabitIds.length}');
+      print('🔍 DEBUG SYNC HABITS - IDs completados: $_completedTodayHabitIds');
+      print('🔍 DEBUG SYNC HABITS - _loadCompletedTodayHabits() completado. IDs cargados: $_completedTodayHabitIds');
+    } catch (e) {
+      print('❌ DEBUG SYNC HABITS - Error al cargar hábitos completados: $e');
+      setState(() {
+        _completedTodayHabitIds = {};
+      });
+      print('🔍 DEBUG SYNC HABITS - _loadCompletedTodayHabits() completado con error. IDs cargados: $_completedTodayHabitIds');
+    }
+   }
+
+  /// Verifica si un hábito está completado hoy
+  bool _isHabitCompletedToday(String userHabitId) {
+    final isCompleted = _completedTodayHabitIds.contains(userHabitId);
+    print('🔍 DEBUG SYNC HABITS - Hábito $userHabitId completado hoy: $isCompleted');
+    return isCompleted;
+  }
+
+  /// Método público para refrescar los hábitos completados
+  void _refreshCompletedHabits() {
+    print('🔄 SYNC HABITS - Refrescando hábitos completados manualmente');
+    _loadCompletedTodayHabits();
+  }
+ 
+    @override
+    void dispose() {
     _scrollController.dispose();
     _highlightController?.dispose();
     super.dispose();
@@ -232,6 +291,19 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList>
 
   @override
   Widget build(BuildContext context) {
+    return BlocListener<HabitBloc, HabitState>(
+      listener: (context, state) {
+        print('🔄 SYNC HABITS - Listener ejecutado, estado: ${state.runtimeType}');
+        if (state is HabitLoaded) {
+          print('🔄 SYNC HABITS - Estado actualizado, recargando hábitos completados');
+          _loadCompletedTodayHabits();
+        }
+      },
+      child: _buildHabitsList(context),
+    );
+  }
+
+  Widget _buildHabitsList(BuildContext context) {
     // Check if category selection changed and trigger scroll
     if (widget.selectedCategoryId != null &&
         widget.selectedCategoryId != _previousSelectedCategoryId) {
@@ -300,12 +372,16 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList>
                   final habit = _getHabitForUserHabit(userHabit);
                   final category = _getCategoryForHabit(habit);
                   final isHighlighted = _highlightedHabitId == userHabit.id;
+                  final isCompletedToday = _isHabitCompletedToday(userHabit.id);
+
+                  // Log de depuración para verificar los datos del hábito
+                  print('🔍 DEBUG SYNC HABITS - Hábito: ${userHabit.customName ?? habit.name}, ID: ${userHabit.id}, Completado: $isCompletedToday, Icono: ${habit.iconName}, Color: ${habit.iconColor}');
 
                   Widget habitItem = CompactHabitItem(
                     userHabit: userHabit,
                     habit: habit,
                     category: category,
-                    isCompleted: userHabit.isCompletedToday,
+                    isCompleted: isCompletedToday,
                     isHighlighted: isHighlighted,
                     onTap: () {
                       widget.onHabitToggle(userHabit);

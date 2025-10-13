@@ -57,12 +57,14 @@ class UserHabit {
   int get hashCode => id.hashCode;
 
   factory UserHabit.fromHabit(Habit habit) {
+    // Generar un UUID temporal para el id hasta que se asigne uno real
+    final uuid = DateTime.now().millisecondsSinceEpoch.toString();
     return UserHabit(
-      id: '',
+      id: uuid,
       userId: '',
       habitId: habit.id,
-      frequency: '',
-      scheduledTime: '',
+      frequency: 'daily',
+      scheduledTime: '09:00',
       notificationsEnabled: false,
       startDate: DateTime.now(),
       endDate: null,

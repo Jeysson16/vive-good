@@ -5,17 +5,23 @@ import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/di/injection_container.dart' as di;
 import 'core/routes/app_routes.dart';
 import 'presentation/blocs/calendar/calendar_bloc.dart';
 import 'presentation/blocs/auth/auth_bloc.dart';
 import 'presentation/blocs/auth/auth_state.dart';
+import 'presentation/blocs/category_evolution/category_evolution_bloc.dart';
+import 'presentation/blocs/chat/chat_bloc.dart';
 import 'presentation/blocs/dashboard/dashboard_bloc.dart';
 import 'presentation/blocs/habit/habit_bloc.dart';
 import 'presentation/blocs/habit_breakdown/habit_breakdown_bloc.dart';
+import 'presentation/blocs/habit_statistics/habit_statistics_bloc.dart';
 import 'presentation/blocs/main_page/main_page_bloc.dart';
 import 'presentation/blocs/progress/progress_bloc.dart';
+import 'presentation/blocs/profile/profile_bloc.dart';
 import 'presentation/blocs/assistant/assistant_bloc.dart';
 import 'data/repositories/supabase_chat_repository.dart';
 import 'data/datasources/chat_remote_datasource.dart';
@@ -23,13 +29,18 @@ import 'data/datasources/assistant/supabase_assistant_datasource.dart';
 import 'data/services/metrics_extraction_service.dart';
 import 'data/services/voice_service.dart';
 import 'data/datasources/assistant/gemini_assistant_datasource.dart';
-import 'data/datasources/deep_learning_datasource.dart';
+import 'data/datasources/assistant/deep_learning_datasource.dart';
+import 'data/repositories/auth/deep_learning_auth_repository.dart';
 import 'domain/repositories/habit_repository.dart';
 import 'data/services/habit_auto_creation_service.dart';
 import 'data/services/habit_extraction_service.dart';
 import 'data/services/connectivity_service.dart';
 import 'data/services/sync_service.dart';
+import 'data/services/permission_service.dart';
+import 'data/services/notification_service.dart';
+import 'data/services/calendar_service.dart';
 import 'data/datasources/local_database_service.dart';
+import 'services/supabase_realtime_service.dart';
 import 'providers/theme_provider.dart';
 import 'presentation/widgets/connectivity_indicator.dart';
 
@@ -37,6 +48,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    // Cargar variables de entorno
+    await dotenv.load(fileName: ".env");
+    
+    // Configurar variables de entorno en SharedPreferences
+    await _configureEnvironmentVariables();
+    
     await di.init();
     await initializeDateFormatting('es_ES', null);
     
@@ -46,8 +63,23 @@ void main() async {
     // Inicializar ConnectivityService para detectar estado de conectividad
     await ConnectivityService.instance.initialize();
     
+    // Inicializar NotificationService
+    await NotificationService().initialize();
+    
+    // Solicitar permisos de notificaciones
+    await NotificationService().requestPermissions();
+    
+    // Solicitar permisos necesarios
+    await PermissionService().requestAllPermissions();
+    
+    // Inicializar CalendarService (no requiere inicialización explícita)
+    // CalendarService se inicializa automáticamente cuando se usa
+    
     // Inicializar SyncService para sincronización automática
     di.sl<SyncService>().initialize();
+    
+    // Inicializar SupabaseRealtimeService para manejo de conexiones en tiempo real
+    await SupabaseRealtimeService().initialize();
     
     runApp(const ViveGoodApp());
   } catch (e, stackTrace) {
@@ -78,7 +110,11 @@ class ViveGoodApp extends StatelessWidget {
               BlocProvider(create: (context) => MainPageBloc()),
               BlocProvider(create: (context) => di.sl<ProgressBloc>()),
               BlocProvider(create: (context) => di.sl<HabitBreakdownBloc>()),
+              BlocProvider(create: (context) => di.sl<HabitStatisticsBloc>()),
+              BlocProvider(create: (context) => di.sl<CategoryEvolutionBloc>()),
               BlocProvider(create: (context) => di.sl<CalendarBloc>()),
+              BlocProvider(create: (context) => di.sl<ChatBloc>()),
+              BlocProvider(create: (context) => di.sl<ProfileBloc>()),
               BlocProvider<AssistantBloc>(
                 create: (context) {
                   // Get userId from AuthBloc if available
@@ -89,6 +125,12 @@ class ViveGoodApp extends StatelessWidget {
                     userId = authState.user.id;
                   }
                   
+                  // Crear instancia del DeepLearningDatasource para reutilizar
+                  final deepLearningDatasource = DeepLearningDatasource(
+                    httpClient: http.Client(),
+                    authRepository: di.sl<DeepLearningAuthRepositoryImpl>(),
+                  );
+
                   return AssistantBloc(
                     chatRepository: SupabaseChatRepository(
                       ChatRemoteDataSource(Supabase.instance.client),
@@ -98,12 +140,9 @@ class ViveGoodApp extends StatelessWidget {
                       geminiDatasource: GeminiAssistantDatasource(
                         apiKey: const String.fromEnvironment('GOOGLE_API_KEY', defaultValue: 'AIzaSyAJ0SdbXQTyxjQ9IpPjKD97rNzFB2zJios'),
                         habitAutoCreationService: di.sl<HabitAutoCreationService>(),
+                        deepLearningDatasource: deepLearningDatasource,
                       ),
-                      deepLearningDatasource: DeepLearningDatasourceImpl(
-                        httpClient: http.Client(),
-                        baseUrl: 'https://homepage-focusing-lanka-describing.trycloudflare.com',
-                        apiKey: const String.fromEnvironment('DEEP_LEARNING_API_KEY', defaultValue: ''),
-                      ),
+                      deepLearningDatasource: deepLearningDatasource,
                     ),
                     habitRepository: di.sl<HabitRepository>(),
                     userId: userId,
@@ -122,5 +161,21 @@ class ViveGoodApp extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+/// Configura las variables de entorno en SharedPreferences
+Future<void> _configureEnvironmentVariables() async {
+  final prefs = await SharedPreferences.getInstance();
+  
+  // Configurar solo la URL base del API de Deep Learning
+  // Las credenciales (email y password) se obtienen del usuario en la interfaz de login
+  final dlBaseUrl = dotenv.env['DL_BASE_URL'] ?? 'https://api.jeysson.cloud/api/v1';
+  
+  await prefs.setString('DL_BASE_URL', dlBaseUrl);
+  
+  if (kDebugMode) {
+    print('🔧 [MAIN] Variables de entorno configuradas:');
+    print('🔧 [MAIN] DL_BASE_URL: $dlBaseUrl');
   }
 }

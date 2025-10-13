@@ -23,6 +23,9 @@ import '../../blocs/dashboard/dashboard_bloc.dart';
 import '../../blocs/dashboard/dashboard_event.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_state.dart';
+import '../../blocs/habit/habit_bloc.dart';
+import '../../blocs/habit/habit_event.dart';
+import '../../../data/services/notification_service.dart' as notification_service;
 
 class NewHabitScreen extends StatefulWidget {
   final String? prefilledHabitName;
@@ -126,6 +129,13 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       _setupPrefilledData();
     }
     
+    // Establecer fecha de inicio por defecto a hoy si no está definida
+    if (_startDate == null) {
+      final today = DateTime.now();
+      _startDate = DateTime(today.year, today.month, today.day);
+      _startDateController.text = _formatDate(_startDate!);
+    }
+
     _habitNameController.addListener(_onHabitNameChanged);
   }
 
@@ -810,10 +820,14 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         .update(habitData)
         .eq('id', habitId);
 
+    // Reprogramar notificaciones para el hábito actualizado
+    print('🔔 [UPDATE_HABIT] Reprogramando notificaciones para userHabitId: $_editingHabitId');
+    await _scheduleHabitNotifications(_editingHabitId!);
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Hábito actualizado exitosamente'),
+          content: Text('Hábito y notificaciones actualizados exitosamente'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -930,6 +944,10 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       // Los eventos se generan dinámicamente desde user_habits usando la frecuencia
       // await _createCalendarEvents(habitId, userHabitId, userId);
 
+      // Programar notificaciones para el hábito recién creado
+      print('🔔 [CREATE_HABIT] Programando notificaciones para userHabitId: $userHabitId');
+      await _scheduleHabitNotifications(userHabitId);
+
       if (mounted) {
         // Actualizar el dashboard después de crear el hábito
         final authState = context.read<AuthBloc>().state;
@@ -944,7 +962,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Hábito y calendario guardados exitosamente'),
+            content: Text('Hábito y notificaciones configurados exitosamente'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -1175,6 +1193,82 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
     }
   }
 
+  /// Mapea la frecuencia seleccionada a días de la semana para las notificaciones
+  /// Retorna una lista de enteros donde 1=Lunes, 2=Martes, ..., 7=Domingo
+  List<int> _mapFrequencyToDaysOfWeek(String frequency) {
+    switch (frequency.toLowerCase()) {
+      case 'diario':
+        return [1, 2, 3, 4, 5, 6, 7]; // Todos los días
+      case 'semanal':
+        return [1, 2, 3, 4, 5]; // Lunes a viernes (días laborables)
+      case 'mensual':
+        return [1]; // Solo lunes (primer día de la semana laboral)
+      default:
+        return [1, 2, 3, 4, 5, 6, 7]; // Por defecto todos los días
+    }
+  }
+
+  /// Programa las notificaciones para un hábito
+  Future<void> _scheduleHabitNotifications(String userHabitId) async {
+    try {
+      print('🔔 [NOTIFICATIONS] Iniciando programación de notificaciones para userHabitId: $userHabitId');
+      
+      // Verificar permisos de notificación
+      final notificationServiceInstance = notification_service.NotificationService();
+      final hasPermissions = await notificationServiceInstance.checkPermissions();
+      if (!hasPermissions) {
+        print('⚠️ [NOTIFICATIONS] No hay permisos de notificación, solicitando...');
+        final granted = await notificationServiceInstance.requestPermissions();
+        if (!granted) {
+          print('❌ [NOTIFICATIONS] Permisos de notificación denegados');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Se necesitan permisos de notificación para los recordatorios'),
+                backgroundColor: AppColors.warning,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // Obtener días de la semana basados en la frecuencia
+      final daysOfWeek = _mapFrequencyToDaysOfWeek(_selectedFrequency);
+      print('📅 [NOTIFICATIONS] Días de la semana para $_selectedFrequency: $daysOfWeek');
+
+      // Usar la hora seleccionada o una por defecto (9:00 AM)
+      final reminderTime = _selectedTime != null 
+          ? DateTime(2024, 1, 1, _selectedTime!.hour, _selectedTime!.minute)
+          : DateTime(2024, 1, 1, 9, 0); // 9:00 AM por defecto
+
+      print('⏰ [NOTIFICATIONS] Hora de recordatorio: ${reminderTime.hour}:${reminderTime.minute.toString().padLeft(2, '0')}');
+
+      // Programar las notificaciones usando el HabitBloc
+      if (mounted) {
+        context.read<HabitBloc>().add(
+          SetupHabitNotifications(
+            userHabitId: userHabitId,
+            daysOfWeek: daysOfWeek,
+            reminderTime: reminderTime,
+          ),
+        );
+        print('✅ [NOTIFICATIONS] Evento SetupHabitNotifications enviado al HabitBloc');
+      }
+
+    } catch (e) {
+      print('❌ [NOTIFICATIONS] Error al programar notificaciones: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al programar notificaciones: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   void _showErrorSnackBar(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1297,13 +1391,13 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
               const SizedBox(height: 20),
               if (!_suggestedSchedule) _buildFrequencySection(),
               if (!_suggestedSchedule) const SizedBox(height: 24),
-              _buildCalendarButton(),
-              const SizedBox(height: 24),
+              if (!_suggestedSchedule) _buildCalendarButton(),
+              if (!_suggestedSchedule) const SizedBox(height: 24),
               _buildScheduleToggle(),
               const SizedBox(height: 24),
               _buildAISuggestionsSection(),
               const SizedBox(height: 24),
-              _buildTimePickerField(),
+              if (!_suggestedSchedule) _buildTimePickerField(),
               const SizedBox(height: 20),
               if (!_suggestedSchedule) _buildDurationField(),
               if (!_suggestedSchedule) const SizedBox(height: 24),
@@ -1370,9 +1464,13 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
           },
           displayStringForOption: (Habit option) => option.name,
           fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-            // Sincronizar con nuestro controlador
+            // Sincronizar con nuestro controlador después del build
             if (controller.text != _habitNameController.text) {
-              controller.text = _habitNameController.text;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (controller.text != _habitNameController.text) {
+                  controller.text = _habitNameController.text;
+                }
+              });
             }
 
             return TextFormField(

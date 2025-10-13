@@ -40,8 +40,8 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
         return;
       }
 
-      // Cargar el perfil desde Supabase
-      final profile = await ProfileService.getProfileById(user.id);
+      // Cargar el perfil desde Supabase con progreso dinámico de hábitos
+      final profile = await ProfileService.getCurrentUserProfileWithDynamicProgress();
 
       if (profile != null) {
         emit(ProfileLoaded(profile));
@@ -80,20 +80,32 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     Emitter<ProfileState> emit,
   ) async {
     try {
+      print('ProfileBloc - _onUpdateUserProfile iniciado, estado actual: ${state.runtimeType}');
+      
+      // Obtener el perfil actual, ya sea desde el estado o desde el evento
+      UserProfile? currentProfile;
       if (state is ProfileLoaded) {
-        final currentProfile = (state as ProfileLoaded).profile;
-        emit(ProfileUpdating(currentProfile));
-
-        final updatedProfile = await ProfileService.updateProfile(
-          event.profile,
-        );
-        emit(ProfileUpdated(updatedProfile, 'Perfil actualizado exitosamente'));
-
-        // Emitir estado cargado después de un breve delay
-        await Future.delayed(const Duration(seconds: 1));
-        emit(ProfileLoaded(updatedProfile));
+        currentProfile = (state as ProfileLoaded).profile;
+      } else {
+        // Si no hay perfil cargado, usar el perfil del evento
+        currentProfile = event.profile;
       }
+      
+      print('ProfileBloc - Emitiendo ProfileUpdating');
+      emit(ProfileUpdating(currentProfile));
+
+      print('ProfileBloc - Llamando a ProfileService.updateProfile');
+      final updatedProfile = await ProfileService.updateProfile(
+        event.profile,
+      );
+      
+      print('ProfileBloc - Perfil actualizado exitosamente, emitiendo ProfileUpdated');
+      emit(ProfileUpdated(updatedProfile, 'Perfil actualizado exitosamente'));
+      
+      // No emitir ProfileLoaded automáticamente para permitir que la UI maneje la navegación
+      // La vista de perfil principal se encargará de recargar los datos cuando sea necesario
     } catch (e) {
+      print('ProfileBloc - Error al actualizar perfil: ${e.toString()}');
       emit(ProfileError('Error al actualizar el perfil: ${e.toString()}'));
     }
   }

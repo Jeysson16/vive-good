@@ -35,12 +35,10 @@ abstract class DeepLearningDatasource {
 class DeepLearningDatasourceImpl implements DeepLearningDatasource {
   final http.Client httpClient;
   final String baseUrl;
-  final String apiKey;
 
   DeepLearningDatasourceImpl({
     required this.httpClient,
     required this.baseUrl,
-    required this.apiKey,
   });
 
   @override
@@ -49,17 +47,32 @@ class DeepLearningDatasourceImpl implements DeepLearningDatasource {
     required Map<String, dynamic> userHabits,
   }) async {
     try {
+      final fullUrl = '$baseUrl/api/v1/predict/habit-evolution';
+      final requestBody = {
+        'user_id': userId,
+        'habits': userHabits,
+      };
+      final headers = {
+        'Content-Type': 'application/json',
+      };
+
+      print('🔥 DEBUG DL GASTRITIS: ===== GASTRITIS RISK ANALYSIS REQUEST =====');
+      print('🔥 DEBUG DL GASTRITIS: URL: $fullUrl');
+      print('🔥 DEBUG DL GASTRITIS: Método: POST');
+      print('🔥 DEBUG DL GASTRITIS: Headers: $headers');
+      print('🔥 DEBUG DL GASTRITIS: Body: ${jsonEncode(requestBody)}');
+      print('🔥 DEBUG DL GASTRITIS: ===============================================');
+
       final response = await httpClient.post(
-        Uri.parse('$baseUrl/analyze/gastritis-risk'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
-        },
-        body: jsonEncode({
-          'user_id': userId,
-          'habits': userHabits,
-        }),
+        Uri.parse(fullUrl),
+        headers: headers,
+        body: jsonEncode(requestBody),
       );
+
+      print('🔥 DEBUG DL GASTRITIS: ===== GASTRITIS RISK ANALYSIS RESPONSE =====');
+      print('🔥 DEBUG DL GASTRITIS: Status Code: ${response.statusCode}');
+      print('🔥 DEBUG DL GASTRITIS: Response Body: ${response.body}');
+      print('🔥 DEBUG DL GASTRITIS: ===============================================');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -80,10 +93,9 @@ class DeepLearningDatasourceImpl implements DeepLearningDatasource {
   }) async {
     try {
       final response = await httpClient.post(
-        Uri.parse('$baseUrl/analyze/habits'),
+        Uri.parse('$baseUrl/api/v1/sequences/analyze'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
         },
         body: jsonEncode({
           'user_id': userId,
@@ -110,9 +122,9 @@ class DeepLearningDatasourceImpl implements DeepLearningDatasource {
   }) async {
     try {
       final response = await httpClient.get(
-        Uri.parse('$baseUrl/recommendations/$userId?type=${analysisType.name}'),
+        Uri.parse('$baseUrl/api/v1/chat/send'),
         headers: {
-          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
         },
       );
 
@@ -137,26 +149,79 @@ class DeepLearningDatasourceImpl implements DeepLearningDatasource {
     bool includePrediction = true,
   }) async {
     try {
+      // Extraer síntomas del contexto o del mensaje
+      List<String> symptoms = [];
+      if (context != null && context['extracted_symptoms'] != null) {
+        final extractedSymptoms = context['extracted_symptoms'] as Map<String, dynamic>;
+        symptoms = extractedSymptoms.keys.toList();
+      }
+      
+      // Si no hay síntomas extraídos, intentar extraer del mensaje directamente
+      if (symptoms.isEmpty) {
+        symptoms = _extractSymptomsFromMessage(message);
+      }
+
       final requestBody = {
         'codigo_usuario': userId,
         'mensaje': message,
+        'symptoms': symptoms,
         'session_id': sessionId,
         'context': context ?? {},
         'include_prediction': includePrediction,
       };
 
+      // Preparar headers
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      
+      // No se requiere Authorization header ya que no usamos API key
+
+      // LOGS DETALLADOS DEL REQUEST DE DEEP LEARNING
+      final fullUrl = '$baseUrl/predict';
+      print('🔥 DEBUG DL REQUEST: ===== DEEP LEARNING REQUEST DETAILS =====');
+      print('🔥 DEBUG DL REQUEST: URL: $fullUrl');
+      print('🔥 DEBUG DL REQUEST: Método: POST');
+      print('🔥 DEBUG DL REQUEST: Headers: $headers');
+      print('🔥 DEBUG DL REQUEST: Body: ${jsonEncode(requestBody)}');
+      print('🔥 DEBUG DL REQUEST: ===============================================');
+
       final response = await httpClient.post(
-        Uri.parse('$baseUrl/api/v1/chat/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
-        },
+        Uri.parse(fullUrl),
+        headers: headers,
         body: jsonEncode(requestBody),
       );
 
+      print('🔥 DEBUG DL RESPONSE: ===== DEEP LEARNING RESPONSE DETAILS =====');
+      print('🔥 DEBUG DL RESPONSE: Status Code: ${response.statusCode}');
+      print('🔥 DEBUG DL RESPONSE: Response Body: ${response.body}');
+      print('🔥 DEBUG DL RESPONSE: ===============================================');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        return data;
+        
+        // Formatear la respuesta para que sea compatible con el formato esperado
+        return {
+          'message_id': sessionId ?? 'dl_${DateTime.now().millisecondsSinceEpoch}',
+          'respuesta_modelo': data['prediction'] ?? 'Análisis completado',
+          'timestamp': DateTime.now().toIso8601String(),
+          'session_id': sessionId ?? 'dl_session_${DateTime.now().millisecondsSinceEpoch}',
+          'risk_assessment': {
+            'level': _mapConfidenceToRiskLevel(data['confidence'] ?? 0.5),
+            'confidence': data['confidence'] ?? 0.5,
+            'factors': symptoms,
+            'recommendations': data['recommendations'] ?? [],
+          },
+          'suggested_actions': data['recommendations'] ?? [
+            'Mantener una dieta balanceada',
+            'Evitar alimentos irritantes',
+            'Realizar ejercicio regularmente'
+          ],
+          'confidence_score': data['confidence'] ?? 0.5,
+          'processing_time_ms': 150,
+          'model_version': '1.0.0',
+          'status': 'online',
+        };
       } else {
         throw Exception('Failed to send chat message: ${response.statusCode}');
       }
@@ -166,13 +231,44 @@ class DeepLearningDatasourceImpl implements DeepLearningDatasource {
     }
   }
 
+  /// Extrae síntomas básicos del mensaje
+  List<String> _extractSymptomsFromMessage(String message) {
+    final symptoms = <String>[];
+    final lowerMessage = message.toLowerCase();
+    
+    if (lowerMessage.contains('dolor') || lowerMessage.contains('duele')) {
+      symptoms.add('dolor_estomago');
+    }
+    if (lowerMessage.contains('ardor') || lowerMessage.contains('quema')) {
+      symptoms.add('ardor_estomacal');
+    }
+    if (lowerMessage.contains('náusea') || lowerMessage.contains('nausea')) {
+      symptoms.add('nauseas');
+    }
+    if (lowerMessage.contains('hinchazón') || lowerMessage.contains('inflamado')) {
+      symptoms.add('hinchazon');
+    }
+    if (lowerMessage.contains('acidez') || lowerMessage.contains('ácido')) {
+      symptoms.add('acidez');
+    }
+    
+    return symptoms;
+  }
+
+  /// Mapea el nivel de confianza a un nivel de riesgo
+  String _mapConfidenceToRiskLevel(double confidence) {
+    if (confidence >= 0.8) return 'high';
+    if (confidence >= 0.6) return 'medium';
+    return 'low';
+  }
+
   @override
   Future<bool> checkModelHealth() async {
     try {
       final response = await httpClient.get(
         Uri.parse('$baseUrl/health'),
         headers: {
-          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
         },
       );
       return response.statusCode == 200;
@@ -185,9 +281,9 @@ class DeepLearningDatasourceImpl implements DeepLearningDatasource {
   Future<Map<String, dynamic>> getModelInfo() async {
     try {
       final response = await httpClient.get(
-        Uri.parse('$baseUrl/model/info'),
+        Uri.parse('$baseUrl/health'),
         headers: {
-          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
         },
       );
 

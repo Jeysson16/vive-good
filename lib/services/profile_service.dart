@@ -50,6 +50,50 @@ class ProfileService {
     }
   }
 
+  /// Obtiene el perfil del usuario actual con progreso dinámico de hábitos
+  static Future<UserProfile?> getCurrentUserProfileWithDynamicProgress() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        throw Exception('Usuario no autenticado');
+      }
+
+      // Obtener el perfil base
+      final profileResponse = await _supabase
+          .from(_tableName)
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (profileResponse == null) {
+        return null;
+      }
+
+      // Obtener progreso dinámico de hábitos
+      final progressResponse = await _supabase
+          .rpc('get_dynamic_habit_progress', params: {'p_user_id': user.id});
+
+      UserProfile profile = UserProfile.fromJson(profileResponse);
+
+      // Si hay datos de progreso dinámico, actualizar el perfil
+      if (progressResponse != null && progressResponse.isNotEmpty) {
+        final progressData = progressResponse[0];
+        profile = profile.copyWith(
+          hydrationProgress: progressData['hydration_progress'] ?? 0,
+          hydrationGoal: progressData['hydration_goal'] ?? 5,
+          sleepProgress: progressData['sleep_progress'] ?? 0,
+          sleepGoal: progressData['sleep_goal'] ?? 5,
+          activityProgress: progressData['activity_progress'] ?? 0,
+          activityGoal: progressData['activity_goal'] ?? 5,
+        );
+      }
+
+      return profile;
+    } catch (e) {
+      throw Exception('Error al obtener el perfil con progreso dinámico: $e');
+    }
+  }
+
   /// Crea un nuevo perfil para el usuario autenticado
   static Future<UserProfile> createProfile({
     required String firstName,

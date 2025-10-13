@@ -17,6 +17,15 @@ class LoadUserHabits extends HabitEvent {
   List<Object> get props => [userId];
 }
 
+class RefreshUserHabits extends HabitEvent {
+  final String userId;
+
+  const RefreshUserHabits({required this.userId});
+
+  @override
+  List<Object> get props => [userId];
+}
+
 class LoadCategories extends HabitEvent {}
 
 class ToggleHabitCompletion extends HabitEvent {

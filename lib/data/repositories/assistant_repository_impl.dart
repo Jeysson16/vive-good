@@ -242,6 +242,29 @@ class AssistantRepositoryImpl implements AssistantRepository {
     }
   }
 
+  /// Procesa análisis de Deep Learning por separado
+  Future<Map<String, dynamic>> processDeepLearningAnalysis({
+    required String message,
+    required String userId,
+    String? sessionId,
+  }) async {
+    try {
+      print('🔥 DEBUG REPOSITORY: ===== INICIANDO processDeepLearningAnalysis =====');
+      
+      final result = await _geminiDatasource.processDeepLearningAnalysis(
+        message: message,
+        userId: userId,
+        sessionId: sessionId,
+      );
+      
+      print('🔥 DEBUG REPOSITORY: Deep Learning analysis completado');
+      return result;
+    } catch (e) {
+      print('🔥 DEBUG REPOSITORY: Error en processDeepLearningAnalysis: $e');
+      throw Exception('Error al procesar análisis de Deep Learning: $e');
+    }
+  }
+
   @override
   Future<List<String>> getHabitRecommendations({
     required String userId,
@@ -338,6 +361,15 @@ class AssistantRepositoryImpl implements AssistantRepository {
       return 'audio_placeholder.mp3';
     } catch (e) {
       throw Exception('Error en text-to-speech: $e');
+    }
+  }
+
+  @override
+  Future<String> generateConversationTitle(String firstMessage) async {
+    try {
+      return await _geminiDatasource.generateConversationTitle(firstMessage);
+    } catch (e) {
+      throw Exception('Error al generar título de conversación: $e');
     }
   }
 

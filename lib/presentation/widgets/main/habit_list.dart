@@ -20,6 +20,7 @@ class HabitList extends StatefulWidget {
   final Map<String, List<HabitLog>> habitLogs;
   final Function(String, bool) onHabitToggle;
   final Set<String> selectedHabits;
+  final Set<String> animatingHabitIds;
   final Function(String, bool) onHabitSelected;
   final String? selectedCategoryId;
   final String? animatedHabitId;
@@ -37,6 +38,7 @@ class HabitList extends StatefulWidget {
     required this.habitLogs,
     required this.onHabitToggle,
     required this.selectedHabits,
+    this.animatingHabitIds = const {},
     required this.onHabitSelected,
     this.selectedCategoryId,
     this.animatedHabitId,
@@ -383,7 +385,10 @@ class _HabitListState extends State<HabitList> with TickerProviderStateMixin {
         ),
         delegate: SliverChildBuilderDelegate((context, index) {
           final userHabit = incompleteHabits[index];
-          final habit = widget.habits.firstWhere(
+          // Use userHabit.habit directly if available (contains correct icons from stored procedure)
+          // Only fallback to searching in widget.habits if userHabit.habit is null
+          // This ensures icons like 'local_drink' display correctly
+          final habit = userHabit.habit ?? widget.habits.firstWhere(
             (h) => h.id == userHabit.habitId,
             orElse: () => Habit(
               id: 'fallback',
@@ -445,7 +450,7 @@ class _HabitListState extends State<HabitList> with TickerProviderStateMixin {
               .toLowerCase()
               .contains('habittoggled');
           final isBeingAnimated = widget.animatedHabitId == userHabit.id ||
-              (isBulkToggle && widget.selectedHabits.contains(userHabit.id));
+              (isBulkToggle && widget.animatingHabitIds.contains(userHabit.id));
 
           // Dirección de salida: izquierda si está en la primera columna, derecha en otras
           final exitToLeft = (index % crossAxisCount) == 0;
@@ -461,7 +466,8 @@ class _HabitListState extends State<HabitList> with TickerProviderStateMixin {
             isBeingAnimated: isBeingAnimated,
             exitToLeft: exitToLeft,
             animationState: widget.animationState,
-            isSelected: widget.selectedHabits.contains(userHabit.id),
+            // Ocultar overlay de selección durante animación bulk
+            isSelected: !isBulkToggle && widget.selectedHabits.contains(userHabit.id),
             onTap: () {
               // Always call onHabitToggle - HabitItem will handle the appropriate animation
               // For completed habits: pulse animation (feedback only)

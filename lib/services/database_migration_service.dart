@@ -359,7 +359,7 @@ class DatabaseMigrationService {
     String sessionId, 
     Map<String, dynamic> data
   ) async {
-    await _supabase.from('user_eating_habits').insert({
+    await _supabase.from('user_habits').insert({
       'user_id': userId,
       'session_id': sessionId,
       'habit_type': data['habit_type'],
@@ -373,13 +373,13 @@ class DatabaseMigrationService {
     String sessionId, 
     Map<String, dynamic> data
   ) async {
-    await _supabase.from('user_healthy_habits').insert({
+    final habitData = <String, dynamic>{
       'user_id': userId,
-      'session_id': sessionId,
-      'habit_category': data['habit_category'],
-      'adoption_status': data['adoption_status'],
-      'habits_adopted': data['habits_adopted'],
-    });
+      // No incluir habit_id para evitar problemas de UUID con null
+      'frequency': 'daily', // Valor por defecto
+      'notes': 'Migrado: ${data['habit_category']}',
+    };
+    await _supabase.from('user_habits').insert(habitData);
   }
 
   static Future<void> _recordTechAcceptance(

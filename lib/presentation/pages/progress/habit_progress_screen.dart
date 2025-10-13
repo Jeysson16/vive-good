@@ -36,14 +36,12 @@ class _HabitProgressScreenState extends State<HabitProgressScreen> {
   }
 
   void _loadHabitProgress() {
-    // Simulate loading habit progress data
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    });
+    // Load habit progress data immediately - no artificial delay needed
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override

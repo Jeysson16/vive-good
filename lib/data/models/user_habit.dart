@@ -83,8 +83,8 @@ class UserHabitModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'user_id': userId,
-      'habit_id': habitId,
+      'user_id': (userId.isNotEmpty) ? userId : null,
+      'habit_id': (habitId?.isNotEmpty == true) ? habitId : null,
       'frequency': frequency,
       'frequency_details': frequencyDetails,
       'scheduled_time': scheduledTime,
@@ -98,7 +98,7 @@ class UserHabitModel {
       'difficulty_level': difficultyLevel,
       'custom_name': customName,
       'custom_description': customDescription,
-      'category_id': categoryId,
+      'category_id': (categoryId?.isNotEmpty == true) ? categoryId : null,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'is_completed_today': isCompletedToday,

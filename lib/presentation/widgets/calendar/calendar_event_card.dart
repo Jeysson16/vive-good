@@ -9,6 +9,9 @@ class CalendarEventCard extends StatelessWidget {
   final VoidCallback? onComplete;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  // Controls for schedule view layout: hide time chips and leading indicator
+  final bool showTime;
+  final bool showLeadingIndicator;
 
   const CalendarEventCard({
     super.key,
@@ -17,6 +20,8 @@ class CalendarEventCard extends StatelessWidget {
     this.onComplete,
     this.onEdit,
     this.onDelete,
+    this.showTime = true,
+    this.showLeadingIndicator = true,
   });
 
   @override
@@ -24,9 +29,9 @@ class CalendarEventCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Material(
-        elevation: 4,
+        elevation: 3,
         borderRadius: BorderRadius.circular(16),
-        shadowColor: Colors.black.withOpacity(0.1),
+        shadowColor: Colors.black.withOpacity(0.08),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
@@ -34,14 +39,7 @@ class CalendarEventCard extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  _getEventColor().withOpacity(0.1),
-                  _getEventColor().withOpacity(0.05),
-                ],
-              ),
+              color: Colors.white,
               border: Border.all(
                 color: _getEventColor().withOpacity(0.2),
                 width: 1,
@@ -52,29 +50,34 @@ class CalendarEventCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: _getEventColor(),
-                        shape: BoxShape.circle,
+                    if (showLeadingIndicator) ...[
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: _getEventColor(),
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
+                      const SizedBox(width: 12),
+                    ],
                     Expanded(
                       child: Text(
                         event.title,
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
                           color: AppColors.textPrimary,
                           decoration: event.isCompleted 
                               ? TextDecoration.lineThrough 
                               : null,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    _buildTimeChip(context),
+                    if (showTime) _buildTimeChip(context),
                   ],
                 ),
                 if (event.description.isNotEmpty) ...[
@@ -96,11 +99,12 @@ class CalendarEventCard extends StatelessWidget {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    _buildInfoChip(
-                      icon: Icons.access_time,
-                      label: _formatEventTime(context),
-                      color: AppColors.info,
-                    ),
+                    if (showTime)
+                      _buildInfoChip(
+                        icon: Icons.access_time,
+                        label: _formatEventTime(context),
+                        color: AppColors.info,
+                      ),
                     if (event.location != null) ...[
                       const SizedBox(width: 8),
                       _buildInfoChip(
@@ -130,7 +134,7 @@ class CalendarEventCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: _getEventColor(),
+        color: AppColors.success,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -138,7 +142,7 @@ class CalendarEventCard extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 12,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -187,7 +191,7 @@ class CalendarEventCard extends StatelessWidget {
       chipText = 'Completado';
       chipIcon = Icons.check_circle;
     } else {
-      // Verificar si el evento ya pasó
+      // Estado "Vencido" solo aplica si es el día de hoy y la hora ya pasó.
       final now = DateTime.now();
       final eventDateTime = event.startTime != null 
           ? DateTime(
@@ -198,8 +202,12 @@ class CalendarEventCard extends StatelessWidget {
               event.startTime!.minute,
             )
           : event.startDate;
-      
-      if (eventDateTime.isBefore(now)) {
+
+      final isSameDay = eventDateTime.year == now.year &&
+          eventDateTime.month == now.month &&
+          eventDateTime.day == now.day;
+
+      if (isSameDay && eventDateTime.isBefore(now)) {
         chipColor = AppColors.error;
         chipText = 'Vencido';
         chipIcon = Icons.schedule_outlined;

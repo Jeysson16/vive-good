@@ -21,17 +21,20 @@ class HabitNotificationModelAdapter
       id: fields[0] as String,
       userHabitId: fields[1] as String,
       title: fields[2] as String,
-      message: fields[3] as String,
+      message: fields[3] as String?,
       isEnabled: fields[4] as bool,
-      createdAt: fields[5] as DateTime,
-      updatedAt: fields[6] as DateTime,
+      notificationSound: fields[5] as String?,
+      schedules: (fields[6] as List).cast<NotificationSchedule>(),
+      createdAt: fields[7] as DateTime,
+      updatedAt: fields[8] as DateTime,
+      isSynced: fields[9] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, HabitNotificationModel obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -43,9 +46,15 @@ class HabitNotificationModelAdapter
       ..writeByte(4)
       ..write(obj.isEnabled)
       ..writeByte(5)
-      ..write(obj.createdAt)
+      ..write(obj.notificationSound)
       ..writeByte(6)
-      ..write(obj.updatedAt);
+      ..write(obj.schedules)
+      ..writeByte(7)
+      ..write(obj.createdAt)
+      ..writeByte(8)
+      ..write(obj.updatedAt)
+      ..writeByte(9)
+      ..write(obj.isSynced);
   }
 
   @override

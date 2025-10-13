@@ -60,14 +60,34 @@ class CalendarService {
     print('📅 [CALENDAR] Rango de fechas: ${startDate.toIso8601String().split('T')[0]} - ${endDate.toIso8601String().split('T')[0]}');
     
     try {
-      // Obtener hábitos activos del usuario con timeout y manejo de errores
-      print('📅 [CALENDAR] Consultando hábitos activos...');
+      // Usar consulta directa a user_habits con JOIN a habits (igual que el dashboard)
+      print('📅 [CALENDAR] Consultando hábitos activos usando consulta directa...');
       final habitsResponse = await _supabase
-          .rpc('get_active_user_habits_for_calendar', params: {'p_user_id': userId})
+          .from('user_habits')
+          .select('''
+            id,
+            user_id,
+            habit_id,
+            frequency,
+            scheduled_time,
+            start_date,
+            end_date,
+            is_active,
+            habits!inner(
+              id,
+              name,
+              description,
+              category_id,
+              icon_name,
+              icon_color
+            )
+          ''')
+          .eq('user_id', userId)
+          .eq('is_active', true)
           .timeout(
             const Duration(seconds: 10),
             onTimeout: () {
-              print('⏰ [CALENDAR] TIMEOUT: get_active_user_habits_for_calendar tardó más de 10 segundos');
+              print('⏰ [CALENDAR] TIMEOUT: consulta directa de user_habits tardó más de 10 segundos');
               throw TimeoutException('Timeout obteniendo hábitos activos', const Duration(seconds: 10));
             },
           );
@@ -77,8 +97,30 @@ class CalendarService {
         return [];
       }
 
-      final habits = habitsResponse as List;
-      print('📅 [CALENDAR] Hábitos encontrados: ${habits.length}');
+      final rawHabits = habitsResponse as List;
+      print('📅 [CALENDAR] Hábitos encontrados (sin filtrar por hora): ${rawHabits.length}');
+      
+      // Transformar los datos para que coincidan con el formato esperado
+      final habits = rawHabits
+          .where((h) => h['scheduled_time'] != null)
+          .map((userHabit) {
+            final habit = userHabit['habits'] as Map<String, dynamic>?;
+            return {
+              'user_habit_id': userHabit['id'],
+              'habit_id': userHabit['habit_id'],
+              'habit_name': habit?['name'] ?? 'Hábito sin nombre',
+              'habit_description': habit?['description'] ?? '',
+              'scheduled_time': userHabit['scheduled_time'],
+              'frequency': userHabit['frequency'],
+              'start_date': userHabit['start_date'],
+              'end_date': userHabit['end_date'],
+              'icon_name': habit?['icon_name'],
+              'icon_color': habit?['icon_color'],
+            };
+          })
+          .toList();
+      
+      print('📅 [CALENDAR] Hábitos procesados: ${habits.length}');
       
       if (habits.isEmpty) {
         print('ℹ️ [CALENDAR] No hay hábitos activos para generar eventos');
@@ -90,15 +132,16 @@ class CalendarService {
       // Obtener eventos de completado para evitar duplicados
       print('📅 [CALENDAR] Consultando eventos completados...');
       final completedEventsResponse = await _supabase
-          .rpc('get_habit_completion_events', params: {
-            'p_user_id': userId,
-            'p_start_date': startDate.toIso8601String().split('T')[0],
-            'p_end_date': endDate.toIso8601String().split('T')[0],
-          })
+          .from('user_habit_logs')
+          .select('user_habit_id, completed_at, user_habits!inner(user_id)')
+          .eq('user_habits.user_id', userId)
+          .eq('status', 'completed')
+          .gte('completed_at', startDate.toIso8601String())
+          .lte('completed_at', endDate.add(const Duration(days: 1)).toIso8601String())
           .timeout(
             const Duration(seconds: 10),
             onTimeout: () {
-              print('⏰ [CALENDAR] TIMEOUT: get_habit_completion_events tardó más de 10 segundos');
+              print('⏰ [CALENDAR] TIMEOUT: consulta de user_habit_logs tardó más de 10 segundos');
               throw TimeoutException('Timeout obteniendo eventos completados', const Duration(seconds: 10));
             },
           );
@@ -108,28 +151,30 @@ class CalendarService {
       
       final completedDates = <String, Set<String>>{};
       
-      // Mapear eventos completados por hábito y fecha
+      // Mapear eventos completados por user_habit_id y fecha
       for (final completed in completedEvents) {
-        final habitId = completed['habit_id'] as String;
-        final eventDate = completed['event_date'] as String;
-        completedDates.putIfAbsent(habitId, () => <String>{}).add(eventDate);
+        final userHabitId = completed['user_habit_id'] as String;
+        final completedAt = DateTime.parse(completed['completed_at'] as String);
+        final eventDate = completedAt.toIso8601String().split('T')[0];
+        completedDates.putIfAbsent(userHabitId, () => <String>{}).add(eventDate);
       }
 
       // Generar eventos para cada hábito
       print('📅 [CALENDAR] Procesando ${habits.length} hábitos...');
       for (int i = 0; i < habits.length; i++) {
-        final habit = habits[i];
-        print('📅 [CALENDAR] Procesando hábito ${i + 1}/${habits.length}: ${habit['habit_name']}');
+        final userHabit = habits[i];
         
-        final habitId = habit['habit_id'] as String;
-        final userHabitId = habit['user_habit_id'] as String;
-        final habitName = habit['habit_name'] as String;
-        final habitDescription = habit['habit_description'] as String? ?? '';
-        final scheduledTime = habit['scheduled_time'] as String?;
-        final frequency = habit['frequency'] as String;
-        final habitStartDate = DateTime.parse(habit['start_date'] as String);
-        final habitEndDate = habit['end_date'] != null 
-            ? DateTime.parse(habit['end_date'] as String)
+        print('📅 [CALENDAR] Procesando hábito ${i + 1}/${habits.length}: ${userHabit['habit_name']}');
+        
+        final habitId = userHabit['habit_id'] as String;
+        final userHabitId = userHabit['user_habit_id'] as String;
+        final habitName = userHabit['habit_name'] as String;
+        final habitDescription = userHabit['habit_description'] as String? ?? '';
+        final scheduledTime = userHabit['scheduled_time'] as String?;
+        final frequency = userHabit['frequency'] as String;
+        final habitStartDate = DateTime.parse(userHabit['start_date'] as String);
+        final habitEndDate = userHabit['end_date'] != null 
+            ? DateTime.parse(userHabit['end_date'] as String)
             : null;
 
         if (scheduledTime == null) {
@@ -153,8 +198,8 @@ class CalendarService {
         for (final eventDate in eventDates) {
           final eventDateStr = eventDate.toIso8601String().split('T')[0];
           
-          // Verificar si ya está completado
-          final isCompleted = completedDates[habitId]?.contains(eventDateStr) ?? false;
+          // Verificar si ya está completado (usando userHabitId en lugar de habitId)
+          final isCompleted = completedDates[userHabitId]?.contains(eventDateStr) ?? false;
           
           // Crear el evento
           final event = CalendarEvent(
@@ -194,16 +239,31 @@ class CalendarService {
   /// Obtiene eventos manuales (no relacionados con hábitos)
   Future<List<CalendarEvent>> getManualEvents(String userId) async {
     try {
+      print('📅 [CALENDAR] Consultando eventos manuales...');
       final response = await _supabase
-          .rpc('get_manual_calendar_events', params: {'p_user_id': userId});
+          .from('calendar_events')
+          .select('*')
+          .eq('user_id', userId)
+          .isFilter('habit_id', null) // Solo eventos manuales (sin habit_id)
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              print('⏰ [CALENDAR] TIMEOUT: consulta de calendar_events tardó más de 10 segundos');
+              throw TimeoutException('Timeout obteniendo eventos manuales', const Duration(seconds: 10));
+            },
+          );
 
       if (response == null) return [];
 
+      print('📅 [CALENDAR] Eventos manuales encontrados: ${response.length}');
+      
       return (response as List)
           .map((json) => CalendarEvent.fromJson(json))
           .toList();
     } catch (e) {
-      throw ServerException('Error al obtener eventos manuales: $e');
+      print('❌ [CALENDAR] ERROR: Error al obtener eventos manuales: $e');
+      // Retornar lista vacía en lugar de lanzar excepción
+      return [];
     }
   }
 

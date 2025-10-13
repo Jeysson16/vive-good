@@ -156,6 +156,23 @@ class SupabaseAssistantDatasource {
     }
   }
 
+  Future<void> updateChatMessage(String messageId, Map<String, dynamic> updates) async {
+    try {
+      print('DEBUG SUPABASE: Updating chat message - id: $messageId');
+      print('DEBUG SUPABASE: Updates: ${updates.toString()}');
+      
+      await _supabaseClient
+          .from('chat_messages')
+          .update(updates)
+          .eq('id', messageId);
+          
+      print('DEBUG SUPABASE: Chat message updated successfully');
+    } catch (e) {
+      print('DEBUG SUPABASE: Error updating chat message: $e');
+      throw Exception('Error al actualizar mensaje de chat: $e');
+    }
+  }
+
   // Configuración del asistente
   Future<Map<String, dynamic>> getAssistantConfig() async {
     try {
@@ -239,6 +256,87 @@ class SupabaseAssistantDatasource {
       return suggestions.take(3).toList();
     } catch (e) {
       throw Exception('Error al obtener sugerencias contextuales: $e');
+    }
+  }
+
+  // Métodos para feedback de mensajes
+
+  /// Envía feedback (like/dislike) para un mensaje
+  Future<bool> sendMessageFeedback({
+    required String messageId,
+    required String userId,
+    required String feedbackType,
+  }) async {
+    try {
+      print('DEBUG SUPABASE: Sending message feedback - messageId: $messageId, userId: $userId, type: $feedbackType');
+      
+      // Validar que el tipo de feedback sea válido
+      if (feedbackType != 'like' && feedbackType != 'dislike') {
+        throw Exception('Tipo de feedback inválido: $feedbackType');
+      }
+
+      // Usar upsert para insertar o actualizar el feedback
+      await _supabaseClient
+          .from('message_feedback')
+          .upsert({
+            'user_id': userId,
+            'message_id': messageId,
+            'feedback_type': feedbackType,
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+
+      print('DEBUG SUPABASE: Message feedback sent successfully');
+      return true;
+    } catch (e) {
+      print('DEBUG SUPABASE: Error sending message feedback: $e');
+      throw Exception('Error al enviar feedback del mensaje: $e');
+    }
+  }
+
+  /// Obtiene el feedback de un usuario para un mensaje específico
+  Future<String?> getMessageFeedback({
+    required String messageId,
+    required String userId,
+  }) async {
+    try {
+      print('DEBUG SUPABASE: Getting message feedback - messageId: $messageId, userId: $userId');
+      
+      final response = await _supabaseClient
+          .from('message_feedback')
+          .select('feedback_type')
+          .eq('user_id', userId)
+          .eq('message_id', messageId)
+          .maybeSingle();
+
+      final feedbackType = response?['feedback_type'] as String?;
+      print('DEBUG SUPABASE: Message feedback retrieved: $feedbackType');
+      
+      return feedbackType;
+    } catch (e) {
+      print('DEBUG SUPABASE: Error getting message feedback: $e');
+      throw Exception('Error al obtener feedback del mensaje: $e');
+    }
+  }
+
+  /// Elimina el feedback de un usuario para un mensaje
+  Future<bool> removeMessageFeedback({
+    required String messageId,
+    required String userId,
+  }) async {
+    try {
+      print('DEBUG SUPABASE: Removing message feedback - messageId: $messageId, userId: $userId');
+      
+      await _supabaseClient
+          .from('message_feedback')
+          .delete()
+          .eq('user_id', userId)
+          .eq('message_id', messageId);
+
+      print('DEBUG SUPABASE: Message feedback removed successfully');
+      return true;
+    } catch (e) {
+      print('DEBUG SUPABASE: Error removing message feedback: $e');
+      throw Exception('Error al eliminar feedback del mensaje: $e');
     }
   }
 }

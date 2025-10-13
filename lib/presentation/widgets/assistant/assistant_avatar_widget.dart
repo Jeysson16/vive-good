@@ -201,10 +201,29 @@ class _AssistantAvatarWidgetState extends State<AssistantAvatarWidget>
 
   Widget _buildDefaultAvatar(Color iconColor) {
     return Center(
-      child: Icon(
-        Icons.assistant,
-        size: widget.size * 0.3,
-        color: iconColor.withOpacity(0.8),
+      child: ClipOval(
+        child: Container(
+          width: widget.size * 0.6,
+          height: widget.size * 0.6,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(widget.size * 0.08),
+            child: Image.asset(
+              'assets/images/logo.png',
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return Icon(
+                  Icons.assistant,
+                  size: widget.size * 0.3,
+                  color: iconColor.withOpacity(0.8),
+                );
+              },
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -280,10 +299,20 @@ class MiniAssistantAvatar extends StatelessWidget {
               ]
             : null,
       ),
-      child: Icon(
-        Icons.psychology,
-        size: size * 0.6,
-        color: Colors.white,
+      child: Padding(
+        padding: EdgeInsets.all(size * 0.15),
+        child: Image.asset(
+          'assets/images/logo.png',
+          fit: BoxFit.contain,
+          color: Colors.white,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(
+              Icons.psychology,
+              size: size * 0.6,
+              color: Colors.white,
+            );
+          },
+        ),
       ),
     );
   }
@@ -327,10 +356,20 @@ class CustomAssistantAvatar extends StatelessWidget {
           ),
         ],
       ),
-      child: Icon(
-        Icons.psychology,
-        size: size * 0.4,
-        color: Colors.white,
+      child: Padding(
+        padding: EdgeInsets.all(size * 0.15),
+        child: Image.asset(
+          'assets/images/logo.png',
+          fit: BoxFit.contain,
+          color: Colors.white,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(
+              Icons.psychology,
+              size: size * 0.4,
+              color: Colors.white,
+            );
+          },
+        ),
       ),
     );
   }

@@ -50,6 +50,9 @@ abstract class AssistantRepository {
   Future<String> speechToText(String audioPath);
   Future<String> textToSpeech(String text);
 
+  // Generación de títulos
+  Future<String> generateConversationTitle(String firstMessage);
+
   // Sugerencias contextuales
   Future<List<String>> getContextualSuggestions({
     required String userId,

@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import '../../../domain/entities/chat_session.dart';
 import '../../../domain/entities/chat/chat_message.dart';
 import '../../../domain/repositories/chat_repository.dart';
+import '../../../data/repositories/supabase_chat_repository.dart';
 import 'chat_event.dart';
 import 'chat_state.dart';
 
@@ -61,20 +62,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       } else {
         emit(SessionsLoaded(sessions));
         
-        // Suscribirse a actualizaciones de sesiones
-        _sessionsSubscription?.cancel();
-        _sessionsSubscription = _chatRepository
-            .watchUserSessions(event.userId)
-            .listen((updatedSessions) {
-          if (!isClosed) {
+        // Suscribirse a actualizaciones de sesiones de forma segura
+        await emit.forEach<List<ChatSession>>( 
+          _chatRepository.watchUserSessions(event.userId),
+          onData: (updatedSessions) {
             final currentState = state;
-            if (currentState is SessionsLoaded) {
-              emit(SessionsLoaded(updatedSessions));
-            } else if (currentState is ChatLoaded) {
-              emit(currentState.copyWith(sessions: updatedSessions));
+            if (currentState is ChatLoaded) {
+              return currentState.copyWith(sessions: updatedSessions);
             }
-          }
-        });
+            return SessionsLoaded(updatedSessions);
+          },
+          onError: (error, stackTrace) {
+            return ChatError(message: 'Error en sesiones en tiempo real: ${error.toString()}');
+          },
+        );
       }
     } catch (e) {
       emit(ChatError(message: 'Error al cargar sesiones: ${e.toString()}'));
@@ -235,6 +236,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         event.sessionId,
         event.content,
         event.type,
+        metadata: event.metadata,
       );
       
       final updatedMessages = [...messages, newMessage];
@@ -258,12 +260,50 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     try {
+      // Verificar si es el primer mensaje de la sesión
+      final currentState = state;
+      bool isFirstMessage = false;
+      
+      if (currentState is EmptySession) {
+        isFirstMessage = true;
+      } else if (currentState is ChatLoaded && currentState.messages.isEmpty) {
+        isFirstMessage = true;
+      }
+      
       // Primero enviar el mensaje del usuario
       add(SendMessage(
         sessionId: event.sessionId,
         content: event.content,
         type: MessageType.user,
       ));
+      
+      // Si es el primer mensaje, generar título automáticamente
+      if (isFirstMessage) {
+        try {
+          // Verificar si el repositorio es SupabaseChatRepository
+          if (_chatRepository is SupabaseChatRepository) {
+            final supabaseRepo = _chatRepository as SupabaseChatRepository;
+            await supabaseRepo.generateAndUpdateSessionTitle(event.sessionId, event.content);
+            
+            // Recargar las sesiones para mostrar el nuevo título
+            final currentSession = await _chatRepository.getSession(event.sessionId);
+            if (currentSession != null && currentState is ChatLoaded) {
+              final updatedSessions = currentState.sessions.map((session) {
+                return session.id == event.sessionId ? currentSession : session;
+              }).toList();
+              
+              emit(ChatLoaded(
+                sessions: updatedSessions,
+                currentSession: currentSession,
+                messages: currentState.messages,
+              ));
+            }
+          }
+        } catch (e) {
+          print('❌ Error al generar título automático: $e');
+          // Continuar sin interrumpir el flujo
+        }
+      }
       
       // Esperar un poco para que se procese el mensaje del usuario
       await Future.delayed(const Duration(milliseconds: 500));
@@ -526,14 +566,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     
     _messagesSubscription = _chatRepository
         .watchSessionMessages(event.sessionId)
-        .listen((updatedMessages) {
-      if (!isClosed) {
-        final currentState = state;
-        if (currentState is ChatLoaded) {
-          emit(currentState.copyWith(messages: updatedMessages));
-        }
-      }
-    });
+        .listen(
+          (updatedMessages) {
+            if (!isClosed && !emit.isDone) {
+              final currentState = state;
+              if (currentState is ChatLoaded) {
+                emit(currentState.copyWith(messages: updatedMessages));
+              }
+            }
+          },
+          onError: (error) {
+            print('Error en suscripción de tiempo real: $error');
+            // No emitir error state, el servicio se encargará de reconectar automáticamente
+            // Solo logear el error para debugging
+          },
+        );
   }
   
   /// Desuscribirse de actualizaciones en tiempo real

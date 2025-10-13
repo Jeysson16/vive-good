@@ -46,8 +46,8 @@ class HabitScheduleModel extends HabitSchedule {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'user_id': userId,
-      'habit_id': habitId,
+      'user_id': (userId.isNotEmpty) ? userId : null,
+      'habit_id': (habitId.isNotEmpty) ? habitId : null,
       'scheduled_time': scheduledTime,
       'scheduled_date': scheduledDate?.toIso8601String().split('T')[0],
       'recurrence_type': recurrenceType,

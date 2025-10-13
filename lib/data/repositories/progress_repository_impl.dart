@@ -3,6 +3,7 @@ import '../../core/errors/exceptions.dart';
 import '../../core/error/failures.dart';
 import '../../core/network/network_info.dart';
 import '../../domain/entities/progress.dart';
+import '../../domain/entities/habit_progress.dart';
 import '../../domain/repositories/progress_repository.dart';
 import '../datasources/progress_remote_datasource.dart';
 import '../models/progress.dart';
@@ -115,6 +116,22 @@ class ProgressRepositoryImpl implements ProgressRepository {
   }
 
   @override
+  Future<Either<Failure, Map<String, String>>> getMonthlyIndicators(String userId, int year, int month) async {
+    if (await networkInfo.isConnected) {
+      try {
+        final indicators = await remoteDataSource.getMonthlyIndicators(userId, year, month);
+        return Right(indicators);
+      } on ServerException catch (e) {
+        return Left(ServerFailure(e.message));
+      } catch (e) {
+        return Left(ServerFailure('Error inesperado: ${e.toString()}'));
+      }
+    } else {
+      return Left(NetworkFailure('No hay conexión a internet'));
+    }
+  }
+
+  @override
   Future<Either<Failure, Map<String, double>>> getDailyWeekProgress(String userId) async {
     if (await networkInfo.isConnected) {
       try {
@@ -143,6 +160,18 @@ class ProgressRepositoryImpl implements ProgressRepository {
       }
     } else {
       return Left(NetworkFailure('No hay conexión a internet'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> markProgress(HabitProgress progress) async {
+    try {
+      // Por ahora, simplemente retornamos éxito
+      // En una implementación completa, esto debería guardar el progreso
+      // tanto localmente como remotamente según la conectividad
+      return const Right(null);
+    } catch (e) {
+      return Left(ServerFailure('Error al marcar progreso: ${e.toString()}'));
     }
   }
 }

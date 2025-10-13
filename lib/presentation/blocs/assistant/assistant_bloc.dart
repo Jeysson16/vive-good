@@ -74,6 +74,12 @@ class AssistantBloc extends Bloc<AssistantEvent, AssistantState> {
     on<UpdateSessionTitle>(_onUpdateSessionTitle);
     on<RefreshData>(_onRefreshData);
     on<CompleteChatSession>(_onCompleteChatSession);
+    on<ToggleTTS>(_onToggleTTS);
+    on<MuteTTS>(_onMuteTTS);
+    on<UnmuteTTS>(_onUnmuteTTS);
+    on<StopCurrentTTS>(_onStopCurrentTTS);
+    on<RestartTTS>(_onRestartTTS);
+    on<ResetToInitialView>(_onResetToInitialView);
     
     // Cargar datos iniciales solo si tenemos un userId válido
     if (userId != null && userId!.isNotEmpty) {
@@ -165,6 +171,9 @@ class AssistantBloc extends Bloc<AssistantEvent, AssistantState> {
     try {
       emit(state.toLoading());
       
+      // Limpiar cache de hábitos para nueva conversación
+      habitAutoCreationService.habitExtractionService.clearCreatedHabitsCache();
+      
       final session = await chatRepository.createSession(
         event.userId,
         title: event.title ?? 'Nueva conversación',
@@ -190,6 +199,9 @@ class AssistantBloc extends Bloc<AssistantEvent, AssistantState> {
   ) async {
     try {
       emit(state.toLoading());
+      
+      // Limpiar cache de hábitos al cambiar de sesión
+      habitAutoCreationService.habitExtractionService.clearCreatedHabitsCache();
       
       final session = state.getSession(event.sessionId);
       if (session == null) {
@@ -227,9 +239,13 @@ class AssistantBloc extends Bloc<AssistantEvent, AssistantState> {
       
       if (state.currentSession == null) {
         print('🔥 DEBUG: Creando nueva sesión de chat');
+        // Generar título basado en el primer mensaje del usuario
+        final sessionTitle = _generateSessionTitle(event.content);
+        print('🔥 DEBUG: Título generado: "$sessionTitle"');
+        
         currentSession = await chatRepository.createSession(
           event.userId,
-          title: 'Nueva conversación',
+          title: sessionTitle,
         );
         print('🔥 DEBUG: Sesión creada con ID: ${currentSession.id}');
         // Agregar la nueva sesión al inicio de la lista
@@ -279,20 +295,31 @@ class AssistantBloc extends Bloc<AssistantEvent, AssistantState> {
       print('🔥 DEBUG: ===== RESPUESTA DE GEMINI RECIBIDA =====');
       print('🔥 DEBUG: Contenido de la respuesta: "${assistantResponse.content}"');
       
-      print('🔥 DEBUG: ===== INICIANDO CREACIÓN AUTOMÁTICA DE HÁBITOS =====');
-      // Crear hábitos automáticamente basados en la respuesta del asistente
-      final createdHabits = await _createHabitsFromAssistantResponse(
-        assistantResponse,
-        event.content,
-        event.userId,
-      );
+      print('🔥 DEBUG: ===== OBTENIENDO HÁBITOS SUGERIDOS =====');
+      // Obtener hábitos sugeridos directamente de la respuesta del asistente
+      final suggestedHabitsData = assistantResponse.suggestedHabits ?? [];
+      print('🔥 DEBUG BLOC: Hábitos sugeridos recibidos: ${suggestedHabitsData.length}');
       
-      // Crear mensaje del asistente con metadatos de hábitos si se crearon
+      if (suggestedHabitsData.isNotEmpty) {
+        print('🔥 DEBUG BLOC: Lista de hábitos sugeridos:');
+        for (int i = 0; i < suggestedHabitsData.length; i++) {
+          final habit = suggestedHabitsData[i];
+          print('🔥 DEBUG BLOC: Hábito $i: ${habit['name']} - ${habit['description']}');
+        }
+      } else {
+        print('🔥 DEBUG BLOC: No se encontraron hábitos sugeridos en la respuesta');
+      }
+      
+      // Crear mensaje del asistente con metadatos de hábitos sugeridos si se encontraron
       Map<String, dynamic>? metadata;
-      if (createdHabits.isNotEmpty) {
+      if (suggestedHabitsData.isNotEmpty) {
         metadata = {
-          'autoCreatedHabits': createdHabits.map((habit) => habit.toMap()).toList(),
+          'suggestedHabits': suggestedHabitsData,
         };
+        print('🔥 DEBUG BLOC: Metadata de hábitos sugeridos creada con ${suggestedHabitsData.length} hábitos');
+        print('🔥 DEBUG BLOC: Metadata completa: $metadata');
+      } else {
+        print('🔥 DEBUG BLOC: No se creará metadata de hábitos (lista vacía)');
       }
       
       final assistantMessage = ChatMessage(
@@ -316,23 +343,42 @@ class AssistantBloc extends Bloc<AssistantEvent, AssistantState> {
         messages: finalMessages,
         suggestions: assistantResponse.suggestions,
         isTyping: false,
-        autoCreatedHabits: createdHabits,
+        autoCreatedHabits: [], // Ya no creamos hábitos automáticamente
       ));
       
       print('🔥 DEBUG: ===== INICIANDO SÍNTESIS DE VOZ =====');
-      print('🔥 DEBUG: Llamando a voiceService.speak con: "${assistantResponse.content}"');
-      // Speak the assistant's response using TTS
-      if (assistantResponse.content.isNotEmpty) {
-        await voiceService.speak(assistantResponse.content);
+      print('🔥 DEBUG: TTS Habilitado: ${state.isTTSEnabled}, TTS Silenciado: ${state.isTTSMuted}');
+      // Speak the assistant's response using TTS only if enabled and not muted
+      if (assistantResponse.content.isNotEmpty && state.isTTSEnabled && !state.isTTSMuted) {
+        // Limpiar el texto para TTS eliminando símbolos residuales
+        final cleanTextForTTS = _cleanTextForTTS(assistantResponse.content);
+        print('🔥 DEBUG: Texto original: "${assistantResponse.content}"');
+        print('🔥 DEBUG: Texto limpio para TTS: "$cleanTextForTTS"');
+        print('🔥 DEBUG: Llamando a voiceService.speak con texto limpio');
+        await voiceService.speak(cleanTextForTTS);
         print('🔥 DEBUG: ===== SÍNTESIS DE VOZ COMPLETADA =====');
+      } else {
+        print('🔥 DEBUG: ===== SÍNTESIS DE VOZ OMITIDA (TTS deshabilitado o silenciado) =====');
       }
       
       // Procesar métricas y análisis en segundo plano
       _processMetricsInBackground(event.userId, currentSession.id, finalMessages);
       
-      // Analizar hábitos si está habilitado (procesamiento en segundo plano)
-      if (state.isDeepLearningEnabled) {
-        _processDeepLearningInBackground(event.userId, finalMessages);
+      // Procesar Deep Learning en segundo plano solo si es necesario
+      if (state.isDeepLearningEnabled && _shouldUseDeepLearning(event.content)) {
+        print('🔥 DEBUG: ===== DEEP LEARNING ACTIVADO PARA ESTE MENSAJE =====');
+        print('🔥 DEBUG: Mensaje: "${event.content}"');
+        _processDeepLearningAndUpdateResponse(
+          event.content, 
+          event.userId, 
+          currentSession.id, 
+          assistantMessage,
+          finalMessages
+        );
+      } else {
+        print('🔥 DEBUG: ===== DEEP LEARNING OMITIDO - NO ES NECESARIO =====');
+        print('🔥 DEBUG: Mensaje: "${event.content}"');
+        print('🔥 DEBUG: DL Habilitado: ${state.isDeepLearningEnabled}, Requiere DL: ${_shouldUseDeepLearning(event.content)}');
       }
       
     } catch (e) {
@@ -797,6 +843,10 @@ class AssistantBloc extends Bloc<AssistantEvent, AssistantState> {
         clearError: true,
       ));
       
+      // Wait a moment for the summary to be displayed, then reset to initial view
+      await Future.delayed(const Duration(seconds: 3));
+      add(const ResetToInitialView());
+      
     } catch (e) {
       emit(state.copyWith(
         isLoading: false,
@@ -1004,44 +1054,450 @@ class AssistantBloc extends Bloc<AssistantEvent, AssistantState> {
     });
   }
 
-  /// Crea hábitos automáticamente basados en la respuesta del asistente
-  Future<List<Habit>> _createHabitsFromAssistantResponse(
+  /// Procesa Deep Learning en segundo plano y actualiza la respuesta del asistente
+  void _processDeepLearningAndUpdateResponse(
+    String userMessage,
+    String userId,
+    String sessionId,
+    ChatMessage assistantMessage,
+    List<ChatMessage> messages,
+  ) {
+    Future.microtask(() async {
+      try {
+        print('🔥 DEBUG: ===== INICIANDO DEEP LEARNING EN SEGUNDO PLANO =====');
+        
+        // Procesar análisis de Deep Learning usando el repositorio de chat
+        // Extraer síntomas básicos del mensaje del usuario
+        final symptoms = _extractSymptomsFromMessage(userMessage);
+        final habitHistory = <Map<String, dynamic>>[];
+        
+        final dlAnalysis = await chatRepository.analyzeGastritisRisk(
+          userId: userId,
+          symptoms: symptoms,
+          habitHistory: habitHistory,
+        );
+        
+        print('🔥 DEBUG: Deep Learning analysis obtenido: $dlAnalysis');
+        
+        // Crear un nuevo mensaje con el análisis de Deep Learning
+        if (dlAnalysis.isNotEmpty && !isClosed) {
+          // Crear contenido del análisis inteligente
+          final analysisContent = _formatDeepLearningAnalysis(dlAnalysis);
+          
+          // Crear nuevo mensaje con el análisis inteligente
+          final analysisMessage = ChatMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            sessionId: sessionId,
+            content: analysisContent,
+            type: MessageType.assistant,
+            status: MessageStatus.sent,
+            createdAt: DateTime.now(),
+            metadata: {
+              'isAnalysisMessage': true,
+              'deepLearningAnalysis': dlAnalysis,
+              'hasDeepLearning': true,
+              'analysisType': 'intelligent_analysis',
+            },
+          );
+          
+          // Agregar el nuevo mensaje a la lista
+          final updatedMessages = [...messages, analysisMessage];
+          
+          // Actualizar estado con el nuevo mensaje
+          emit(state.copyWith(
+            messages: updatedMessages,
+            deepLearningAnalysis: dlAnalysis,
+            clearError: true,
+          ));
+          
+          // Guardar el nuevo mensaje (no editar el existente)
+          await chatRepository.sendMessage(
+            sessionId,
+            analysisContent,
+            MessageType.assistant,
+            metadata: analysisMessage.metadata,
+          );
+          
+          print('🔥 DEBUG: Nuevo mensaje de análisis inteligente creado');
+        }
+        
+        // También procesar métricas de hábitos como antes
+        _processDeepLearningInBackground(userId, messages);
+        
+      } catch (e) {
+        print('🔥 DEBUG: Error en Deep Learning en segundo plano: $e');
+        // No emitir error para no interrumpir la conversación
+      }
+    });
+  }
+
+  /// Combina la respuesta de Gemini con el análisis de Deep Learning
+  String _combineGeminiWithDeepLearning(
+    String geminiContent,
+    Map<String, dynamic> dlAnalysis,
+  ) {
+    final buffer = StringBuffer();
+    
+    // Agregar la respuesta original de Gemini
+    buffer.writeln(geminiContent);
+    
+    // Agregar separador
+    buffer.writeln('\n---\n');
+    
+    // Agregar análisis de Deep Learning
+    buffer.writeln('## 🤖 Análisis Inteligente');
+    
+    if (dlAnalysis.containsKey('confidence')) {
+      final confidence = dlAnalysis['confidence'];
+      buffer.writeln('**Confianza del análisis:** ${(confidence * 100).toStringAsFixed(1)}%');
+    }
+    
+    if (dlAnalysis.containsKey('riskLevel')) {
+      final riskLevel = dlAnalysis['riskLevel'];
+      buffer.writeln('**Nivel de riesgo:** $riskLevel');
+    }
+    
+    if (dlAnalysis.containsKey('suggestions') && dlAnalysis['suggestions'] is List) {
+      buffer.writeln('\n**Recomendaciones específicas:**');
+      for (final suggestion in dlAnalysis['suggestions']) {
+        buffer.writeln('• $suggestion');
+      }
+    }
+    
+    if (dlAnalysis.containsKey('dlChatResponse') && dlAnalysis['dlChatResponse'] != null) {
+      buffer.writeln('\n**Análisis detallado:**');
+      buffer.writeln(dlAnalysis['dlChatResponse']);
+    }
+    
+    return buffer.toString();
+  }
+
+  /// Formatea el análisis de Deep Learning de manera amigable para el usuario
+  String _formatDeepLearningAnalysis(Map<String, dynamic> dlAnalysis) {
+    final buffer = StringBuffer();
+    
+    // Título del análisis
+    buffer.writeln('## 🤖 Análisis Inteligente');
+    buffer.writeln('');
+    
+    // Nivel de riesgo
+    if (dlAnalysis.containsKey('riskLevel')) {
+      final riskLevel = dlAnalysis['riskLevel'];
+      String emoji = '⚠️';
+      if (riskLevel.toLowerCase().contains('bajo')) {
+        emoji = '✅';
+      } else if (riskLevel.toLowerCase().contains('alto')) {
+        emoji = '🚨';
+      }
+      buffer.writeln('$emoji **Nivel de riesgo:** $riskLevel');
+    }
+    
+    // Confianza del análisis
+    if (dlAnalysis.containsKey('confidence')) {
+      final confidence = dlAnalysis['confidence'];
+      final confidencePercent = (confidence * 100).toStringAsFixed(1);
+      buffer.writeln('📊 **Confianza del análisis:** $confidencePercent%');
+    }
+    
+    // Recomendaciones específicas
+    if (dlAnalysis.containsKey('suggestions') && dlAnalysis['suggestions'] is List) {
+      buffer.writeln('');
+      buffer.writeln('💡 **Recomendaciones:**');
+      for (final suggestion in dlAnalysis['suggestions']) {
+        buffer.writeln('• $suggestion');
+      }
+    }
+    
+    // Nota importante
+    buffer.writeln('');
+    buffer.writeln('⚕️ *Este análisis es una herramienta de apoyo. Siempre consulta con un profesional de la salud para un diagnóstico preciso.*');
+    
+    return buffer.toString();
+  }
+
+  /// Extrae hábitos sugeridos basados en la respuesta del asistente (sin crearlos automáticamente)
+  Future<List<Habit>> _extractSuggestedHabitsFromResponse(
     AssistantResponse assistantResponse,
     String userMessage,
     String? userId,
   ) async {
     try {
       if (userId == null) {
-        print('🔥 DEBUG: Usuario no autenticado, omitiendo creación de hábitos');
+        print('🔥 DEBUG: Usuario no autenticado, omitiendo extracción de hábitos');
         return [];
       }
 
-      print('🔥 DEBUG: Analizando respuesta del asistente para extraer hábitos');
+      print('🔥 DEBUG: Analizando respuesta del asistente para extraer hábitos sugeridos');
       print('🔥 DEBUG: Contenido de respuesta: ${assistantResponse.content}');
       
-      // Crear hábitos contextuales basados en el mensaje del usuario y la respuesta
-      final createdHabits = await habitAutoCreationService.createContextualHabits(
+      // Extraer hábitos sugeridos basados en el mensaje del usuario y la respuesta (sin crearlos)
+      final suggestedHabits = await habitAutoCreationService.extractSuggestedHabits(
         assistantResponse: assistantResponse,
         userMessage: userMessage,
         userId: userId,
       );
       
-      if (createdHabits.isNotEmpty) {
-        print('🔥 DEBUG: Se crearon ${createdHabits.length} hábitos automáticamente');
-        for (final habit in createdHabits) {
-          print('🔥 DEBUG: Hábito creado: ${habit.name}');
+      if (suggestedHabits.isNotEmpty) {
+        print('🔥 DEBUG: Se encontraron ${suggestedHabits.length} hábitos sugeridos');
+        for (final habit in suggestedHabits) {
+          print('🔥 DEBUG: Hábito sugerido: ${habit.name}');
         }
       } else {
-        print('🔥 DEBUG: No se encontraron hábitos para crear automáticamente');
+        print('🔥 DEBUG: No se encontraron hábitos sugeridos');
       }
       
-      return createdHabits;
+      return suggestedHabits;
     } catch (e, stackTrace) {
-      print('🔥 ERROR: Error creando hábitos automáticamente: $e');
+      print('🔥 ERROR: Error extrayendo hábitos sugeridos: $e');
       print('🔥 ERROR: StackTrace: $stackTrace');
       // Retornar lista vacía en caso de error para no interrumpir la conversación
       return [];
     }
+  }
+
+  /// Determina si el mensaje del usuario requiere análisis de Deep Learning
+  bool _shouldUseDeepLearning(String userMessage) {
+    final message = userMessage.toLowerCase();
+    
+    // Palabras clave relacionadas con síntomas de gastritis
+    final gastritisSymptoms = [
+      'dolor', 'estómago', 'estomago', 'gastritis', 'acidez', 'ardor',
+      'náuseas', 'nauseas', 'vómito', 'vomito', 'reflujo', 'indigestión',
+      'hinchazón', 'hinchado', 'pesadez', 'malestar', 'quemazón',
+      'punzadas', 'presión', 'distensión', 'abdominal', 'digestivo',
+      'úlcera', 'ulcera', 'helicobacter', 'pylori'
+    ];
+    
+    // Palabras clave relacionadas con análisis de riesgo
+    final riskAnalysisKeywords = [
+      'riesgo', 'análisis', 'analisis', 'evaluación', 'evaluacion',
+      'diagnóstico', 'diagnostico', 'predicción', 'prediccion',
+      'probabilidad', 'posibilidad', 'chequeo', 'revisión', 'revision'
+    ];
+    
+    // Palabras clave relacionadas con hábitos alimentarios
+    final foodHabitsKeywords = [
+      'comida', 'alimentación', 'alimentacion', 'dieta', 'nutrición',
+      'nutricion', 'alimentos', 'comer', 'desayuno', 'almuerzo',
+      'cena', 'merienda', 'snack', 'bebida', 'alcohol', 'café',
+      'picante', 'grasa', 'frituras', 'condimentos', 'especias'
+    ];
+    
+    // Palabras clave relacionadas con estilo de vida
+    final lifestyleKeywords = [
+      'estrés', 'estres', 'ansiedad', 'sueño', 'dormir', 'ejercicio',
+      'actividad', 'sedentario', 'trabajo', 'horarios', 'rutina',
+      'medicamentos', 'pastillas', 'antiinflamatorios', 'aspirina'
+    ];
+    
+    // Verificar si el mensaje contiene alguna palabra clave relevante
+    bool hasGastritisSymptoms = gastritisSymptoms.any((symptom) => message.contains(symptom));
+    bool hasRiskAnalysis = riskAnalysisKeywords.any((keyword) => message.contains(keyword));
+    bool hasFoodHabits = foodHabitsKeywords.any((keyword) => message.contains(keyword));
+    bool hasLifestyle = lifestyleKeywords.any((keyword) => message.contains(keyword));
+    
+    // Frases que NO requieren deep learning (conversación general)
+    final generalConversationPhrases = [
+      'hola', 'buenos días', 'buenas tardes', 'buenas noches',
+      'gracias', 'de nada', 'por favor', 'disculpa', 'perdón',
+      'cómo estás', 'como estas', 'qué tal', 'que tal',
+      'ayuda', 'información', 'informacion', 'explicar',
+      'entiendo', 'ok', 'vale', 'bien', 'perfecto'
+    ];
+    
+    bool isGeneralConversation = generalConversationPhrases.any((phrase) => message.contains(phrase));
+    
+    // Si es conversación general y no tiene síntomas específicos, no usar DL
+    if (isGeneralConversation && !hasGastritisSymptoms && !hasRiskAnalysis) {
+      return false;
+    }
+    
+    // Usar Deep Learning si:
+    // 1. Menciona síntomas específicos de gastritis
+    // 2. Solicita análisis de riesgo
+    // 3. Habla de hábitos alimentarios en contexto de salud
+    // 4. Menciona factores de estilo de vida relacionados con gastritis
+    return hasGastritisSymptoms || hasRiskAnalysis || 
+           (hasFoodHabits && (hasGastritisSymptoms || hasLifestyle)) ||
+           (hasLifestyle && hasGastritisSymptoms);
+  }
+
+  // Manejadores de eventos TTS
+  void _onToggleTTS(
+    ToggleTTS event,
+    Emitter<AssistantState> emit,
+  ) {
+    emit(state.copyWith(isTTSMuted: !state.isTTSMuted));
+    
+    // Si se está silenciando, detener TTS actual
+    if (state.isTTSMuted) {
+      voiceService.stopSpeaking();
+    }
+  }
+
+  void _onMuteTTS(
+    MuteTTS event,
+    Emitter<AssistantState> emit,
+  ) {
+    emit(state.copyWith(isTTSMuted: true));
+    voiceService.stopSpeaking();
+  }
+
+  void _onUnmuteTTS(
+    UnmuteTTS event,
+    Emitter<AssistantState> emit,
+  ) {
+    emit(state.copyWith(isTTSMuted: false));
+  }
+
+  void _onStopCurrentTTS(
+    StopCurrentTTS event,
+    Emitter<AssistantState> emit,
+  ) {
+    voiceService.stopSpeaking();
+    emit(state.copyWith(isPlayingAudio: false));
+  }
+
+  void _onRestartTTS(
+    RestartTTS event,
+    Emitter<AssistantState> emit,
+  ) async {
+    try {
+      // Desmutear TTS si está silenciado
+      emit(state.copyWith(isTTSMuted: false));
+      
+      // Limpiar el texto para TTS eliminando símbolos residuales
+      final cleanTextForTTS = _cleanTextForTTS(event.content);
+      
+      // Reiniciar la lectura del contenido
+      await voiceService.speak(cleanTextForTTS);
+    } catch (e) {
+      print('❌ Error al reiniciar TTS: $e');
+    }
+  }
+
+  void _onResetToInitialView(
+    ResetToInitialView event,
+    Emitter<AssistantState> emit,
+  ) {
+    // Reset to initial state but keep chat sessions
+    emit(state.copyWith(
+      clearCurrentSession: true,
+      messages: [],
+      textInput: '',
+      partialTranscription: '',
+      isTyping: false,
+      isRecording: false,
+      isPlayingAudio: false,
+      clearError: true,
+      autoCreatedHabits: [],
+    ));
+    
+    // Stop any ongoing TTS
+    voiceService.stopSpeaking();
+  }
+
+  /// Extrae síntomas básicos del mensaje del usuario para análisis de Deep Learning
+  Map<String, dynamic> _extractSymptomsFromMessage(String message) {
+    final lowerMessage = message.toLowerCase();
+    final symptoms = <String, dynamic>{};
+    
+    // Detectar dolor de estómago
+    if (lowerMessage.contains('dolor') && (lowerMessage.contains('estómago') || lowerMessage.contains('estomago'))) {
+      symptoms['stomachpain'] = true;
+    }
+    
+    // Detectar reflujo
+    if (lowerMessage.contains('reflujo') || lowerMessage.contains('acidez')) {
+      symptoms['heartburn'] = true;
+    }
+    
+    // Detectar náuseas
+    if (lowerMessage.contains('náusea') || lowerMessage.contains('nausea') || lowerMessage.contains('mareo')) {
+      symptoms['nausea'] = true;
+    }
+    
+    // Detectar vómito
+    if (lowerMessage.contains('vómito') || lowerMessage.contains('vomito')) {
+      symptoms['vomiting'] = true;
+    }
+    
+    // Detectar pérdida de apetito
+    if (lowerMessage.contains('apetito') || lowerMessage.contains('hambre')) {
+      symptoms['appetite_loss'] = true;
+    }
+    
+    return symptoms;
+  }
+
+  /// Limpia el texto para TTS eliminando símbolos residuales y caracteres no deseados
+  String _cleanTextForTTS(String text) {
+    String cleanText = text;
+    
+    // PRIMERO: Extraer contenido de markdown antes de eliminar símbolos
+    // Extraer contenido de negritas **texto** y __texto__
+    cleanText = cleanText.replaceAllMapped(RegExp(r'\*\*([^*]+?)\*\*'), (match) => match.group(1)!);
+    cleanText = cleanText.replaceAllMapped(RegExp(r'__([^_]+?)__'), (match) => match.group(1)!);
+    
+    // Extraer contenido de cursivas *texto* y _texto_
+    cleanText = cleanText.replaceAllMapped(RegExp(r'\*([^*]+?)\*'), (match) => match.group(1)!);
+    cleanText = cleanText.replaceAllMapped(RegExp(r'_([^_]+?)_'), (match) => match.group(1)!);
+    
+    // Extraer contenido de headers # texto
+    cleanText = cleanText.replaceAllMapped(RegExp(r'^#{1,6}\s*(.+)', multiLine: true), (match) => match.group(1)!);
+    
+    // SEGUNDO: Limpiar símbolos y caracteres no deseados
+    return cleanText
+        // Eliminar símbolos $1, $2, etc. que puedan haber quedado
+        .replaceAll(RegExp(r'\$\d+'), '')
+        // Eliminar cualquier símbolo $ seguido de caracteres
+        .replaceAll(RegExp(r'\$[a-zA-Z0-9]*'), '')
+        // Eliminar TODOS los emojis (rangos Unicode completos)
+        .replaceAll(RegExp(r'[\u{1F600}-\u{1F64F}]', unicode: true), '') // Emoticons
+        .replaceAll(RegExp(r'[\u{1F300}-\u{1F5FF}]', unicode: true), '') // Misc Symbols
+        .replaceAll(RegExp(r'[\u{1F680}-\u{1F6FF}]', unicode: true), '') // Transport
+        .replaceAll(RegExp(r'[\u{1F1E0}-\u{1F1FF}]', unicode: true), '') // Flags
+        .replaceAll(RegExp(r'[\u{2600}-\u{26FF}]', unicode: true), '') // Misc symbols
+        .replaceAll(RegExp(r'[\u{2700}-\u{27BF}]', unicode: true), '') // Dingbats
+        .replaceAll(RegExp(r'[\u{1F900}-\u{1F9FF}]', unicode: true), '') // Supplemental Symbols
+        .replaceAll(RegExp(r'[\u{1FA70}-\u{1FAFF}]', unicode: true), '') // Extended symbols
+        // Eliminar asteriscos y guiones bajos residuales (ya se extrajo el contenido)
+        .replaceAll(RegExp(r'\*+'), '')
+        .replaceAll(RegExp(r'_+'), '')
+        // Eliminar marcadores markdown adicionales
+        .replaceAll(RegExp(r'`+'), '') // Code blocks
+        .replaceAll(RegExp(r'~~'), '') // Strikethrough
+        // Eliminar corchetes y llaves
+        .replaceAll(RegExp(r'[\[\]{}]'), '')
+        // Eliminar caracteres de control y símbolos especiales problemáticos
+        .replaceAll(RegExp(r'[^\w\s\.,;:!?¿¡\-\(\)áéíóúüñÁÉÍÓÚÜÑ]'), '')
+        // Limpiar espacios múltiples y normalizar
+        .replaceAll(RegExp(r'\s+'), ' ')
+        // Eliminar espacios al inicio y final
+        .trim();
+  }
+
+  /// Genera un título para la sesión basado en el primer mensaje del usuario
+  String _generateSessionTitle(String firstMessage) {
+    // Limpiar el mensaje de caracteres especiales y espacios extra
+    String cleanMessage = firstMessage
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ') // Reemplazar múltiples espacios por uno solo
+        .replaceAll(RegExp(r'[^\w\s\u00C0-\u017F]'), '') // Mantener solo letras, números, espacios y acentos
+        .trim();
+    
+    // Si el mensaje está vacío después de limpiar, usar título por defecto
+    if (cleanMessage.isEmpty) {
+      return 'Nueva conversación';
+    }
+    
+    // Si el mensaje es de 20 caracteres o menos, usarlo completo
+    if (cleanMessage.length <= 20) {
+      return cleanMessage;
+    }
+    
+    // Si es más largo, cortarlo a 17 caracteres y agregar "..."
+    return '${cleanMessage.substring(0, 17)}...';
   }
 
   @override

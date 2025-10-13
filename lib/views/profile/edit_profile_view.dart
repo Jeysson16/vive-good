@@ -37,6 +37,10 @@ class _EditProfileViewState extends State<EditProfileView> {
   String? _selectedImagePath;
   List<String> _selectedRiskFactors = [];
   bool _autoSuggestionsEnabled = false;
+  
+  // Variables para controlar el guardado
+  bool _isSaving = false;
+  bool _hasNavigated = false;
 
   // Opciones de factores de riesgo
   final List<String> _riskFactorOptions = [
@@ -69,7 +73,9 @@ class _EditProfileViewState extends State<EditProfileView> {
       text: widget.profile.institution ?? '',
     );
     _heightController = TextEditingController(
-      text: widget.profile.heightCm?.toString() ?? '',
+      text: widget.profile.heightCm != null 
+          ? (widget.profile.heightCm! / 100).toStringAsFixed(2)
+          : '',
     );
     _weightController = TextEditingController(
       text: widget.profile.weightKg?.toString() ?? '',
@@ -102,89 +108,99 @@ class _EditProfileViewState extends State<EditProfileView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text(
-          'Editar perfil',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF2E2E2E),
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF2E2E2E)),
-        actions: [
-          BlocConsumer<ProfileBloc, ProfileState>(
-            listener: (context, state) {
-              if (state is ProfileUpdated) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(state.message),
-                    backgroundColor: const Color(0xFF4CAF50),
-                  ),
-                );
-                Navigator.pop(context);
-              } else if (state is ProfileError) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(state.message),
-                    backgroundColor: const Color(0xFFF44336),
-                  ),
-                );
-              }
-            },
-            builder: (context, state) {
-              final isLoading = state is ProfileUpdating;
-              return TextButton(
-                onPressed: isLoading ? null : _saveProfile,
-                child: isLoading
-                    ? const SmallLoadingWidget(size: 16)
-                    : const Text(
-                        'Guardar',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF4CAF50),
-                        ),
-                      ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Foto de perfil
-              _buildProfileImageSection(),
-              const SizedBox(height: 32),
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: BlocConsumer<ProfileBloc, ProfileState>(
+        listener: (context, state) {
+          print('EditProfileView - Estado recibido: ${state.runtimeType}');
+          
+          // Evitar múltiples navegaciones
+          if (_hasNavigated) return;
+          
+          if (state is ProfileUpdated) {
+            print('EditProfileView - ProfileUpdated: ${state.message}');
+            // Solo mostrar mensaje y cerrar si no hay imagen pendiente por subir
+            if (_selectedImagePath == null) {
+              _showSuccessAndClose(state.message);
+            } else {
+              print('EditProfileView - Perfil actualizado, esperando imagen...');
+            }
+          } else if (state is ProfileImageUpdated) {
+            print('EditProfileView - ProfileImageUpdated');
+            _showSuccessAndClose('Perfil e imagen actualizados exitosamente');
+          } else if (state is ProfileError) {
+            print('EditProfileView - ProfileError: ${state.message}');
+            setState(() {
+              _isSaving = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: const Color(0xFFF44336),
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          final isLoading = _isSaving || state is ProfileUpdating || state is ProfileImageUploading;
+          print('EditProfileView - Builder ejecutado, isLoading: $isLoading, estado: ${state.runtimeType}');
+          
+          return Scaffold(
+            backgroundColor: const Color(0xFFF8F9FA),
+            appBar: AppBar(
+              title: const Text(
+                'Editar perfil',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2E2E2E),
+                ),
+              ),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Color(0xFF2E2E2E)),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: isLoading ? null : () => _onWillPop().then((shouldPop) {
+                  if (shouldPop) Navigator.pop(context);
+                }),
+              ),
+            ),
+            body: Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Foto de perfil
+                    _buildProfileImageSection(),
+                    const SizedBox(height: 32),
 
-              // Información personal
-              _buildPersonalInfoSection(),
-              const SizedBox(height: 24),
+                    // Información personal
+                    _buildPersonalInfoSection(),
+                    const SizedBox(height: 24),
 
-              // Datos de salud
-              _buildHealthDataSection(),
-              const SizedBox(height: 24),
+                    // Datos de salud
+                    _buildHealthDataSection(),
+                    const SizedBox(height: 24),
 
-              // Factores de riesgo
-              _buildRiskFactorsSection(),
-              const SizedBox(height: 24),
+                    // Factores de riesgo
+                    _buildRiskFactorsSection(),
+                    const SizedBox(height: 24),
 
-              // Configuraciones inteligentes
-              _buildSmartSettingsSection(),
-              const SizedBox(height: 100), // Espacio para el botón flotante
-            ],
-          ),
-        ),
+                    // Configuraciones inteligentes
+                    _buildSmartSettingsSection(),
+                    const SizedBox(height: 100), // Espacio para el botón flotante
+                  ],
+                ),
+              ),
+            ),
+            floatingActionButton: _buildFloatingActionButton(isLoading),
+            floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+          );
+        },
       ),
     );
   }
@@ -482,7 +498,7 @@ class _EditProfileViewState extends State<EditProfileView> {
             Expanded(
               child: _buildTimeField(
                 controller: _morningTimeController,
-                label: 'Mañana',
+                label: 'Recordatorio matutino',
                 icon: Icons.wb_sunny,
                 color: const Color(0xFFFF9800),
               ),
@@ -491,7 +507,7 @@ class _EditProfileViewState extends State<EditProfileView> {
             Expanded(
               child: _buildTimeField(
                 controller: _eveningTimeController,
-                label: 'Noche',
+                label: 'Recordatorio nocturno',
                 icon: Icons.nightlight_round,
                 color: const Color(0xFF3F51B5),
               ),
@@ -587,29 +603,32 @@ class _EditProfileViewState extends State<EditProfileView> {
     required IconData icon,
     required Color color,
   }) {
-    return GestureDetector(
+    return InkWell(
       onTap: () => _selectTime(controller),
-      child: AbsorbPointer(
-        child: TextFormField(
-          controller: controller,
-          decoration: InputDecoration(
-            labelText: label,
-            prefixIcon: Icon(icon, color: color),
-            suffixIcon: Icon(Icons.access_time, color: color),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: color.withOpacity(0.3)),
+      borderRadius: BorderRadius.circular(12),
+      child: IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(0.3)),
+            color: color.withOpacity(0.05),
+          ),
+          child: TextFormField(
+            controller: controller,
+            enabled: false,
+            decoration: InputDecoration(
+              labelText: label,
+              prefixIcon: Icon(icon, color: color),
+              suffixIcon: Icon(Icons.access_time, color: color),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: color.withOpacity(0.3)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: color, width: 2),
-            ),
-            filled: true,
-            fillColor: color.withOpacity(0.05),
           ),
         ),
       ),
@@ -679,8 +698,133 @@ class _EditProfileViewState extends State<EditProfileView> {
     }
   }
 
+  Future<bool> _onWillPop() async {
+    if (_hasUnsavedChanges()) {
+      final shouldPop = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('¿Descartar cambios?'),
+          content: const Text(
+            'Tienes cambios sin guardar. ¿Estás seguro de que quieres salir sin guardar?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFF44336),
+              ),
+              child: const Text('Descartar'),
+            ),
+          ],
+        ),
+      );
+      return shouldPop ?? false;
+    }
+    return true;
+  }
+
+  bool _hasUnsavedChanges() {
+    return _firstNameController.text.trim() != widget.profile.firstName ||
+        _lastNameController.text.trim() != widget.profile.lastName ||
+        _ageController.text != (widget.profile.age?.toString() ?? '') ||
+        _institutionController.text.trim() != (widget.profile.institution ?? '') ||
+        _heightController.text != (widget.profile.heightCm != null 
+            ? (widget.profile.heightCm! / 100).toStringAsFixed(2)
+            : '') ||
+        _weightController.text != (widget.profile.weightKg?.toString() ?? '') ||
+        !_listEquals(_selectedRiskFactors, widget.profile.riskFactors) ||
+        _autoSuggestionsEnabled != widget.profile.autoSuggestionsEnabled ||
+        _morningTimeController.text != (widget.profile.morningReminderTime ?? '8:00') ||
+        _eveningTimeController.text != (widget.profile.eveningReminderTime ?? '21:30') ||
+        _selectedImagePath != null;
+  }
+
+  bool _listEquals<T>(List<T> a, List<T> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  Widget _buildFloatingActionButton(bool isLoading) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      width: double.infinity,
+      height: 56,
+      child: FloatingActionButton.extended(
+        onPressed: isLoading ? null : _saveProfile,
+        backgroundColor: isLoading 
+            ? const Color(0xFFE0E0E0) 
+            : const Color(0xFF4CAF50),
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Icon(Icons.save),
+        label: Text(
+          isLoading ? 'Guardando...' : 'Guardar cambios',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSuccessAndClose(String message) {
+    if (_hasNavigated) return;
+    
+    setState(() {
+      _hasNavigated = true;
+      _isSaving = false;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF4CAF50),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    
+    print('EditProfileView - Cerrando pantalla');
+    
+    // Cerrar después de mostrar el mensaje
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context, true); // Retornar true para indicar que se guardó
+      }
+    });
+  }
+
   void _saveProfile() {
+    // Evitar múltiples ejecuciones
+    if (_isSaving) {
+      print('EditProfileView - Guardado ya en progreso, ignorando');
+      return;
+    }
+    
     if (_formKey.currentState?.validate() == true) {
+      setState(() {
+        _isSaving = true;
+      });
+      
+      print('EditProfileView - Iniciando guardado de perfil');
+      print('EditProfileView - Imagen seleccionada: ${_selectedImagePath != null}');
+      
       // Crear perfil actualizado
       final updatedProfile = widget.profile.copyWith(
         firstName: _firstNameController.text.trim(),
@@ -692,7 +836,7 @@ class _EditProfileViewState extends State<EditProfileView> {
             ? _institutionController.text.trim()
             : null,
         heightCm: _heightController.text.isNotEmpty
-            ? double.tryParse(_heightController.text)
+            ? (double.tryParse(_heightController.text) ?? 0) * 100
             : null,
         weightKg: _weightController.text.isNotEmpty
             ? double.tryParse(_weightController.text)
@@ -704,15 +848,30 @@ class _EditProfileViewState extends State<EditProfileView> {
         updatedAt: DateTime.now(),
       );
 
-      // Actualizar imagen si se seleccionó una nueva
-      if (_selectedImagePath != null) {
-        context.read<ProfileBloc>().add(
-          UpdateProfileImage(_selectedImagePath!),
-        );
-      }
-
-      // Actualizar perfil
+      // Actualizar perfil primero
+      print('EditProfileView - Actualizando perfil');
       context.read<ProfileBloc>().add(UpdateUserProfile(updatedProfile));
+      
+      // Si hay imagen seleccionada, actualizar imagen después
+      if (_selectedImagePath != null) {
+        print('EditProfileView - Actualizando imagen después del perfil');
+        // Esperar un poco para que se complete la actualización del perfil
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted && !_hasNavigated) {
+            context.read<ProfileBloc>().add(
+              UpdateProfileImage(_selectedImagePath!),
+            );
+          }
+        });
+      }
+    } else {
+      print('EditProfileView - Formulario no válido');
+      // Scroll al primer error
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     }
   }
 

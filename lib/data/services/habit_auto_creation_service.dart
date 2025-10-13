@@ -1,3 +1,4 @@
+import 'package:uuid/uuid.dart';
 import '../../domain/entities/habit.dart';
 import '../../domain/entities/user_habit.dart';
 import '../../domain/repositories/habit_repository.dart';
@@ -7,18 +8,25 @@ import 'habit_extraction_service.dart';
 class HabitAutoCreationService {
   final HabitRepository habitRepository;
   final HabitExtractionService habitExtractionService;
+  final Uuid _uuid = const Uuid();
   
   HabitAutoCreationService({
     required this.habitRepository,
     required this.habitExtractionService,
   });
   
-  /// Crea hábitos automáticamente basados en el contexto de la conversación
+  /// DESHABILITADO: Crea hábitos automáticamente basados en el contexto de la conversación
+  /// Esta funcionalidad se ha deshabilitado para evitar la creación de hábitos sin sentido
   Future<List<Habit>> createContextualHabits({
     required AssistantResponse assistantResponse,
     required String userMessage,
     required String userId,
   }) async {
+    // DESHABILITADO: Retorna lista vacía para evitar creación automática
+    print('🚫 Creación automática de hábitos deshabilitada');
+    return [];
+    
+    /* CÓDIGO ORIGINAL COMENTADO:
     try {
       // Extraer hábitos sugeridos de la respuesta del asistente
       final extractedHabits = habitExtractionService.extractHabitsFromResponse(
@@ -74,9 +82,48 @@ class HabitAutoCreationService {
       print('Error in createContextualHabits: $e');
       return [];
     }
+    */
   }
-  
 
+  /// Extrae hábitos sugeridos sin crearlos automáticamente
+  Future<List<Habit>> extractSuggestedHabits({
+    required AssistantResponse assistantResponse,
+    required String userMessage,
+    required String userId,
+  }) async {
+    try {
+      print('🔥 DEBUG: Extrayendo hábitos sugeridos del contenido');
+      
+      // Extraer hábitos del contenido de la respuesta
+      final extractedHabits = habitExtractionService.extractHabitsFromResponse(
+        assistantResponse,
+        userId,
+      );
+      
+      print('🔥 DEBUG: Hábitos extraídos: ${extractedHabits.length}');
+      
+      // Enriquecer hábitos con información adicional si está disponible
+      final enrichedHabits = <Habit>[];
+      for (final habit in extractedHabits) {
+        final enrichedHabit = _enrichHabitWithAdditionalInfo(habit, assistantResponse);
+        enrichedHabits.add(enrichedHabit);
+      }
+      
+      print('🔥 DEBUG: Hábitos enriquecidos: ${enrichedHabits.length}');
+      
+      return enrichedHabits;
+    } catch (e) {
+      print('Error in extractSuggestedHabits: $e');
+      return [];
+    }
+  }
+
+  /// Enriquece un hábito con información adicional del contexto
+  Habit _enrichHabitWithAdditionalInfo(Habit habit, AssistantResponse assistantResponse) {
+    // Por ahora, simplemente retornamos el hábito tal como está
+    // En el futuro se puede agregar lógica para enriquecer con información del contexto
+    return habit;
+  }
   
   /// Crea un hábito personalizado basado en texto libre
   Future<Habit?> createCustomHabit({
@@ -89,11 +136,14 @@ class HabitAutoCreationService {
       // Analizar el texto para extraer información del hábito
       final habitInfo = _parseHabitText(habitText);
       
+      // Convertir nombre de categoría a UUID si es necesario
+      final categoryId = _getCategoryIdFromName(category ?? habitInfo['category'] ?? 'General');
+      
       final habit = Habit(
-        id: '',
+        id: _uuid.v4(),
         name: habitInfo['name'] ?? habitText,
         description: habitInfo['description'] ?? 'Hábito personalizado',
-        categoryId: category ?? habitInfo['category'] ?? 'General',
+        categoryId: categoryId,
         iconName: 'target',
         iconColor: '#607D8B',
         createdAt: DateTime.now(),
@@ -419,7 +469,7 @@ class HabitAutoCreationService {
     final schedule = <String>[];
     
     // Horarios basados en el tipo de hábito y contexto
-    if (habit.categoryId == 'Alimentación') {
+    if (habit.categoryId == 'b0231bea-a750-4984-97d8-8ccb3a2bae1c') { // Alimentación
       if (mealContext == 'before_meal') {
         schedule.addAll(['07:30', '11:30', '18:30']);
       } else if (mealContext == 'after_meal') {
@@ -427,7 +477,7 @@ class HabitAutoCreationService {
       } else {
         schedule.addAll(['08:00', '12:00', '19:00']);
       }
-    } else if (habit.categoryId == 'Hidratación') {
+    } else if (habit.categoryId == '93688043-4d35-4b2a-9dcd-17482125b1a9') { // Hidratación
       if (urgency == 'high') {
         schedule.addAll(['08:00', '10:00', '12:00', '14:00', '16:00', '18:00']);
       } else {
@@ -508,11 +558,11 @@ class HabitAutoCreationService {
       suggestions.add('Recordatorio cuando sientas dolor');
     }
     
-    if (habit.categoryId == 'Alimentación') {
+    if (habit.categoryId == 'b0231bea-a750-4984-97d8-8ccb3a2bae1c') { // Alimentación
       suggestions.add('Recordatorio 30 min antes de comer');
     }
     
-    if (habit.categoryId == 'Hidratación') {
+    if (habit.categoryId == '93688043-4d35-4b2a-9dcd-17482125b1a9') { // Hidratación
       suggestions.add('Recordatorio cada 3 horas');
     }
     
@@ -582,5 +632,28 @@ class HabitAutoCreationService {
         return '#607D8B'; // Gris azulado
     }
   }
-
+  
+  /// Convierte nombres de categorías a UUIDs correspondientes
+  String _getCategoryIdFromName(String? categoryName) {
+    // Mapeo de nombres de categorías a UUIDs reales de la base de datos
+    // Estos UUIDs coinciden con las categorías definidas en las migraciones de Supabase
+    final categoryMap = {
+      // Categorías principales del sistema
+      'Alimentación': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c',
+      'Actividad Física': '2196f3aa-1234-4567-89ab-cdef12345678',
+      'Sueño': '6d1f2f1b-04ef-497e-97b7-8077ff3b3c69',
+      'Hidratación': '93688043-4d35-4b2a-9dcd-17482125b1a9',
+      'Bienestar Mental': 'ff9800bb-5678-4567-89ab-cdef12345678',
+      'Productividad': '795548cc-9012-4567-89ab-cdef12345678',
+      
+      // Alias y variaciones comunes
+      'Ejercicio': '2196f3aa-1234-4567-89ab-cdef12345678', // Alias para Actividad Física
+      'Salud': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Alias para Alimentación
+      'Bienestar': 'ff9800bb-5678-4567-89ab-cdef12345678', // Alias para Bienestar Mental
+      'Descanso': '6d1f2f1b-04ef-497e-97b7-8077ff3b3c69', // Alias para Sueño
+      'General': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Fallback a Alimentación
+    };
+    
+    return categoryMap[categoryName] ?? 'b0231bea-a750-4984-97d8-8ccb3a2bae1c'; // Fallback a Alimentación
+  }
 }

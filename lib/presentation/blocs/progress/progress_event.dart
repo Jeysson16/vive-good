@@ -51,3 +51,29 @@ class LoadUserStreak extends ProgressEvent {
   @override
   List<Object?> get props => [userId];
 }
+
+/// Cargar datos de evolución mensual (series y indicadores)
+class LoadMonthlyProgress extends ProgressEvent {
+  final String userId;
+
+  const LoadMonthlyProgress({required this.userId});
+
+  @override
+  List<Object?> get props => [userId];
+}
+
+/// Cargar datos de evolución mensual para un mes específico
+class LoadMonthlyProgressForDate extends ProgressEvent {
+  final String userId;
+  final int year;
+  final int month;
+
+  const LoadMonthlyProgressForDate({
+    required this.userId,
+    required this.year,
+    required this.month,
+  });
+
+  @override
+  List<Object?> get props => [userId, year, month];
+}

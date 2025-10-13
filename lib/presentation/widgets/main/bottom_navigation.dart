@@ -140,12 +140,14 @@ class MainBottomNavigation extends StatelessWidget {
     required bool isSelected,
   }) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () {
         // Usar el sistema de índices normal para todos los botones
         onTap(index);
       },
       child: SizedBox(
         width: 60, // Ancho fijo para cada item
+        height: 46, // Altura para cubrir toda el área útil dentro del bar
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,

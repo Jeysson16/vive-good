@@ -321,4 +321,34 @@ class CompleteChatSession extends AssistantEvent {
   List<Object?> get props => [sessionId, userId];
 }
 
+// Eventos de TTS
+class ToggleTTS extends AssistantEvent {
+  const ToggleTTS();
+}
+
+class MuteTTS extends AssistantEvent {
+  const MuteTTS();
+}
+
+class UnmuteTTS extends AssistantEvent {
+  const UnmuteTTS();
+}
+
+class StopCurrentTTS extends AssistantEvent {
+  const StopCurrentTTS();
+}
+
+class RestartTTS extends AssistantEvent {
+  final String content;
+  
+  const RestartTTS({required this.content});
+  
+  @override
+  List<Object?> get props => [content];
+}
+
+class ResetToInitialView extends AssistantEvent {
+  const ResetToInitialView();
+}
+
 // VoiceAnimationState se define en domain/entities/assistant/voice_animation_state.dart

@@ -13,98 +13,118 @@ class NotificationLogModel extends NotificationLog {
   
   @HiveField(1)
   @override
-  final String notificationId;
+  final String notificationScheduleId;
   
   @HiveField(2)
   @override
-  final String action;
+  final DateTime scheduledFor;
   
   @HiveField(3)
   @override
-  final DateTime timestamp;
+  final DateTime? sentAt;
   
   @HiveField(4)
   @override
-  final String? details;
+  final NotificationStatus status;
   
   @HiveField(5)
   @override
-  final String? errorMessage;
+  final NotificationAction? actionTaken;
+  
+  @HiveField(6)
+  @override
+  final DateTime createdAt;
 
   const NotificationLogModel({
     required this.id,
-    required this.notificationId,
-    required this.action,
-    required this.timestamp,
-    this.details,
-    this.errorMessage,
+    required this.notificationScheduleId,
+    required this.scheduledFor,
+    this.sentAt,
+    required this.status,
+    this.actionTaken,
+    required this.createdAt,
   }) : super(
           id: id,
-          notificationId: notificationId,
-          action: action,
-          timestamp: timestamp,
-          details: details,
-          errorMessage: errorMessage,
+          notificationScheduleId: notificationScheduleId,
+          scheduledFor: scheduledFor,
+          sentAt: sentAt,
+          status: status,
+          actionTaken: actionTaken,
+          createdAt: createdAt,
         );
 
   factory NotificationLogModel.fromEntity(NotificationLog log) {
     return NotificationLogModel(
       id: log.id,
-      notificationId: log.notificationId,
-      action: log.action,
-      timestamp: log.timestamp,
-      details: log.details,
-      errorMessage: log.errorMessage,
+      notificationScheduleId: log.notificationScheduleId,
+      scheduledFor: log.scheduledFor,
+      sentAt: log.sentAt,
+      status: log.status,
+      actionTaken: log.actionTaken,
+      createdAt: log.createdAt,
     );
   }
 
   factory NotificationLogModel.fromJson(Map<String, dynamic> json) {
     return NotificationLogModel(
       id: json['id'] as String,
-      notificationId: json['notificationId'] as String,
-      action: json['action'] as String,
-      timestamp: DateTime.parse(json['timestamp'] as String),
-      details: json['details'] as String?,
-      errorMessage: json['errorMessage'] as String?,
+      notificationScheduleId: json['notification_schedule_id'] as String,
+      scheduledFor: DateTime.parse(json['scheduled_for'] as String),
+      sentAt: json['sent_at'] != null ? DateTime.parse(json['sent_at'] as String) : null,
+      status: NotificationStatus.values.firstWhere(
+        (e) => e.name == json['status'],
+        orElse: () => NotificationStatus.scheduled,
+      ),
+      actionTaken: json['action_taken'] != null 
+        ? NotificationAction.values.firstWhere(
+            (e) => e.name == json['action_taken'],
+            orElse: () => NotificationAction.ignored,
+          )
+        : null,
+      createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'notificationId': notificationId,
-      'action': action,
-      'timestamp': timestamp.toIso8601String(),
-      'details': details,
-      'errorMessage': errorMessage,
+      'notification_schedule_id': notificationScheduleId,
+      'scheduled_for': scheduledFor.toIso8601String(),
+      'sent_at': sentAt?.toIso8601String(),
+      'status': status.name,
+      'action_taken': actionTaken?.name,
+      'created_at': createdAt.toIso8601String(),
     };
   }
 
   NotificationLogModel copyWith({
     String? id,
-    String? notificationId,
-    String? action,
-    DateTime? timestamp,
-    String? details,
-    String? errorMessage,
+    String? notificationScheduleId,
+    DateTime? scheduledFor,
+    DateTime? sentAt,
+    NotificationStatus? status,
+    NotificationAction? actionTaken,
+    DateTime? createdAt,
   }) {
     return NotificationLogModel(
       id: id ?? this.id,
-      notificationId: notificationId ?? this.notificationId,
-      action: action ?? this.action,
-      timestamp: timestamp ?? this.timestamp,
-      details: details ?? this.details,
-      errorMessage: errorMessage ?? this.errorMessage,
+      notificationScheduleId: notificationScheduleId ?? this.notificationScheduleId,
+      scheduledFor: scheduledFor ?? this.scheduledFor,
+      sentAt: sentAt ?? this.sentAt,
+      status: status ?? this.status,
+      actionTaken: actionTaken ?? this.actionTaken,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
   @override
   List<Object?> get props => [
         id,
-        notificationId,
-        action,
-        timestamp,
-        details,
-        errorMessage,
+        notificationScheduleId,
+        scheduledFor,
+        sentAt,
+        status,
+        actionTaken,
+        createdAt,
       ];
 }

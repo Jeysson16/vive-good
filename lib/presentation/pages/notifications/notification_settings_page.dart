@@ -161,19 +161,21 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             SwitchListTile(
               title: const Text('Notificaciones Habilitadas'),
               subtitle: const Text('Recibir recordatorios de hábitos'),
-              value: settings?.notificationsEnabled ?? true,
+              value: settings?.globalNotificationsEnabled ?? true,
               onChanged: (value) {
                 _notificationBloc.add(
                   UpdateNotificationSettings(
-                    settings?.copyWith(notificationsEnabled: value) ??
+                    settings?.copyWith(globalNotificationsEnabled: value) ??
                         NotificationSettings(
                           userId: widget.userId,
-                          notificationsEnabled: value,
-                          quietHoursEnabled: false,
-                          quietHoursStart: const TimeOfDay(hour: 22, minute: 0),
-                          quietHoursEnd: const TimeOfDay(hour: 8, minute: 0),
+                          globalNotificationsEnabled: value,
+                          permissionsGranted: false,
+                          quietHoursStart: '22:00',
+                          quietHoursEnd: '08:00',
                           maxSnoozeCount: 3,
                           defaultSnoozeMinutes: 5,
+                          defaultNotificationSound: 'default',
+                          updatedAt: DateTime.now(),
                         ),
                   ),
                 );
@@ -203,37 +205,39 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             SwitchListTile(
               title: const Text('Habilitar Horas de Silencio'),
               subtitle: const Text('No recibir notificaciones durante estas horas'),
-              value: settings?.quietHoursEnabled ?? false,
+              value: (settings?.quietHoursStart != null && settings?.quietHoursEnd != null),
               onChanged: (value) {
                 _notificationBloc.add(
                   UpdateNotificationSettings(
-                    settings?.copyWith(quietHoursEnabled: value) ??
+                    settings?.copyWith(quietHoursStart: value ? '22:00' : null, quietHoursEnd: value ? '08:00' : null) ??
                         NotificationSettings(
                           userId: widget.userId,
-                          notificationsEnabled: true,
-                          quietHoursEnabled: value,
-                          quietHoursStart: const TimeOfDay(hour: 22, minute: 0),
-                          quietHoursEnd: const TimeOfDay(hour: 8, minute: 0),
+                          globalNotificationsEnabled: true,
+                          permissionsGranted: false,
+                          quietHoursStart: value ? '22:00' : null,
+                          quietHoursEnd: value ? '08:00' : null,
                           maxSnoozeCount: 3,
                           defaultSnoozeMinutes: 5,
+                          defaultNotificationSound: 'default',
+                          updatedAt: DateTime.now(),
                         ),
                   ),
                 );
               },
             ),
-            if (settings?.quietHoursEnabled == true) ...[
+            if (settings?.quietHoursStart != null && settings?.quietHoursEnd != null) ...[
               const SizedBox(height: 16),
               ListTile(
                 title: const Text('Hora de Inicio'),
-                subtitle: Text(_formatTimeOfDay(settings!.quietHoursStart)),
+                subtitle: Text(_formatTimeString(settings!.quietHoursStart)),
                 trailing: const Icon(Icons.access_time),
                 onTap: () => _selectTime(
                   context,
-                  settings.quietHoursStart,
+                  _parseTimeString(settings.quietHoursStart),
                   (time) {
                     _notificationBloc.add(
                       UpdateNotificationSettings(
-                        settings.copyWith(quietHoursStart: time),
+                        settings.copyWith(quietHoursStart: _timeOfDayToString(time)),
                       ),
                     );
                   },
@@ -241,15 +245,15 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
               ),
               ListTile(
                 title: const Text('Hora de Fin'),
-                subtitle: Text(_formatTimeOfDay(settings.quietHoursEnd)),
+                subtitle: Text(_formatTimeString(settings.quietHoursEnd)),
                 trailing: const Icon(Icons.access_time),
                 onTap: () => _selectTime(
                   context,
-                  settings.quietHoursEnd,
+                  _parseTimeString(settings.quietHoursEnd),
                   (time) {
                     _notificationBloc.add(
                       UpdateNotificationSettings(
-                        settings.copyWith(quietHoursEnd: time),
+                        settings.copyWith(quietHoursEnd: _timeOfDayToString(time)),
                       ),
                     );
                   },
@@ -301,6 +305,26 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     return '$hour:$minute';
   }
 
+  String _formatTimeString(String? timeString) {
+    if (timeString == null) return '--:--';
+    return timeString;
+  }
+
+  TimeOfDay _parseTimeString(String? timeString) {
+    if (timeString == null) return const TimeOfDay(hour: 22, minute: 0);
+    final parts = timeString.split(':');
+    if (parts.length != 2) return const TimeOfDay(hour: 22, minute: 0);
+    final hour = int.tryParse(parts[0]) ?? 22;
+    final minute = int.tryParse(parts[1]) ?? 0;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  String _timeOfDayToString(TimeOfDay time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
   Future<void> _selectTime(
     BuildContext context,
     TimeOfDay initialTime,
@@ -334,12 +358,14 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                       settings?.copyWith(maxSnoozeCount: value) ??
                           NotificationSettings(
                             userId: widget.userId,
-                            notificationsEnabled: true,
-                            quietHoursEnabled: false,
-                            quietHoursStart: const TimeOfDay(hour: 22, minute: 0),
-                            quietHoursEnd: const TimeOfDay(hour: 8, minute: 0),
+                            globalNotificationsEnabled: true,
+                            permissionsGranted: false,
+                            quietHoursStart: '22:00',
+                            quietHoursEnd: '08:00',
                             maxSnoozeCount: value,
                             defaultSnoozeMinutes: 5,
+                            defaultNotificationSound: 'default',
+                            updatedAt: DateTime.now(),
                           ),
                     ),
                   );
@@ -373,10 +399,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                           NotificationSettings(
                             userId: widget.userId,
                             globalNotificationsEnabled: true,
+                            permissionsGranted: false,
                             quietHoursStart: '22:00',
                             quietHoursEnd: '08:00',
                             maxSnoozeCount: 3,
                             defaultSnoozeMinutes: value,
+                            defaultNotificationSound: 'default',
                             updatedAt: DateTime.now(),
                           ),
                     ),

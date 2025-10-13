@@ -83,10 +83,13 @@ class _ChatHistoryPageState extends State<ChatHistoryPage> {
   }
 
   void _navigateToChat(ChatSession session) {
-    Navigator.of(context).push(
+    Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (context) => ChatConversationPage(
-          sessionId: session.id,
+        builder: (context) => BlocProvider.value(
+          value: context.read<ChatBloc>(),
+          child: ChatConversationPage(
+            sessionId: session.id,
+          ),
         ),
       ),
     );

@@ -36,7 +36,7 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
       throw Exception('GOOGLE_API_KEY is not configured');
     }
 
-    _model = GenerativeModel(model: 'gemini-2.0-flash-exp', apiKey: finalApiKey);
+    _model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: finalApiKey);
   }
 
   @override

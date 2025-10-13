@@ -24,10 +24,15 @@ import 'package:vive_good_app/presentation/blocs/notification/notification_bloc.
 
 import '../../core/network/network_info.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
+import '../../data/datasources/auth_custom_remote_datasource.dart';
 import '../../data/datasources/chat_remote_datasource.dart';
 import '../../data/datasources/habit_local_datasource.dart';
 import '../../data/datasources/habit_remote_datasource.dart';
 import '../../data/datasources/local/database_helper.dart';
+// Deep Learning imports
+import '../../data/datasources/assistant/deep_learning_datasource.dart';
+import '../../data/datasources/auth/deep_learning_auth_datasource.dart';
+import '../../data/repositories/auth/deep_learning_auth_repository.dart';
 import '../../data/datasources/local_database_service.dart';
 
 import '../../data/datasources/onboarding_local_data_source.dart';
@@ -80,13 +85,17 @@ import '../../domain/usecases/calendar/mark_event_completed.dart';
 import '../../domain/usecases/get_daily_week_progress.dart';
 import '../../domain/usecases/get_user_progress.dart';
 import '../../domain/usecases/get_user_streak.dart';
+import '../../domain/usecases/get_monthly_progress.dart';
+import '../../domain/usecases/get_monthly_indicators.dart';
 import '../../domain/usecases/habit/add_habit_usecase.dart';
 import '../../domain/usecases/habit/delete_habit_usecase.dart';
 import '../../domain/usecases/habit/delete_user_habit_usecase.dart';
 import '../../domain/usecases/habit/get_categories_usecase.dart';
+import '../../domain/usecases/habit/get_category_evolution_usecase.dart';
 import '../../domain/usecases/habit/get_dashboard_habits_usecase.dart';
+import '../../domain/usecases/habit/get_habit_statistics_usecase.dart';
 import '../../domain/usecases/habit/get_habit_suggestions_usecase.dart';
-import '../../domain/usecases/habit/get_monthly_habits_breakdown.dart';
+import '../../domain/usecases/get_monthly_habits_breakdown.dart';
 import '../../domain/usecases/habit/get_user_habit_by_id_usecase.dart';
 import '../../domain/usecases/habit/get_user_habits_usecase.dart';
 import '../../domain/usecases/habit/log_habit_completion_usecase.dart';
@@ -104,12 +113,15 @@ import '../../domain/usecases/user/set_first_time_user.dart';
 import '../../domain/usecases/user/set_onboarding_completed.dart';
 import '../../presentation/blocs/auth/auth_bloc.dart';
 import '../../presentation/blocs/calendar/calendar_bloc.dart';
+import '../../presentation/blocs/category_evolution/category_evolution_bloc.dart';
+import '../../presentation/blocs/chat/chat_bloc.dart';
 import '../../presentation/blocs/dashboard/dashboard_bloc.dart';
 import '../../presentation/blocs/habit/habit_bloc.dart';
 // Blocs
 import '../../presentation/blocs/habit_breakdown/habit_breakdown_bloc.dart';
-
+import '../../presentation/blocs/habit_statistics/habit_statistics_bloc.dart';
 import '../../presentation/blocs/progress/progress_bloc.dart';
+import '../../presentation/blocs/profile/profile_bloc.dart';
 
 final sl = GetIt.instance;
 
@@ -206,11 +218,17 @@ Future<void> init() async {
   );
 
   // Data sources
+  // Usar la implementación de Supabase para autenticación
   sl.registerLazySingleton<AuthRemoteDataSource>(
     () => AuthRemoteDataSourceImpl(supabaseClient: sl()),
   );
 
   //! Features - Chat
+  // Bloc
+  sl.registerFactory(
+    () => ChatBloc(chatRepository: sl()),
+  );
+
   // Repository
   sl.registerLazySingleton<ChatRepository>(
     () => ChatRepositoryImpl(remoteDataSource: sl()),
@@ -219,6 +237,31 @@ Future<void> init() async {
   // Data sources
   sl.registerLazySingleton<ChatRemoteDataSource>(
     () => ChatRemoteDataSource(sl()),
+  );
+
+  //! Features - Deep Learning
+  // Auth Repository
+  sl.registerLazySingleton<DeepLearningAuthRepositoryImpl>(
+    () => DeepLearningAuthRepositoryImpl(
+      datasource: sl(),
+    ),
+  );
+
+  // Auth Data Source
+  sl.registerLazySingleton<DeepLearningAuthDatasource>(
+    () => DeepLearningAuthDatasourceImpl(
+      client: sl(),
+      baseUrl: sl<SharedPreferences>().getString('DL_BASE_URL') ?? 'https://api.jeysson.cloud/api/v1',
+      prefs: sl(),
+    ),
+  );
+
+  // Deep Learning Data Source
+  sl.registerLazySingleton<DeepLearningDatasource>(
+    () => DeepLearningDatasource(
+      httpClient: sl(),
+      authRepository: sl(),
+    ),
   );
 
   //! Features - Notification
@@ -301,7 +344,6 @@ Future<void> init() async {
     () => DashboardBloc(
       getDashboardHabitsUseCase: sl(),
       getCategoriesUseCase: sl(),
-      logHabitCompletionUseCase: sl(),
     ),
   );
 
@@ -309,15 +351,19 @@ Future<void> init() async {
   // Bloc
   sl.registerFactory(
     () => ProgressBloc(
-      getUserProgress: sl(), 
+      getUserProgress: sl(),
       getDailyWeekProgress: sl(),
       getUserStreak: sl(),
+      getMonthlyProgress: sl(),
+      getMonthlyIndicators: sl(),
     ),
   );
 
-  //! Features - Habit Breakdown
+  //! Features - Profile
   // Bloc
-  sl.registerFactory(() => HabitBreakdownBloc(getMonthlyHabitsBreakdown: sl()));
+  sl.registerFactory(
+    () => ProfileBloc(supabaseClient: sl()),
+  );
 
   //! Features - Calendar
   // Bloc
@@ -356,6 +402,8 @@ Future<void> init() async {
   sl.registerLazySingleton(() => GetUserProgress(sl()));
   sl.registerLazySingleton(() => GetDailyWeekProgress(sl()));
   sl.registerLazySingleton(() => GetUserStreak(sl()));
+  sl.registerLazySingleton(() => GetMonthlyProgress(sl()));
+  sl.registerLazySingleton(() => GetMonthlyIndicators(sl()));
 
   // Calendar Use cases
   sl.registerLazySingleton(() => GetCalendarEvents(sl()));
@@ -388,6 +436,24 @@ Future<void> init() async {
   sl.registerLazySingleton(() => LogHabitCompletionUseCase(sl()));
   sl.registerLazySingleton(() => GetMonthlyHabitsBreakdown(sl()));
   sl.registerLazySingleton(() => UpdateUserHabitUseCase(sl()));
+  sl.registerLazySingleton(() => GetHabitStatisticsUseCase(sl()));
+  sl.registerLazySingleton(() => GetCategoryEvolutionUseCase(sl()));
+
+  //! Features - Habit Breakdown
+  // Bloc
+  sl.registerFactory(() => HabitBreakdownBloc(getMonthlyHabitsBreakdown: sl()));
+
+  //! Features - Habit Statistics
+  // Bloc
+  sl.registerFactory(
+    () => HabitStatisticsBloc(getHabitStatisticsUseCase: sl()),
+  );
+
+  //! Features - Category Evolution
+  // Bloc
+  sl.registerFactory(
+    () => CategoryEvolutionBloc(getCategoryEvolutionUseCase: sl()),
+  );
 
   // Repository
   sl.registerLazySingleton<HabitRepository>(

@@ -5,6 +5,8 @@
 *.swp
 .DS_Store
 .atom/
+.figma/
+vive_good_website/
 .build/
 .buildlog/
 .history

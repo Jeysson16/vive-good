@@ -1,13 +1,44 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
+import '../../repositories/auth/deep_learning_auth_repository.dart';
 
 class DeepLearningDatasource {
-  final String _baseUrl = 'https://homepage-focusing-lanka-describing.trycloudflare.com';
+  final String _baseUrl = 'https://api.jeysson.cloud/api/v1';
   final http.Client _httpClient;
+  final DeepLearningAuthRepositoryImpl _authRepository;
 
   DeepLearningDatasource({
     http.Client? httpClient,
-  }) : _httpClient = httpClient ?? http.Client();
+    required DeepLearningAuthRepositoryImpl authRepository,
+  }) : _httpClient = httpClient ?? http.Client(),
+       _authRepository = authRepository;
+
+  /// Obtiene headers autenticados para las peticiones
+  Future<Map<String, String>> _getAuthenticatedHeaders() async {
+    final token = await _authRepository.getValidToken();
+    
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    
+    if (token != null) {
+      headers['Authorization'] = 'Bearer $token';
+      developer.log(
+        '🔐 [DL DATASOURCE] Headers autenticados agregados',
+        name: 'DeepLearningDatasource',
+      );
+    } else {
+      developer.log(
+        '⚠️ [DL DATASOURCE] No se pudo obtener token válido',
+        name: 'DeepLearningDatasource',
+      );
+      throw Exception('No se pudo obtener token de autenticación válido');
+    }
+    
+    return headers;
+  }
 
   /// Predice el riesgo de gastritis basado en los hábitos del usuario
   Future<GastritisRiskPrediction> predictGastritisRisk({
@@ -15,26 +46,65 @@ class DeepLearningDatasource {
     required String userId,
   }) async {
     try {
+      final headers = await _getAuthenticatedHeaders();
+      final url = '$_baseUrl/predict';
+      
+      developer.log(
+        '🤖 [DL DATASOURCE] Prediciendo riesgo de gastritis...',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        '🤖 [DL DATASOURCE] URL: $url',
+        name: 'DeepLearningDatasource',
+      );
+      
+      final requestBody = {
+        'user_id': userId,
+        'habits': userHabits,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      
+      developer.log(
+        '🤖 [DL DATASOURCE] Request body: ${jsonEncode(requestBody)}',
+        name: 'DeepLearningDatasource',
+      );
+
       final response = await _httpClient.post(
-        Uri.parse('$_baseUrl/predict'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'user_id': userId,
-          'habits': userHabits,
-          'timestamp': DateTime.now().toIso8601String(),
-        }),
+        Uri.parse(url),
+        headers: headers,
+        body: jsonEncode(requestBody),
+      );
+
+      developer.log(
+        '🤖 [DL DATASOURCE] Response status: ${response.statusCode}',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        '🤖 [DL DATASOURCE] Response body: ${response.body}',
+        name: 'DeepLearningDatasource',
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        developer.log(
+          '✅ [DL DATASOURCE] Predicción exitosa',
+          name: 'DeepLearningDatasource',
+        );
         return GastritisRiskPrediction.fromJson(data);
       } else {
+        developer.log(
+          '❌ [DL DATASOURCE] Error en predicción: ${response.statusCode} - ${response.body}',
+          name: 'DeepLearningDatasource',
+        );
         throw Exception('Error en predicción: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
+      developer.log(
+        '💥 [DL DATASOURCE] Excepción en predicción: $e',
+        name: 'DeepLearningDatasource',
+      );
       throw Exception('Error al conectar con el modelo de deep learning: $e');
     }
   }
@@ -46,30 +116,69 @@ class DeepLearningDatasource {
     required double riskLevel,
   }) async {
     try {
+      final headers = await _getAuthenticatedHeaders();
+      final url = '$_baseUrl/chat/send';
+      
+      developer.log(
+        '💬 [DL DATASOURCE] Obteniendo recomendaciones de hábitos...',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        '💬 [DL DATASOURCE] URL: $url',
+        name: 'DeepLearningDatasource',
+      );
+      
+      final requestBody = {
+        'user_id': userId,
+        'current_habits': currentHabits,
+        'risk_level': riskLevel,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      
+      developer.log(
+        '💬 [DL DATASOURCE] Request body: ${jsonEncode(requestBody)}',
+        name: 'DeepLearningDatasource',
+      );
+
       final response = await _httpClient.post(
-        Uri.parse('$_baseUrl/recommendations'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'user_id': userId,
-          'current_habits': currentHabits,
-          'risk_level': riskLevel,
-          'timestamp': DateTime.now().toIso8601String(),
-        }),
+        Uri.parse(url),
+        headers: headers,
+        body: jsonEncode(requestBody),
+      );
+
+      developer.log(
+        '💬 [DL DATASOURCE] Response status: ${response.statusCode}',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        '💬 [DL DATASOURCE] Response body: ${response.body}',
+        name: 'DeepLearningDatasource',
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final recommendations = data['recommendations'] as List;
+        developer.log(
+          '✅ [DL DATASOURCE] Recomendaciones obtenidas: ${recommendations.length}',
+          name: 'DeepLearningDatasource',
+        );
         return recommendations
             .map((rec) => HabitRecommendation.fromJson(rec))
             .toList();
       } else {
+        developer.log(
+          '❌ [DL DATASOURCE] Error obteniendo recomendaciones: ${response.statusCode} - ${response.body}',
+          name: 'DeepLearningDatasource',
+        );
         throw Exception('Error obteniendo recomendaciones: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
+      developer.log(
+        '💥 [DL DATASOURCE] Excepción obteniendo recomendaciones: $e',
+        name: 'DeepLearningDatasource',
+      );
       throw Exception('Error al obtener recomendaciones: $e');
     }
   }
@@ -81,27 +190,66 @@ class DeepLearningDatasource {
     int? daysPeriod,
   }) async {
     try {
+      final headers = await _getAuthenticatedHeaders();
+      final url = '$_baseUrl/sequences/analyze';
+      
+      developer.log(
+        '📊 [DL DATASOURCE] Analizando patrones de hábitos...',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        '📊 [DL DATASOURCE] URL: $url',
+        name: 'DeepLearningDatasource',
+      );
+      
+      final requestBody = {
+        'user_id': userId,
+        'habit_history': habitHistory,
+        'days_period': daysPeriod ?? 30,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      
+      developer.log(
+        '📊 [DL DATASOURCE] Request body: ${jsonEncode(requestBody)}',
+        name: 'DeepLearningDatasource',
+      );
+
       final response = await _httpClient.post(
-        Uri.parse('$_baseUrl/analyze'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'user_id': userId,
-          'habit_history': habitHistory,
-          'days_period': daysPeriod ?? 30,
-          'timestamp': DateTime.now().toIso8601String(),
-        }),
+        Uri.parse(url),
+        headers: headers,
+        body: jsonEncode(requestBody),
+      );
+
+      developer.log(
+        '📊 [DL DATASOURCE] Response status: ${response.statusCode}',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        '📊 [DL DATASOURCE] Response body: ${response.body}',
+        name: 'DeepLearningDatasource',
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        developer.log(
+          '✅ [DL DATASOURCE] Análisis de patrones exitoso',
+          name: 'DeepLearningDatasource',
+        );
         return HabitAnalysis.fromJson(data);
       } else {
+        developer.log(
+          '❌ [DL DATASOURCE] Error en análisis: ${response.statusCode} - ${response.body}',
+          name: 'DeepLearningDatasource',
+        );
         throw Exception('Error en análisis: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
+      developer.log(
+        '💥 [DL DATASOURCE] Excepción en análisis: $e',
+        name: 'DeepLearningDatasource',
+      );
       throw Exception('Error al analizar patrones: $e');
     }
   }
@@ -109,15 +257,42 @@ class DeepLearningDatasource {
   /// Verifica el estado de salud del modelo
   Future<bool> checkModelHealth() async {
     try {
-      final response = await _httpClient.get(
-        Uri.parse('$_baseUrl/health'),
-        headers: {
-          'Accept': 'application/json',
-        },
+      final headers = await _getAuthenticatedHeaders();
+      final url = '$_baseUrl/health';
+      
+      developer.log(
+        '🏥 [DL DATASOURCE] Verificando salud del modelo...',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        '🏥 [DL DATASOURCE] URL: $url',
+        name: 'DeepLearningDatasource',
       );
 
-      return response.statusCode == 200;
+      final response = await _httpClient.get(
+        Uri.parse(url),
+        headers: headers,
+      );
+
+      developer.log(
+        '🏥 [DL DATASOURCE] Response status: ${response.statusCode}',
+        name: 'DeepLearningDatasource',
+      );
+
+      final isHealthy = response.statusCode == 200;
+      
+      developer.log(
+        '🏥 [DL DATASOURCE] Modelo saludable: $isHealthy',
+        name: 'DeepLearningDatasource',
+      );
+
+      return isHealthy;
     } catch (e) {
+      developer.log(
+        '💥 [DL DATASOURCE] Error verificando salud: $e',
+        name: 'DeepLearningDatasource',
+      );
       return false;
     }
   }
@@ -125,20 +300,53 @@ class DeepLearningDatasource {
   /// Obtiene información del modelo
   Future<ModelInfo> getModelInfo() async {
     try {
+      final headers = await _getAuthenticatedHeaders();
+      final url = '$_baseUrl/health';
+      
+      developer.log(
+        'ℹ️ [DL DATASOURCE] Obteniendo información del modelo...',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        'ℹ️ [DL DATASOURCE] URL: $url',
+        name: 'DeepLearningDatasource',
+      );
+
       final response = await _httpClient.get(
-        Uri.parse('$_baseUrl/info'),
-        headers: {
-          'Accept': 'application/json',
-        },
+        Uri.parse(url),
+        headers: headers,
+      );
+
+      developer.log(
+        'ℹ️ [DL DATASOURCE] Response status: ${response.statusCode}',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        'ℹ️ [DL DATASOURCE] Response body: ${response.body}',
+        name: 'DeepLearningDatasource',
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        developer.log(
+          '✅ [DL DATASOURCE] Información del modelo obtenida',
+          name: 'DeepLearningDatasource',
+        );
         return ModelInfo.fromJson(data);
       } else {
+        developer.log(
+          '❌ [DL DATASOURCE] Error obteniendo info del modelo: ${response.statusCode}',
+          name: 'DeepLearningDatasource',
+        );
         throw Exception('Error obteniendo info del modelo: ${response.statusCode}');
       }
     } catch (e) {
+      developer.log(
+        '💥 [DL DATASOURCE] Excepción obteniendo info del modelo: $e',
+        name: 'DeepLearningDatasource',
+      );
       throw Exception('Error al obtener información del modelo: $e');
     }
   }

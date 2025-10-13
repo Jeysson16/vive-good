@@ -31,15 +31,22 @@ class CompactHabitItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final habitName = habit.name.isNotEmpty ? habit.name : (userHabit.customName ?? 'Hábito');
-    
+    print(
+      '🔍 COMPACT HABIT ITEM - habit.iconName: ${habit.iconName}, habit.iconColor: ${habit.iconColor}',
+    );
+    final habitName = habit.name.isNotEmpty
+        ? habit.name
+        : (userHabit.customName ?? 'Hábito');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isCompleted ? const Color(0xFF10B981) : const Color(0xFFE5E7EB),
+          color: isCompleted
+              ? const Color(0xFF10B981)
+              : const Color(0xFFE5E7EB),
           width: 1,
         ),
         boxShadow: [
@@ -59,23 +66,50 @@ class CompactHabitItem extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Category icon
+                // Habit icon (usando icono específico del hábito)
                 Container(
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: _getIconColor(category.color).withOpacity(0.1),
+                    color: _getCategoryColor().withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(
-                    _getIconData(category.iconName),
-                    color: _getIconColor(category.color),
-                    size: 20,
+                  child: Builder(
+                    builder: (context) {
+                      // Priorizar icono de categoría sobre icono individual (igual que habit_item.dart)
+                      final categoryIconName = category.iconName;
+                      final habitIconName = habit.iconName;
+                      final finalIconName =
+                          categoryIconName ?? habitIconName ?? 'star';
+
+                      print(
+                        '🔍 DEBUG COMPACT HABIT ITEM - habit.name: "${habit.name}"',
+                      ); // CATEGORY PRIORITY FIXED
+                      print(
+                        '🔍 DEBUG COMPACT HABIT ITEM - category.iconName: "$categoryIconName"',
+                      );
+                      print(
+                        '🔍 DEBUG COMPACT HABIT ITEM - habit.iconName: "$habitIconName"',
+                      );
+                      print(
+                        '🔍 DEBUG COMPACT HABIT ITEM - finalIconName usado: "$finalIconName"',
+                      );
+
+                      final iconData = _getIconData(finalIconName);
+                      print(
+                        '🔍 DEBUG COMPACT HABIT ITEM - iconData result: $iconData',
+                      );
+                      return Icon(
+                        iconData,
+                        color: _getCategoryColor(),
+                        size: 20,
+                      );
+                    },
                   ),
                 ),
-                
+
                 const SizedBox(width: 12),
-                
+
                 // Habit info
                 Expanded(
                   child: Column(
@@ -86,8 +120,12 @@ class CompactHabitItem extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: isCompleted ? const Color(0xFF10B981) : const Color(0xFF1F2937),
-                          decoration: isCompleted ? TextDecoration.lineThrough : null,
+                          color: isCompleted
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFF1F2937),
+                          decoration: isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -107,9 +145,9 @@ class CompactHabitItem extends StatelessWidget {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(width: 8),
-                
+
                 // Completion status
                 if (isCompleted)
                   Container(
@@ -124,9 +162,11 @@ class CompactHabitItem extends StatelessWidget {
                       size: 16,
                     ),
                   ),
-                
+
                 // Action menu (three dots)
-                if (onEdit != null || onViewProgress != null || onDelete != null)
+                if (onEdit != null ||
+                    onViewProgress != null ||
+                    onDelete != null)
                   PopupMenuButton<String>(
                     icon: Icon(
                       Icons.more_vert,
@@ -158,7 +198,11 @@ class CompactHabitItem extends StatelessWidget {
                           value: 'edit',
                           child: Row(
                             children: [
-                              Icon(Icons.edit, size: 18, color: Color(0xFF6B7280)),
+                              Icon(
+                                Icons.edit,
+                                size: 18,
+                                color: Color(0xFF6B7280),
+                              ),
                               SizedBox(width: 12),
                               Text('Editar hábito'),
                             ],
@@ -169,7 +213,11 @@ class CompactHabitItem extends StatelessWidget {
                           value: 'progress',
                           child: Row(
                             children: [
-                              Icon(Icons.analytics, size: 18, color: Color(0xFF3B82F6)),
+                              Icon(
+                                Icons.analytics,
+                                size: 18,
+                                color: Color(0xFF3B82F6),
+                              ),
                               SizedBox(width: 12),
                               Text('Ver progreso'),
                             ],
@@ -180,7 +228,11 @@ class CompactHabitItem extends StatelessWidget {
                           value: 'delete',
                           child: Row(
                             children: [
-                              Icon(Icons.delete, size: 18, color: Color(0xFFEF4444)),
+                              Icon(
+                                Icons.delete,
+                                size: 18,
+                                color: Color(0xFFEF4444),
+                              ),
                               SizedBox(width: 12),
                               Text('Eliminar hábito'),
                             ],
@@ -204,30 +256,102 @@ class CompactHabitItem extends StatelessWidget {
     }
   }
 
+  Color _getCategoryColor() {
+    try {
+      return Color(int.parse(category.color.replaceFirst('#', '0xFF')));
+    } catch (e) {
+      return const Color(0xFF6B7280);
+    }
+  }
+
   IconData _getIconData(String iconName) {
-    switch (iconName) {
-      case 'fitness_center':
-        return Icons.fitness_center;
+    // Map icon names to Flutter icons - prioritizing category icons
+    switch (iconName.toLowerCase()) {
+      // Iconos de las categorías principales
+      case 'utensils':
       case 'restaurant':
+      case 'food':
         return Icons.restaurant;
-      case 'local_drink':
-        return Icons.local_drink;
+      case 'activity':
+      case 'fitness_center':
+      case 'exercise':
+        return Icons.fitness_center;
+      case 'moon':
+      case 'bed':
+      case 'sleep':
       case 'bedtime':
         return Icons.bedtime;
+      case 'droplet':
+      case 'water_drop':
+      case 'water':
+      case 'local_drink':
+        return Icons.local_drink; // Usar local_drink específicamente
+      // Iconos específicos de la base de datos
+      case 'apple':
+        return Icons.apple;
+      case 'directions_walk':
+        return Icons.directions_walk;
+      case 'accessibility_new':
+        return Icons.accessibility_new;
+      case 'phone_iphone':
+        return Icons.phone_iphone;
+      case 'edit':
+        return Icons.edit;
+      case 'menu_book':
+        return Icons.menu_book;
+      case 'event_note':
+        return Icons.event_note;
+      case 'brain':
+      case 'psychology':
+      case 'mental':
+        return Icons.psychology;
+      case 'target':
+      case 'track_changes':
+      case 'productivity':
+        return Icons.track_changes;
+      // Iconos adicionales
       case 'book':
         return Icons.book;
       case 'work':
+      case 'business':
         return Icons.work;
+      case 'school':
+      case 'education':
+        return Icons.school;
+      case 'person':
+      case 'personal':
+        return Icons.person;
+      case 'home':
+      case 'house':
+        return Icons.home;
+      case 'people':
+      case 'social':
+        return Icons.people;
+      case 'palette':
+      case 'creative':
+        return Icons.palette;
+      case 'spiritual':
+        return Icons.self_improvement;
+      case 'movie':
+      case 'entertainment':
+        return Icons.movie;
+      case 'attach_money':
+      case 'money':
+      case 'finance':
+        return Icons.attach_money;
+      case 'fastfood':
+        return Icons.fastfood;
       case 'family_restroom':
         return Icons.family_restroom;
       case 'self_improvement':
         return Icons.self_improvement;
-      case 'psychology':
-        return Icons.psychology;
       case 'favorite':
+      case 'heart':
         return Icons.favorite;
+      case 'general':
+        return Icons.track_changes;
       default:
-        return Icons.check_circle_outline;
+        return Icons.star; // Cambiar de check_circle_outline a star
     }
   }
 }

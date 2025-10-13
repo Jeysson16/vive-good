@@ -34,7 +34,7 @@ class AIAdviceModel extends AIAdvice {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'user_id': userId,
+      'user_id': (userId.isNotEmpty) ? userId : null,
       'habit_name': habitName,
       'habit_category': habitCategory,
       'advice_text': adviceText,

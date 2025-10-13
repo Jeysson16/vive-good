@@ -104,10 +104,20 @@ class _TypingIndicatorWidgetState extends State<TypingIndicatorWidget>
         ),
         borderRadius: BorderRadius.circular(18),
       ),
-      child: const Icon(
-        Icons.smart_toy,
-        color: Colors.white,
-        size: 20,
+      child: Padding(
+        padding: const EdgeInsets.all(6.0),
+        child: Image.asset(
+          'assets/images/logo.png',
+          fit: BoxFit.contain,
+          color: Colors.white,
+          errorBuilder: (context, error, stackTrace) {
+            return const Icon(
+              Icons.psychology,
+              color: Colors.white,
+              size: 20,
+            );
+          },
+        ),
       ),
     );
   }
@@ -175,10 +185,20 @@ class SimpleTypingIndicatorWidget extends StatelessWidget {
             ),
             borderRadius: BorderRadius.circular(18),
           ),
-          child: const Icon(
-            Icons.smart_toy,
-            color: Colors.white,
-            size: 20,
+          child: Padding(
+            padding: const EdgeInsets.all(6.0),
+            child: Image.asset(
+              'assets/images/logo.png',
+              fit: BoxFit.contain,
+              color: Colors.white,
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(
+                  Icons.psychology,
+                  color: Colors.white,
+                  size: 20,
+                );
+              },
+            ),
           ),
         ),
         

@@ -46,7 +46,8 @@ class User extends Equatable {
       name: name ?? this.name,
       email: email ?? this.email,
       isFirstTime: isFirstTime ?? this.isFirstTime,
-      hasCompletedOnboarding: hasCompletedOnboarding ?? this.hasCompletedOnboarding,
+      hasCompletedOnboarding:
+          hasCompletedOnboarding ?? this.hasCompletedOnboarding,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
       role: role ?? this.role,
@@ -60,16 +61,16 @@ class User extends Equatable {
 
   @override
   List<Object?> get props => [
-        id,
-        name,
-        email,
-        isFirstTime,
-        hasCompletedOnboarding,
-        firstName,
-        lastName,
-        role,
-        avatarUrl,
-        createdAt,
-        updatedAt,
-      ];
+    id,
+    name,
+    email,
+    isFirstTime,
+    hasCompletedOnboarding,
+    firstName,
+    lastName,
+    role,
+    avatarUrl,
+    createdAt,
+    updatedAt,
+  ];
 }

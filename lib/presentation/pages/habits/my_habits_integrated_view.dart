@@ -25,7 +25,8 @@ class MyHabitsIntegratedView extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onHabitCreated;
 
-  const MyHabitsIntegratedView({Key? key, this.onBack, this.onHabitCreated}) : super(key: key);
+  const MyHabitsIntegratedView({Key? key, this.onBack, this.onHabitCreated})
+    : super(key: key);
 
   @override
   State<MyHabitsIntegratedView> createState() => _MyHabitsIntegratedViewState();
@@ -47,7 +48,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   int _currentSuggestionIndex = 0;
   late AnimationController _bounceAnimationController;
   late Animation<double> _bounceAnimation;
-  
+
   // Nuevas variables para filtros expandidos
   String? selectedFrequency;
   String? selectedCompletionStatus; // 'completed', 'pending', null (todos)
@@ -56,6 +57,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
 
   @override
   void initState() {
+    print('🔍 INICIALIZANDO MIS HÁBITOS - initState() llamado');
     super.initState();
     _suggestionsAnimationController = AnimationController(
       duration: const Duration(milliseconds: 300),
@@ -111,13 +113,12 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     try {
       final userId = await _tryGetUserIdFromSupabase();
       if (userId != null) {
-        // Load user habits and categories only once
-        context.read<HabitBloc>().add(LoadUserHabits(userId: userId));
+        // Use RefreshUserHabits to force reload after habit creation
+        context.read<HabitBloc>().add(RefreshUserHabits(userId: userId));
         context.read<HabitBloc>().add(LoadCategories());
         // Cargar sugerencias una sola vez
         await _initializeSuggestionCategory();
-      } else {
-      }
+      } else {}
     } catch (e) {
     } finally {
       setState(() {
@@ -223,6 +224,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
 
   @override
   Widget build(BuildContext context) {
+    print('🔍 CONSTRUYENDO MIS HÁBITOS - build() llamado');
     return BlocProvider(
       create: (context) =>
           CategoryScrollBloc()..add(InitializeCategoryScroll()),
@@ -248,8 +250,6 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         },
         child: Column(
           children: [
-            // Offline banner at the top
-            const OfflineBanner(),
             // Main content
             Expanded(
               child: Container(
@@ -458,7 +458,6 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       _hasUserInteracted = true; // Marcar que el usuario ha interactuado
     });
 
-
     if (isSuggestionsExpanded) {
       _suggestionsAnimationController.forward().then((_) {
         // Activar animación de rebote después de expandir
@@ -466,12 +465,12 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         _bounceAnimationController.forward();
       });
     } else {
-      _suggestionsAnimationController.reverse().then((_) {
-      });
+      _suggestionsAnimationController.reverse().then((_) {});
     }
   }
 
   Widget _buildMyHabitsView() {
+    print('🔍 CONSTRUYENDO VISTA HÁBITOS - _buildMyHabitsView() llamado');
     return BlocBuilder<HabitBloc, HabitState>(
       builder: (context, habitState) {
         if (habitState is HabitLoaded) {
@@ -488,7 +487,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                 selectedCategoryId: selectedCategoryId,
                 onCategoryChanged: _onCategorySelected,
                 onHabitToggle: (userHabit) {
-                  // Implementar toggle de hábito
+                  _toggleHabitCompletion(userHabit);
                 },
                 onEdit: (userHabit) {
                   _handleHabitAction('edit', userHabit);
@@ -552,6 +551,23 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   }
 
   Widget _buildSuggestionItem(Habit habit) {
+    // Obtener información de la categoría para usar su icono
+    final habitState = context.read<HabitBloc>().state;
+    String categoryName = 'General';
+    Category? category;
+    if (habitState is HabitLoaded) {
+      category = habitState.categories.cast<Category?>().firstWhere(
+        (cat) => cat?.id == habit.categoryId,
+        orElse: () => null,
+      );
+      if (category != null) {
+        categoryName = category.name;
+      }
+    }
+    
+    final categoryIcon = _getIconForCategory(categoryName, category: category);
+    final categoryColor = _getColorForCategory(categoryName, category: category);
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
@@ -573,12 +589,12 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: _getIconColor(habit.iconColor).withOpacity(0.1),
+              color: categoryColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(
-              _getIconData(habit.iconName),
-              color: _getIconColor(habit.iconColor),
+              categoryIcon,
+              color: categoryColor,
               size: 26,
             ),
           ),
@@ -632,6 +648,23 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   }
 
   Widget _buildCompactSuggestionItem(Habit habit) {
+    // Obtener información de la categoría para usar su icono
+    final habitState = context.read<HabitBloc>().state;
+    String categoryName = 'General';
+    Category? category;
+    if (habitState is HabitLoaded) {
+      category = habitState.categories.cast<Category?>().firstWhere(
+        (cat) => cat?.id == habit.categoryId,
+        orElse: () => null,
+      );
+      if (category != null) {
+        categoryName = category.name;
+      }
+    }
+    
+    final categoryIcon = _getIconForCategory(categoryName, category: category);
+    final categoryColor = _getColorForCategory(categoryName, category: category);
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -646,12 +679,12 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: _getIconColor(habit.iconColor).withOpacity(0.1),
+              color: categoryColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Icon(
-              _getIconData(habit.iconName),
-              color: _getIconColor(habit.iconColor),
+              categoryIcon,
+              color: categoryColor,
               size: 16,
             ),
           ),
@@ -697,13 +730,18 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     List<Habit> habits,
     List<Category> categories,
   ) {
-    final habit = habits.firstWhere(
+    // Usar userHabit.habit directamente si está disponible (viene del stored procedure con iconos correctos)
+    // Solo usar fallback si userHabit.habit es null
+    // Esto asegura que los iconos como 'local_drink' se muestren correctamente
+    final habit = userHabit.habit ?? habits.firstWhere(
       (h) => h.id == userHabit.habitId,
       orElse: () => Habit(
         id: 'fallback',
-        name: 'Hábito no encontrado',
-        description: '',
+        name: userHabit.customName ?? 'Hábito no encontrado',
+        description: userHabit.customDescription ?? '',
         categoryId: userHabit.habitId != null ? 'fallback' : userHabit.id,
+        iconName: 'star', // Fallback icon
+        iconColor: '#6B7280', // Fallback color
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       ),
@@ -718,6 +756,17 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         iconName: 'help_outline',
       ),
     );
+
+    // DEBUG: Logs para diagnosticar problema de iconos
+    print('🔍 DEBUG MIS HÁBITOS - Hábito: ${habit.name}');
+    print('🔍 DEBUG userHabit.habit es null: ${userHabit.habit == null}');
+    print('🔍 DEBUG habit.iconName: ${habit.iconName}');
+    print('🔍 DEBUG habit.iconColor: ${habit.iconColor}');
+    print('🔍 DEBUG userHabit.habit?.iconName: ${userHabit.habit?.iconName}');
+    print('🔍 DEBUG userHabit.habit?.iconColor: ${userHabit.habit?.iconColor}');
+    print('🔍 DEBUG category.name: ${category.name}');
+    print('🔍 DEBUG category.iconName: ${category.iconName}');
+    print('🔍 DEBUG ========================================== COMPLETADO CALCULADO');
 
     return HabitItem(
       userHabit: userHabit,
@@ -837,10 +886,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => NewHabitScreen(
-          isEditMode: true,
-          userHabitToEdit: userHabit,
-        ),
+        builder: (context) =>
+            NewHabitScreen(isEditMode: true, userHabitToEdit: userHabit),
       ),
     ).then((result) {
       // Recargar datos después de editar
@@ -855,16 +902,14 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   void _navigateToHabitProgress(UserHabit userHabit) {
     // Obtener el userId del usuario actual
     final userId = Supabase.instance.client.auth.currentUser?.id;
-    
+
     if (userId != null) {
       // Navegar a la pantalla de progreso del hábito específico
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => HabitProgressScreen(
-            userHabit: userHabit,
-            userId: userId,
-          ),
+          builder: (context) =>
+              HabitProgressScreen(userHabit: userHabit, userId: userId),
         ),
       );
     } else {
@@ -1277,8 +1322,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                 categoryName = category.name;
               }
 
-              final iconData = _getIconForCategory(categoryName);
-              final colorData = _getColorForCategory(categoryName);
+              final iconData = _getIconForCategory(categoryName, category: category);
+              final colorData = _getColorForCategory(categoryName, category: category);
 
               // Aplicar animación de rebote con delay escalonado
               final animationDelay = (index * 0.1).clamp(0.0, 1.0);
@@ -1424,7 +1469,9 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
             width: isActive ? 12 : 8,
             height: 8,
             decoration: BoxDecoration(
-              color: isActive ? const Color(0xFF219540) : const Color(0xFFE5E7EB),
+              color: isActive
+                  ? const Color(0xFF219540)
+                  : const Color(0xFFE5E7EB),
               borderRadius: BorderRadius.circular(4),
             ),
           );
@@ -1472,7 +1519,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                   ],
                 ),
               ),
-            
+
             // Puntos principales (máximo 5 visibles)
             ...List.generate(5, (i) {
               int actualIndex;
@@ -1483,11 +1530,11 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
               } else {
                 actualIndex = currentIndex - 2 + i;
               }
-              
+
               if (actualIndex < 0 || actualIndex >= totalSuggestions) {
                 return const SizedBox.shrink();
               }
-              
+
               final isActive = currentIndex == actualIndex;
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -1495,12 +1542,14 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
                 width: isActive ? 12 : 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: isActive ? const Color(0xFF219540) : const Color(0xFFE5E7EB),
+                  color: isActive
+                      ? const Color(0xFF219540)
+                      : const Color(0xFFE5E7EB),
                   borderRadius: BorderRadius.circular(4),
                 ),
               );
             }),
-            
+
             // Indicador de más contenido a la derecha
             if (currentIndex < totalSuggestions - 3)
               Container(
@@ -1570,8 +1619,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         return {
           'title': habit.name,
           'description': habit.description ?? 'Hábito recomendado',
-          'icon': _getIconForCategory(categoryName),
-          'color': _getColorForCategory(categoryName),
+          'icon': _getIconForCategory(categoryName, category: category),
+          'color': _getColorForCategory(categoryName, category: category),
           'category': categoryName,
         };
       }
@@ -1599,8 +1648,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         rejectedSuggestions.add(rejectedKey);
         await prefs.setStringList('rejected_suggestions', rejectedSuggestions);
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<List<String>> _loadRejectedSuggestions() async {
@@ -1638,7 +1686,20 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     }).toList();
   }
 
-  IconData _getIconForCategory(String categoryName) {
+  IconData _getIconForCategory(String categoryName, {Category? category}) {
+    print('🔍 DEBUG _getIconForCategory - categoryName: $categoryName');
+    print('🔍 DEBUG _getIconForCategory - category: ${category?.name}');
+    print('🔍 DEBUG _getIconForCategory - category.iconName: ${category?.iconName}');
+    
+    // Si tenemos la categoría, usar su icono de la base de datos
+    if (category?.iconName != null) {
+      final iconData = _getIconData(category!.iconName!);
+      print('🔍 DEBUG _getIconForCategory - usando icono de BD: ${category.iconName} -> $iconData');
+      return iconData;
+    }
+    
+    print('🔍 DEBUG _getIconForCategory - usando fallback para: $categoryName');
+    // Fallback a mapeo por nombre (mantener compatibilidad)
     switch (categoryName.toLowerCase()) {
       case 'alimentación':
         return Icons.restaurant;
@@ -1646,23 +1707,44 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         return Icons.fitness_center;
       case 'sueño':
         return Icons.bedtime;
+      case 'hidratación':
+        return Icons.water_drop;
       case 'bienestar mental':
         return Icons.psychology;
+      case 'productividad':
+        return Icons.track_changes;
       default:
         return Icons.star;
     }
   }
 
-  Color _getColorForCategory(String categoryName) {
+  Color _getColorForCategory(String categoryName, {Category? category}) {
+    print('🔍 DEBUG _getColorForCategory - categoryName: $categoryName');
+    print('🔍 DEBUG _getColorForCategory - category: ${category?.name}');
+    print('🔍 DEBUG _getColorForCategory - category.color: ${category?.color}');
+    
+    // Si tenemos la categoría, usar su color de la base de datos
+    if (category?.color != null) {
+      final color = _getIconColor(category!.color!);
+      print('🔍 DEBUG _getColorForCategory - usando color de BD: ${category.color} -> $color');
+      return color;
+    }
+    
+    print('🔍 DEBUG _getColorForCategory - usando fallback para: $categoryName');
+    // Fallback a mapeo por nombre (mantener compatibilidad)
     switch (categoryName.toLowerCase()) {
       case 'alimentación':
-        return const Color(0xFF10B981);
+        return const Color(0xFF4CAF50); // Verde
       case 'actividad física':
-        return const Color(0xFF3B82F6);
+        return const Color(0xFF2196F3); // Azul
       case 'sueño':
-        return const Color(0xFF8B5CF6);
+        return const Color(0xFF9C27B0); // Púrpura
+      case 'hidratación':
+        return const Color(0xFF00BCD4); // Cian
       case 'bienestar mental':
-        return const Color(0xFFEC4899);
+        return const Color(0xFFFF9800); // Naranja
+      case 'productividad':
+        return const Color(0xFF795548); // Marrón
       default:
         return const Color(0xFF6B7280);
     }
@@ -1733,7 +1815,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   Future<void> _addHabitFromSuggestion(Map<String, dynamic> suggestion) async {
     try {
       print('DEBUG: Iniciando _addHabitFromSuggestion con datos: $suggestion');
-      
+
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
         print('DEBUG: Usuario no autenticado');
@@ -1747,15 +1829,17 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       }
 
       print('DEBUG: Usuario autenticado: ${user.id}');
-      
+
       // Obtener category_id
       final categoryId = _getCategoryIdByName(suggestion['category'] as String);
-      print('DEBUG: Category ID obtenido: $categoryId para categoría: ${suggestion['category']}');
+      print(
+        'DEBUG: Category ID obtenido: $categoryId para categoría: ${suggestion['category']}',
+      );
 
       // Crear el user_habit directamente con los datos de la sugerencia
-      final userHabitData = {
+      final userHabitData = <String, dynamic>{
         'user_id': user.id,
-        'habit_id': null, // Hábito custom
+        // No incluir habit_id para hábitos custom (null causa problemas de UUID)
         'frequency': 'daily',
         'frequency_details': {'times_per_day': 1},
         'scheduled_time': '09:00:00',
@@ -1763,7 +1847,8 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         'notification_time': '09:00:00',
         'start_date': DateTime.now().toIso8601String().split('T')[0],
         'is_active': true,
-        'is_public': false, // Los hábitos desde sugerencias son privados por defecto
+        'is_public':
+            false, // Los hábitos desde sugerencias son privados por defecto
         'custom_name': suggestion['title'] as String,
         'custom_description': suggestion['description'] as String,
         'category_id': categoryId,
@@ -1772,7 +1857,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       print('DEBUG: Datos del hábito a insertar: $userHabitData');
 
       await Supabase.instance.client.from('user_habits').insert(userHabitData);
-      
+
       print('DEBUG: Hábito insertado exitosamente');
 
       if (mounted) {
@@ -1796,7 +1881,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     } catch (e, stackTrace) {
       print('DEBUG: Error en _addHabitFromSuggestion: $e');
       print('DEBUG: Stack trace: $stackTrace');
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1812,7 +1897,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     return Column(
       children: [
         const SizedBox(height: 12),
-        
+
         // Botones de acción principales
         Row(
           children: [
@@ -1891,7 +1976,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     final habitState = context.read<HabitBloc>().state;
     if (habitState is HabitLoaded) {
       final totalSuggestions = habitState.habitSuggestions.length;
-      
+
       if (_currentSuggestionIndex < totalSuggestions - 1) {
         setState(() {
           _currentSuggestionIndex++;
@@ -1921,313 +2006,323 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, modalSetState) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
+          height: MediaQuery.of(context).size.height * 0.7,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
           ),
-        ),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Filtrar Hábitos',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1F2937),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Filtro por Categoría
                     const Text(
-                      'Categoría',
+                      'Filtrar Hábitos',
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                         color: Color(0xFF1F2937),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    BlocBuilder<HabitBloc, HabitState>(
-                      builder: (context, state) {
-                        if (state is HabitLoaded) {
-                          return Column(
-                            children: [
-                              _buildFilterOption(
-                                'Todas las categorías',
-                                tempCategoryId == null,
-                                () {
-                                  modalSetState(() {
-                                    tempCategoryId = null;
-                                  });
-                                },
-                              ),
-                              ...state.categories.map(
-                                (category) => _buildFilterOption(
-                                  category.name,
-                                  tempCategoryId == category.id,
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Filtro por Categoría
+                      const Text(
+                        'Categoría',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1F2937),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      BlocBuilder<HabitBloc, HabitState>(
+                        builder: (context, state) {
+                          if (state is HabitLoaded) {
+                            return Column(
+                              children: [
+                                _buildFilterOption(
+                                  'Todas las categorías',
+                                  tempCategoryId == null,
                                   () {
                                     modalSetState(() {
-                                      tempCategoryId = category.id;
+                                      tempCategoryId = null;
                                     });
                                   },
                                 ),
-                              ),
-                            ],
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Filtro por Frecuencia
-                    const Text(
-                      'Frecuencia',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1F2937),
+                                ...state.categories.map(
+                                  (category) => _buildFilterOption(
+                                    category.name,
+                                    tempCategoryId == category.id,
+                                    () {
+                                      modalSetState(() {
+                                        tempCategoryId = category.id;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Column(
-                      children: [
-                        _buildFilterOption(
-                          'Todas las frecuencias',
-                          tempFrequency == null,
-                          () {
-                            modalSetState(() {
-                              tempFrequency = null;
-                            });
-                          },
+
+                      const SizedBox(height: 24),
+
+                      // Filtro por Frecuencia
+                      const Text(
+                        'Frecuencia',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1F2937),
                         ),
-                        _buildFilterOption(
-                          'Diario',
-                          tempFrequency == 'daily',
-                          () {
-                            modalSetState(() {
-                              tempFrequency = 'daily';
-                            });
-                          },
-                        ),
-                        _buildFilterOption(
-                          'Semanal',
-                          tempFrequency == 'weekly',
-                          () {
-                            modalSetState(() {
-                              tempFrequency = 'weekly';
-                            });
-                          },
-                        ),
-                        _buildFilterOption(
-                          'Mensual',
-                          tempFrequency == 'monthly',
-                          () {
-                            modalSetState(() {
-                              tempFrequency = 'monthly';
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Filtro por Estado de Completado
-                    const Text(
-                      'Estado de Completado',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1F2937),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Column(
-                      children: [
-                        _buildFilterOption(
-                          'Todos los estados',
-                          tempCompletionStatus == null,
-                          () {
-                            modalSetState(() {
-                              tempCompletionStatus = null;
-                            });
-                          },
-                        ),
-                        _buildFilterOption(
-                          'Completados hoy',
-                          tempCompletionStatus == 'completed',
-                          () {
-                            modalSetState(() {
-                              tempCompletionStatus = 'completed';
-                            });
-                          },
-                        ),
-                        _buildFilterOption(
-                          'Pendientes',
-                          tempCompletionStatus == 'pending',
-                          () {
-                            modalSetState(() {
-                              tempCompletionStatus = 'pending';
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Filtro por Racha Mínima
-                    const Text(
-                      'Racha Mínima',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1F2937),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                      ),
-                      child: Row(
+                      const SizedBox(height: 8),
+                      Column(
                         children: [
-                          const Icon(Icons.trending_up, color: Color(0xFF6B7280), size: 20),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                hintText: 'Ej: 5 días',
-                                border: InputBorder.none,
-                                isDense: true,
-                              ),
-                              onChanged: (value) {
-                                modalSetState(() {
-                                  tempMinStreakCount = int.tryParse(value);
-                                });
-                              },
-                            ),
+                          _buildFilterOption(
+                            'Todas las frecuencias',
+                            tempFrequency == null,
+                            () {
+                              modalSetState(() {
+                                tempFrequency = null;
+                              });
+                            },
+                          ),
+                          _buildFilterOption(
+                            'Diario',
+                            tempFrequency == 'daily',
+                            () {
+                              modalSetState(() {
+                                tempFrequency = 'daily';
+                              });
+                            },
+                          ),
+                          _buildFilterOption(
+                            'Semanal',
+                            tempFrequency == 'weekly',
+                            () {
+                              modalSetState(() {
+                                tempFrequency = 'weekly';
+                              });
+                            },
+                          ),
+                          _buildFilterOption(
+                            'Mensual',
+                            tempFrequency == 'monthly',
+                            () {
+                              modalSetState(() {
+                                tempFrequency = 'monthly';
+                              });
+                            },
                           ),
                         ],
                       ),
-                    ),
-                    // Padding inferior para evitar solapamiento con botones fijos
-                    const SizedBox(height: 100),
-                  ],
-                ),
-              ),
-            ),
-            // Botones fijos al fondo
-            SafeArea(
-              top: false,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          modalSetState(() {
-                            tempCategoryId = null;
-                            tempFrequency = null;
-                            tempCompletionStatus = null;
-                            tempMinStreakCount = null;
-                            tempScheduledTime = null;
-                          });
-                        },
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFE5E7EB)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text(
-                          'Limpiar',
-                          style: TextStyle(color: Color(0xFF6B7280)),
+
+                      const SizedBox(height: 24),
+
+                      // Filtro por Estado de Completado
+                      const Text(
+                        'Estado de Completado',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1F2937),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          // Persistir selección a estado del padre y aplicar filtros
-                          setState(() {
-                            selectedCategoryId = tempCategoryId;
-                            selectedFrequency = tempFrequency;
-                            selectedCompletionStatus = tempCompletionStatus;
-                            minStreakCount = tempMinStreakCount;
-                            selectedScheduledTime = tempScheduledTime;
-                          });
-                          _applyFilters();
-                          Navigator.pop(context);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text(
-                          'Aplicar',
-                          style: TextStyle(color: Colors.white),
+                      const SizedBox(height: 8),
+                      Column(
+                        children: [
+                          _buildFilterOption(
+                            'Todos los estados',
+                            tempCompletionStatus == null,
+                            () {
+                              modalSetState(() {
+                                tempCompletionStatus = null;
+                              });
+                            },
+                          ),
+                          _buildFilterOption(
+                            'Completados hoy',
+                            tempCompletionStatus == 'completed',
+                            () {
+                              modalSetState(() {
+                                tempCompletionStatus = 'completed';
+                              });
+                            },
+                          ),
+                          _buildFilterOption(
+                            'Pendientes',
+                            tempCompletionStatus == 'pending',
+                            () {
+                              modalSetState(() {
+                                tempCompletionStatus = 'pending';
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Filtro por Racha Mínima
+                      const Text(
+                        'Racha Mínima',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1F2937),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.trending_up,
+                              color: Color(0xFF6B7280),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextField(
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  hintText: 'Ej: 5 días',
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                ),
+                                onChanged: (value) {
+                                  modalSetState(() {
+                                    tempMinStreakCount = int.tryParse(value);
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Padding inferior para evitar solapamiento con botones fijos
+                      const SizedBox(height: 100),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+              // Botones fijos al fondo
+              SafeArea(
+                top: false,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            modalSetState(() {
+                              tempCategoryId = null;
+                              tempFrequency = null;
+                              tempCompletionStatus = null;
+                              tempMinStreakCount = null;
+                              tempScheduledTime = null;
+                            });
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFE5E7EB)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text(
+                            'Limpiar',
+                            style: TextStyle(color: Color(0xFF6B7280)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // Persistir selección a estado del padre y aplicar filtros
+                            setState(() {
+                              selectedCategoryId = tempCategoryId;
+                              selectedFrequency = tempFrequency;
+                              selectedCompletionStatus = tempCompletionStatus;
+                              minStreakCount = tempMinStreakCount;
+                              selectedScheduledTime = tempScheduledTime;
+                            });
+                            _applyFilters();
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text(
+                            'Aplicar',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 
@@ -2370,6 +2465,4 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       return const Color(0xFF6B7280);
     }
   }
-
-
 }

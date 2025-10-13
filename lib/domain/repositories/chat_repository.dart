@@ -33,6 +33,7 @@ abstract class ChatRepository {
     String sessionId,
     String content,
     MessageType messageType,
+    {Map<String, dynamic>? metadata}
   );
 
   /// Edita un mensaje existente
@@ -213,4 +214,44 @@ abstract class ChatRepository {
   /// 
   /// [sessionId] - ID de la sesión a eliminar
   Future<void> deleteChatSession(String sessionId);
+
+  /// Actualiza un mensaje de chat existente
+  /// 
+  /// [message] - Mensaje con los cambios
+  /// Retorna el mensaje actualizado
+  Future<ChatMessage> updateChatMessage(ChatMessage message);
+
+  // Métodos para feedback de mensajes
+
+  /// Envía feedback (like/dislike) para un mensaje
+  /// 
+  /// [messageId] - ID del mensaje
+  /// [userId] - ID del usuario
+  /// [feedbackType] - Tipo de feedback ('like' o 'dislike')
+  /// Retorna true si se guardó exitosamente
+  Future<bool> sendMessageFeedback({
+    required String messageId,
+    required String userId,
+    required String feedbackType,
+  });
+
+  /// Obtiene el feedback de un usuario para un mensaje específico
+  /// 
+  /// [messageId] - ID del mensaje
+  /// [userId] - ID del usuario
+  /// Retorna el tipo de feedback o null si no hay feedback
+  Future<String?> getMessageFeedback({
+    required String messageId,
+    required String userId,
+  });
+
+  /// Elimina el feedback de un usuario para un mensaje
+  /// 
+  /// [messageId] - ID del mensaje
+  /// [userId] - ID del usuario
+  /// Retorna true si se eliminó exitosamente
+  Future<bool> removeMessageFeedback({
+    required String messageId,
+    required String userId,
+  });
 }

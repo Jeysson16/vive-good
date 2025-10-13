@@ -24,14 +24,15 @@ class NotificationScheduleModelAdapter
       scheduledTime: fields[3] as String,
       isActive: fields[4] as bool,
       snoozeCount: fields[5] as int,
-      platformNotificationId: fields[6] as int,
+      lastTriggered: fields[6] as DateTime?,
+      platformNotificationId: fields[7] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, NotificationScheduleModel obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -45,6 +46,8 @@ class NotificationScheduleModelAdapter
       ..writeByte(5)
       ..write(obj.snoozeCount)
       ..writeByte(6)
+      ..write(obj.lastTriggered)
+      ..writeByte(7)
       ..write(obj.platformNotificationId);
   }
 

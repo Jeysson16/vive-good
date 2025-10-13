@@ -42,12 +42,12 @@ BEGIN
   RETURN QUERY
   SELECT 
     uh.id as user_habit_id,
-    h.id as habit_id,
-    h.name as habit_name,
-    h.description as habit_description,
-    h.icon_name as habit_icon_name,
-    h.icon_color as habit_icon_color,
-    c.id as category_id,
+    COALESCE(h.id, uh.id) as habit_id,
+    COALESCE(h.name, uh.custom_name, 'Hábito personalizado') as habit_name,
+    COALESCE(h.description, uh.custom_description, '') as habit_description,
+    COALESCE(h.icon_name, 'star') as habit_icon_name,
+    COALESCE(h.icon_color, '#6366F1') as habit_icon_color,
+    COALESCE(h.category_id, uh.category_id) as category_id,
     c.name as category_name,
     c.color as category_color,
     c.icon as category_icon,
@@ -83,13 +83,13 @@ BEGIN
     ce.end_time as event_end_time
     
   FROM user_habits uh
-  INNER JOIN habits h ON uh.habit_id = h.id
-  LEFT JOIN categories c ON h.category_id = c.id
+  LEFT JOIN habits h ON uh.habit_id = h.id
+  LEFT JOIN categories c ON COALESCE(h.category_id, uh.category_id) = c.id
   
   -- Inner join with calendar_events to show only habits scheduled for the specific date
   INNER JOIN calendar_events ce ON (
     ce.user_id = p_user_id 
-    AND ce.habit_id = h.id
+    AND ce.habit_id = COALESCE(h.id, uh.id)
     AND (
       -- Direct date match
       ce.start_date = p_date

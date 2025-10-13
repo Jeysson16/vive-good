@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../presentation/pages/splash/splash_page.dart';
 import '../../presentation/pages/onboarding/onboarding_page.dart';
 import '../../presentation/pages/welcome/welcome_page.dart';
@@ -12,6 +14,7 @@ import '../../presentation/pages/assistant/assistant_page.dart';
 import '../../presentation/pages/progress/progress_main_screen.dart';
 import '../../views/profile/edit_profile_view.dart';
 import '../../models/user_profile.dart';
+import '../../presentation/blocs/profile/profile_bloc.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -61,7 +64,10 @@ class AppRoutes {
         path: editProfile,
         builder: (context, state) {
           final profile = state.extra as UserProfile;
-          return EditProfileView(profile: profile);
+          return BlocProvider(
+            create: (context) => ProfileBloc(supabaseClient: Supabase.instance.client),
+            child: EditProfileView(profile: profile),
+          );
         },
       ),
     ],

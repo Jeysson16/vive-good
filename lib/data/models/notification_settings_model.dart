@@ -9,186 +9,138 @@ part 'notification_settings_model.g.dart';
 class NotificationSettingsModel extends NotificationSettings {
   @HiveField(0)
   @override
-  final String id;
+  final String userId;
   
   @HiveField(1)
   @override
-  final String userId;
+  final bool globalNotificationsEnabled;
   
   @HiveField(2)
   @override
-  final bool globalNotificationsEnabled;
+  final bool permissionsGranted;
   
   @HiveField(3)
   @override
-  final bool quietHoursEnabled;
+  final String? quietHoursStart;
   
   @HiveField(4)
   @override
-  final DateTime quietHoursStart;
+  final String? quietHoursEnd;
   
   @HiveField(5)
   @override
-  final DateTime quietHoursEnd;
+  final int defaultSnoozeMinutes;
   
   @HiveField(6)
   @override
-  final int snoozeMinutes;
+  final int maxSnoozeCount;
   
   @HiveField(7)
   @override
-  final int maxSnoozeCount;
+  final String defaultNotificationSound;
   
   @HiveField(8)
-  @override
-  final String defaultSound;
-  
-  @HiveField(9)
-  @override
-  final bool vibrationEnabled;
-  
-  @HiveField(10)
-  @override
-  final int defaultPriority;
-  
-  @HiveField(11)
-  @override
-  final DateTime createdAt;
-  
-  @HiveField(12)
   @override
   final DateTime updatedAt;
 
   const NotificationSettingsModel({
-    required this.id,
     required this.userId,
-    required this.globalNotificationsEnabled,
-    required this.quietHoursEnabled,
-    required this.quietHoursStart,
-    required this.quietHoursEnd,
-    required this.snoozeMinutes,
-    required this.maxSnoozeCount,
-    required this.defaultSound,
-    required this.vibrationEnabled,
-    required this.defaultPriority,
-    required this.createdAt,
+    this.globalNotificationsEnabled = true,
+    this.permissionsGranted = false,
+    this.quietHoursStart = '22:00',
+    this.quietHoursEnd = '07:00',
+    this.defaultSnoozeMinutes = 15,
+    this.maxSnoozeCount = 3,
+    this.defaultNotificationSound = 'default',
     required this.updatedAt,
   }) : super(
-          id: id,
           userId: userId,
           globalNotificationsEnabled: globalNotificationsEnabled,
-          quietHoursEnabled: quietHoursEnabled,
+          permissionsGranted: permissionsGranted,
           quietHoursStart: quietHoursStart,
           quietHoursEnd: quietHoursEnd,
-          snoozeMinutes: snoozeMinutes,
+          defaultSnoozeMinutes: defaultSnoozeMinutes,
           maxSnoozeCount: maxSnoozeCount,
-          defaultSound: defaultSound,
-          vibrationEnabled: vibrationEnabled,
-          defaultPriority: defaultPriority,
-          createdAt: createdAt,
+          defaultNotificationSound: defaultNotificationSound,
           updatedAt: updatedAt,
         );
 
   factory NotificationSettingsModel.fromEntity(NotificationSettings settings) {
     return NotificationSettingsModel(
-      id: settings.id,
       userId: settings.userId,
       globalNotificationsEnabled: settings.globalNotificationsEnabled,
-      quietHoursEnabled: settings.quietHoursEnabled,
+      permissionsGranted: settings.permissionsGranted,
       quietHoursStart: settings.quietHoursStart,
       quietHoursEnd: settings.quietHoursEnd,
-      snoozeMinutes: settings.snoozeMinutes,
+      defaultSnoozeMinutes: settings.defaultSnoozeMinutes,
       maxSnoozeCount: settings.maxSnoozeCount,
-      defaultSound: settings.defaultSound,
-      vibrationEnabled: settings.vibrationEnabled,
-      defaultPriority: settings.defaultPriority,
-      createdAt: settings.createdAt,
+      defaultNotificationSound: settings.defaultNotificationSound,
       updatedAt: settings.updatedAt,
     );
   }
 
   factory NotificationSettingsModel.fromJson(Map<String, dynamic> json) {
     return NotificationSettingsModel(
-      id: json['id'] as String,
       userId: json['userId'] as String,
-      globalNotificationsEnabled: json['globalNotificationsEnabled'] as bool,
-      quietHoursEnabled: json['quietHoursEnabled'] as bool,
-      quietHoursStart: DateTime.parse(json['quietHoursStart'] as String),
-      quietHoursEnd: DateTime.parse(json['quietHoursEnd'] as String),
-      snoozeMinutes: json['snoozeMinutes'] as int,
-      maxSnoozeCount: json['maxSnoozeCount'] as int,
-      defaultSound: json['defaultSound'] as String,
-      vibrationEnabled: json['vibrationEnabled'] as bool,
-      defaultPriority: json['defaultPriority'] as int,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      globalNotificationsEnabled: json['globalNotificationsEnabled'] as bool? ?? true,
+      permissionsGranted: json['permissionsGranted'] as bool? ?? false,
+      quietHoursStart: json['quietHoursStart'] as String?,
+      quietHoursEnd: json['quietHoursEnd'] as String?,
+      defaultSnoozeMinutes: json['defaultSnoozeMinutes'] as int? ?? 15,
+      maxSnoozeCount: json['maxSnoozeCount'] as int? ?? 3,
+      defaultNotificationSound: json['defaultNotificationSound'] as String? ?? 'default',
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
       'userId': userId,
       'globalNotificationsEnabled': globalNotificationsEnabled,
-      'quietHoursEnabled': quietHoursEnabled,
-      'quietHoursStart': quietHoursStart.toIso8601String(),
-      'quietHoursEnd': quietHoursEnd.toIso8601String(),
-      'snoozeMinutes': snoozeMinutes,
+      'permissionsGranted': permissionsGranted,
+      'quietHoursStart': quietHoursStart,
+      'quietHoursEnd': quietHoursEnd,
+      'defaultSnoozeMinutes': defaultSnoozeMinutes,
       'maxSnoozeCount': maxSnoozeCount,
-      'defaultSound': defaultSound,
-      'vibrationEnabled': vibrationEnabled,
-      'defaultPriority': defaultPriority,
-      'createdAt': createdAt.toIso8601String(),
+      'defaultNotificationSound': defaultNotificationSound,
       'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
   NotificationSettingsModel copyWith({
-    String? id,
     String? userId,
     bool? globalNotificationsEnabled,
-    bool? quietHoursEnabled,
-    DateTime? quietHoursStart,
-    DateTime? quietHoursEnd,
-    int? snoozeMinutes,
+    bool? permissionsGranted,
+    String? quietHoursStart,
+    String? quietHoursEnd,
+    int? defaultSnoozeMinutes,
     int? maxSnoozeCount,
-    String? defaultSound,
-    bool? vibrationEnabled,
-    int? defaultPriority,
-    DateTime? createdAt,
+    String? defaultNotificationSound,
     DateTime? updatedAt,
   }) {
     return NotificationSettingsModel(
-      id: id ?? this.id,
       userId: userId ?? this.userId,
       globalNotificationsEnabled: globalNotificationsEnabled ?? this.globalNotificationsEnabled,
-      quietHoursEnabled: quietHoursEnabled ?? this.quietHoursEnabled,
+      permissionsGranted: permissionsGranted ?? this.permissionsGranted,
       quietHoursStart: quietHoursStart ?? this.quietHoursStart,
       quietHoursEnd: quietHoursEnd ?? this.quietHoursEnd,
-      snoozeMinutes: snoozeMinutes ?? this.snoozeMinutes,
+      defaultSnoozeMinutes: defaultSnoozeMinutes ?? this.defaultSnoozeMinutes,
       maxSnoozeCount: maxSnoozeCount ?? this.maxSnoozeCount,
-      defaultSound: defaultSound ?? this.defaultSound,
-      vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
-      defaultPriority: defaultPriority ?? this.defaultPriority,
-      createdAt: createdAt ?? this.createdAt,
+      defaultNotificationSound: defaultNotificationSound ?? this.defaultNotificationSound,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
   @override
   List<Object?> get props => [
-        id,
         userId,
         globalNotificationsEnabled,
-        quietHoursEnabled,
+        permissionsGranted,
         quietHoursStart,
         quietHoursEnd,
-        snoozeMinutes,
+        defaultSnoozeMinutes,
         maxSnoozeCount,
-        defaultSound,
-        vibrationEnabled,
-        defaultPriority,
-        createdAt,
+        defaultNotificationSound,
         updatedAt,
       ];
 }

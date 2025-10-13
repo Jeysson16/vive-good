@@ -1,8 +1,10 @@
 import '../../domain/entities/user_habit.dart';
 import 'package:vive_good_app/data/models/habit_model.dart';
+import 'package:vive_good_app/data/models/category_model.dart';
 
 class UserHabitModel extends UserHabit {
   final HabitModel? habit;
+  final CategoryModel? category;
 
   const UserHabitModel({
     required super.id,
@@ -25,6 +27,7 @@ class UserHabitModel extends UserHabit {
     super.streakCount,
     super.totalCompletions,
     this.habit,
+    this.category,
   });
 
   factory UserHabitModel.fromJson(Map<String, dynamic> json) {
@@ -49,14 +52,15 @@ class UserHabitModel extends UserHabit {
       streakCount: json['streak_count'] as int? ?? 0,
       totalCompletions: json['total_completions'] as int? ?? 0,
       habit: json['habits'] != null ? HabitModel.fromJson(json['habits'] as Map<String, dynamic>) : null,
+      category: json['category'] != null ? CategoryModel.fromJson(json['category'] as Map<String, dynamic>) : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'user_id': userId,
-      'habit_id': habitId,
+      'user_id': (userId.isNotEmpty) ? userId : null,
+      'habit_id': (habitId?.isNotEmpty == true) ? habitId : null,
       'frequency': frequency,
       'frequency_details': frequencyDetails,
       'scheduled_time': scheduledTime,
@@ -91,6 +95,7 @@ class UserHabitModel extends UserHabit {
       streakCount: userHabit.streakCount,
       totalCompletions: userHabit.totalCompletions,
       habit: userHabit.habit as HabitModel?,
+      category: null, // La entidad UserHabit no tiene categoría directamente
     );
   }
 

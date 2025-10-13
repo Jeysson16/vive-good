@@ -124,7 +124,7 @@ BEGIN
   
   WHERE 
     uh.user_id = p_user_id
-    AND (p_category_id IS NULL OR h.category_id = p_category_id)
+    AND (p_category_id IS NULL OR COALESCE(h.category_id, uh.category_id) = p_category_id)
     -- Mostrar TODOS los hábitos del usuario (pendientes, aplazados, cumplidos)
     -- Sin filtrar por is_active ni fechas para la pantalla de hábitos
   

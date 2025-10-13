@@ -1,5 +1,6 @@
 import 'package:dartz/dartz.dart';
 import '../entities/progress.dart';
+import '../entities/habit_progress.dart';
 import '../../core/error/failures.dart';
 
 abstract class ProgressRepository {
@@ -14,6 +15,10 @@ abstract class ProgressRepository {
   
   /// Obtiene el progreso mensual del usuario
   Future<Either<Failure, List<Progress>>> getMonthlyProgress(String userId);
+
+  /// Obtiene indicadores mensuales del usuario
+  /// Retorna un mapa con claves: best_day, most_consistent_habit, area_to_improve
+  Future<Either<Failure, Map<String, String>>> getMonthlyIndicators(String userId, int year, int month);
   
   /// Obtiene el progreso diario de la semana actual
   /// Retorna un mapa con los nombres de los días y sus porcentajes de completitud
@@ -22,4 +27,7 @@ abstract class ProgressRepository {
   /// Obtiene la racha actual del usuario
   /// Retorna el número de días consecutivos con al menos un hábito completado
   Future<Either<Failure, int>> getUserStreak(String userId);
+  
+  /// Marca el progreso de un hábito
+  Future<Either<Failure, void>> markProgress(HabitProgress progress);
 }

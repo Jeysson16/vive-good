@@ -45,13 +45,13 @@ class HabitModel {
       'id': id,
       'name': name,
       'description': description,
-      'category_id': categoryId,
+      'category_id': (categoryId?.isNotEmpty == true) ? categoryId : null,
       'icon_name': iconName,
       'icon_color': iconColor,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'is_public': isPublic,
-      'created_by': createdBy,
+      'created_by': (createdBy?.isNotEmpty == true) ? createdBy : null,
     };
   }
 

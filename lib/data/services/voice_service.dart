@@ -95,8 +95,134 @@ class VoiceService {
     try {
       _ttsEnabled = true;
       
-      // Configure TTS settings
-      await _flutterTts.setLanguage('es-ES'); // Spanish
+      // Configure TTS settings with multiple Spanish variants
+      bool languageSet = false;
+      
+      // Try different Spanish language codes, prioritizing Peruvian Spanish
+      final spanishLanguages = ['es-PE', 'es-MX', 'es-AR', 'es-CO', 'es-CL', 'es-ES', 'es-US', 'es'];
+      
+      for (String lang in spanishLanguages) {
+        try {
+          final result = await _flutterTts.setLanguage(lang);
+          if (result == 1) {
+            print('TTS: Successfully set language to $lang');
+            languageSet = true;
+            break;
+          }
+        } catch (e) {
+          print('TTS: Failed to set language $lang: $e');
+        }
+      }
+      
+      if (!languageSet) {
+        print('TTS: Warning - Could not set Spanish language, using default');
+      }
+      
+      // Try to find and set a Spanish voice
+      try {
+        print('TTS: Getting available voices...');
+        final voices = await _flutterTts.getVoices;
+        
+        if (voices != null && voices.isNotEmpty) {
+          print('TTS: Found ${voices.length} available voices');
+          
+          // Look for Spanish voices, prioritizing Peruvian and Latin American variants
+          final spanishVoices = voices.where((voice) {
+            try {
+              final name = voice['name']?.toString().toLowerCase() ?? '';
+              final locale = voice['locale']?.toString().toLowerCase() ?? '';
+              return locale.startsWith('es') || 
+                     name.contains('spanish') || 
+                     name.contains('español') ||
+                     name.contains('maria') ||
+                     name.contains('diego') ||
+                     name.contains('carmen') ||
+                     name.contains('lucia') ||
+                     name.contains('carlos') ||
+                     name.contains('sofia');
+            } catch (e) {
+              print('TTS: Error processing voice data: $e');
+              return false;
+            }
+          }).toList();
+          
+          print('TTS: Found ${spanishVoices.length} Spanish voices');
+          
+          if (spanishVoices.isNotEmpty) {
+            // Sort voices to prioritize Peruvian and Latin American variants
+            try {
+              spanishVoices.sort((a, b) {
+                try {
+                  final localeA = a['locale']?.toString().toLowerCase() ?? '';
+                  final localeB = b['locale']?.toString().toLowerCase() ?? '';
+                  
+                  // Prioritize Peruvian Spanish
+                  if (localeA.contains('pe') && !localeB.contains('pe')) return -1;
+                  if (!localeA.contains('pe') && localeB.contains('pe')) return 1;
+                  
+                  // Then prioritize other Latin American variants
+                  final latinAmericanA = localeA.contains('mx') || localeA.contains('ar') || 
+                                        localeA.contains('co') || localeA.contains('cl') ||
+                                        localeA.contains('ve') || localeA.contains('ec') ||
+                                        localeA.contains('bo') || localeA.contains('py') ||
+                                        localeA.contains('uy');
+                  final latinAmericanB = localeB.contains('mx') || localeB.contains('ar') || 
+                                        localeB.contains('co') || localeB.contains('cl') ||
+                                        localeB.contains('ve') || localeB.contains('ec') ||
+                                        localeB.contains('bo') || localeB.contains('py') ||
+                                        localeB.contains('uy');
+                  
+                  if (latinAmericanA && !latinAmericanB) return -1;
+                  if (!latinAmericanA && latinAmericanB) return 1;
+                  
+                  return 0;
+                } catch (e) {
+                  print('TTS: Error sorting voices: $e');
+                  return 0;
+                }
+              });
+            } catch (e) {
+              print('TTS: Error sorting Spanish voices: $e');
+            }
+            
+            // Try to set the best Spanish voice
+            for (int i = 0; i < spanishVoices.length; i++) {
+              try {
+                final selectedVoice = spanishVoices[i];
+                final voiceMap = <String, String>{};
+                
+                // Safely convert each key-value pair to String
+                selectedVoice.forEach((key, value) {
+                  if (key != null && value != null) {
+                    voiceMap[key.toString()] = value.toString();
+                  }
+                });
+                
+                if (voiceMap.isNotEmpty && voiceMap.containsKey('name')) {
+                  await _flutterTts.setVoice(voiceMap);
+                  print('TTS: Successfully set Spanish voice: ${voiceMap['name']} (${voiceMap['locale'] ?? 'unknown locale'})');
+                  break; // Exit loop on success
+                } else {
+                  print('TTS: Voice data incomplete for voice ${i + 1}, trying next...');
+                }
+              } catch (e) {
+                print('TTS: Error setting voice ${i + 1}: $e');
+                if (i == spanishVoices.length - 1) {
+                  print('TTS: All Spanish voices failed, using default voice');
+                }
+              }
+            }
+          } else {
+            print('TTS: No Spanish voices found, using default voice');
+          }
+        } else {
+          print('TTS: No voices available or getVoices returned null');
+        }
+      } catch (e) {
+        print('TTS: Critical error in voice configuration: $e');
+        print('TTS: Continuing with default voice settings');
+      }
+      
       await _flutterTts.setSpeechRate(0.5);
       await _flutterTts.setVolume(1.0);
       await _flutterTts.setPitch(1.0);
@@ -111,6 +237,7 @@ class VoiceService {
       });
       
       _flutterTts.setErrorHandler((message) {
+        print('TTS Error: $message');
         _ttsStateController.add(false);
       });
       
@@ -120,6 +247,7 @@ class VoiceService {
       }
       
     } catch (e) {
+      print('TTS: Failed to initialize: $e');
       _ttsEnabled = false;
     }
   }
@@ -154,7 +282,7 @@ class VoiceService {
         listenFor: const Duration(minutes: 5), // Tiempo máximo extendido
         pauseFor: const Duration(seconds: 30), // Pausa mucho más larga antes de auto-stop
         partialResults: true, // Habilitar resultados parciales
-        localeId: 'es_ES', // Spanish locale
+        localeId: 'es_PE', // Peruvian Spanish locale
         cancelOnError: false, // No cancelar por errores menores
         listenMode: ListenMode.dictation, // Modo dictado para escucha continua
         onSoundLevelChange: (level) {

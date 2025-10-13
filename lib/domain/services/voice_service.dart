@@ -49,7 +49,7 @@ class VoiceService {
   }
   
   Future<void> _initializeTts() async {
-    await _flutterTts.setLanguage('es-ES');
+    await _flutterTts.setLanguage('es-PE');
     await _flutterTts.setSpeechRate(0.5);
     await _flutterTts.setVolume(1.0);
     await _flutterTts.setPitch(1.0);
@@ -84,7 +84,7 @@ class VoiceService {
         listenFor: const Duration(seconds: 30),
         pauseFor: const Duration(seconds: 3),
         partialResults: false,
-        localeId: 'es_ES',
+        localeId: 'es_PE',
         cancelOnError: true,
         listenMode: ListenMode.confirmation,
         onSoundLevelChange: (level) {

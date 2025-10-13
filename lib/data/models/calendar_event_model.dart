@@ -38,10 +38,10 @@ class CalendarEventModel extends CalendarEvent {
           ? _parseDate(json['end_date'] as String) 
           : null,
       startTime: json['start_time'] != null 
-          ? _parseDateTime(json['start_time'] as String) 
+          ? _parseTime(json['start_time'] as String) 
           : null,
       endTime: json['end_time'] != null 
-          ? _parseDateTime(json['end_time'] as String) 
+          ? _parseTime(json['end_time'] as String) 
           : null,
       recurrenceType: json['recurrence_type'] as String? ?? 'none',
       recurrenceEndDate: json['recurrence_end_date'] != null 
@@ -93,6 +93,27 @@ class CalendarEventModel extends CalendarEvent {
       }
       // If all else fails, rethrow the original exception
       rethrow;
+    }
+  }
+
+  /// Helper method to parse time strings (HH:MM:SS) and convert to DateTime
+  static DateTime? _parseTime(String timeString) {
+    try {
+      print('DEBUG: Parsing time: $timeString');
+      // If it's just a time string (HH:MM:SS), convert it to a DateTime for today
+      if (RegExp(r'^\d{2}:\d{2}:\d{2}$').hasMatch(timeString)) {
+        final now = DateTime.now();
+        final timeParts = timeString.split(':');
+        final hour = int.parse(timeParts[0]);
+        final minute = int.parse(timeParts[1]);
+        final second = int.parse(timeParts[2]);
+        return DateTime(now.year, now.month, now.day, hour, minute, second);
+      }
+      // If it's already a full datetime string, parse it normally
+      return DateTime.parse(timeString);
+    } catch (e) {
+      print('ERROR: Failed to parse time "$timeString": $e');
+      return null;
     }
   }
 

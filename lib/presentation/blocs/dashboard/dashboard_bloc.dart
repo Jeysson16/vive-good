@@ -8,7 +8,7 @@ import '../../../domain/entities/category.dart';
 import '../../../domain/entities/habit_log.dart';
 import '../../../domain/usecases/habit/get_dashboard_habits_usecase.dart';
 import '../../../domain/usecases/habit/get_categories_usecase.dart';
-import '../../../domain/usecases/habit/log_habit_completion_usecase.dart';
+
 import '../habit/habit_state.dart';
 import 'dashboard_event.dart';
 import 'dashboard_state.dart';
@@ -17,12 +17,10 @@ import 'dashboard_state.dart';
 class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   final GetDashboardHabitsUseCase getDashboardHabitsUseCase;
   final GetCategoriesUseCase getCategoriesUseCase;
-  final LogHabitCompletionUseCase logHabitCompletionUseCase;
 
   DashboardBloc({
     required this.getDashboardHabitsUseCase,
     required this.getCategoriesUseCase,
-    required this.logHabitCompletionUseCase,
   }) : super(const DashboardInitial()) {
     on<LoadDashboardData>(_onLoadDashboardData);
     on<ToggleDashboardHabitCompletion>(_onToggleDashboardHabitCompletion);
@@ -280,27 +278,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         ));
       }
       
-      // Sync with backend in background
-      try {
-        await logHabitCompletionUseCase(
-          LogHabitCompletionParams(habitId: event.habitId, date: event.date),
-        );
-        // If successful, the optimistic update is already applied
-        // No need to reload unless we want to sync other data
-      } catch (e) {
-        print('❌ [DEBUG] DashboardBloc - Sync error: ${e.toString()}');
-        // If failed, revert the optimistic update and emit sync error for auto-refresh
-        emit(currentState.copyWith(
-          userHabits: currentState.userHabits,
-          filteredHabits: currentState.filteredHabits,
-          pendingCount: currentState.pendingCount,
-          completedCount: currentState.completedCount,
-        ));
-        emit(DashboardSyncError(
-          'Error de sincronización. Reintentando automáticamente...',
-          shouldAutoRefresh: true,
-        ));
-      }
+      // Note: Backend sync is handled by HabitBloc via ToggleHabitCompletion event
+      // DashboardBloc only handles UI state and animations
     }
   }
 
@@ -393,21 +372,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       animationState: AnimationState.idle,
     ));
 
-    // Sincronizar con backend en segundo plano para todos
-    try {
-      await Future.wait(idsToComplete.map((id) async {
-        await logHabitCompletionUseCase(
-          LogHabitCompletionParams(habitId: id, date: event.date),
-        );
-      }));
-    } catch (e) {
-      print('❌ [DEBUG] DashboardBloc - Bulk sync error: ${e.toString()}');
-      // Mantener el estado actual pero informar el error de sincronización
-      emit(DashboardSyncError(
-        'Error de sincronización. Reintentando automáticamente...',
-        shouldAutoRefresh: true,
-      ));
-    }
+    // Note: Backend sync for bulk completion should be handled by individual 
+    // ToggleHabitCompletion events dispatched to HabitBloc for each habit
   }
 
   Future<void> _onFilterDashboardByCategory(
@@ -492,8 +458,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           LoadDashboardData(userId: event.userId, date: event.date),
           emit,
         ),
-        Future.delayed(const Duration(seconds: 10), () {
-          throw TimeoutException('Refresh timeout after 10 seconds');
+        Future.delayed(const Duration(seconds: 5), () {
+          throw TimeoutException('Refresh timeout after 5 seconds');
         }),
       ]);
       

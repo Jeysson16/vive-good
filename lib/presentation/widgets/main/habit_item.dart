@@ -17,7 +17,8 @@ class HabitItem extends StatefulWidget {
   final bool isHighlighted;
   final bool isFirstInCategory;
   final bool isBeingAnimated;
-  final String? animationState; // 'AnimationState.categoryChanged' | 'AnimationState.habitToggled' | others
+  final String?
+  animationState; // 'AnimationState.categoryChanged' | 'AnimationState.habitToggled' | others
   final bool exitToLeft; // Controla dirección del desvanecimiento/salida
   final VoidCallback? onTap;
   final Function(String, bool)? onSelectionChanged;
@@ -70,7 +71,8 @@ class _HabitItemState extends State<HabitItem> with TickerProviderStateMixin {
   // Animations
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
-  late Animation<double> _exitSlideAnimation; // Desplazamiento lateral atado al fade
+  late Animation<double>
+  _exitSlideAnimation; // Desplazamiento lateral atado al fade
   late Animation<double> _checkScaleAnimation;
   late Animation<double> _rotationAnimation;
   late Animation<double> _cardScaleAnimation;
@@ -138,12 +140,13 @@ class _HabitItemState extends State<HabitItem> with TickerProviderStateMixin {
     );
 
     // Configurar desplazamiento de salida según la columna
-    _exitSlideAnimation = Tween<double>(
-      begin: 0.0,
-      end: widget.exitToLeft ? -40.0 : 40.0,
-    ).animate(
-      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
-    );
+    _exitSlideAnimation =
+        Tween<double>(
+          begin: 0.0,
+          end: widget.exitToLeft ? -40.0 : 40.0,
+        ).animate(
+          CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+        );
 
     _checkScaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -233,12 +236,13 @@ class _HabitItemState extends State<HabitItem> with TickerProviderStateMixin {
 
     // Actualizar dirección de salida si cambió la columna
     if (oldWidget.exitToLeft != widget.exitToLeft) {
-      _exitSlideAnimation = Tween<double>(
-        begin: 0.0,
-        end: widget.exitToLeft ? -40.0 : 40.0,
-      ).animate(
-        CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
-      );
+      _exitSlideAnimation =
+          Tween<double>(
+            begin: 0.0,
+            end: widget.exitToLeft ? -40.0 : 40.0,
+          ).animate(
+            CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+          );
     }
 
     // Check if habit was just completed (without animation state change)
@@ -514,14 +518,15 @@ class _HabitItemState extends State<HabitItem> with TickerProviderStateMixin {
       ]),
       builder: (context, child) {
         return Transform.scale(
-            scale: _scaleAnimation.value *
-                _cardScaleAnimation.value *
-                _alreadyCompletedPulseAnimation.value,
-            child: Transform.rotate(
-              angle: _rotationAnimation.value,
-              child: Opacity(
-                opacity: _fadeAnimation.value,
-                child: Container(
+          scale:
+              _scaleAnimation.value *
+              _cardScaleAnimation.value *
+              _alreadyCompletedPulseAnimation.value,
+          child: Transform.rotate(
+            angle: _rotationAnimation.value,
+            child: Opacity(
+              opacity: _fadeAnimation.value,
+              child: Container(
                 // Fill the grid tile to avoid RenderFlex overflow from height mismatch
                 height: double.infinity,
                 margin: EdgeInsets.symmetric(
@@ -804,20 +809,40 @@ class _HabitItemState extends State<HabitItem> with TickerProviderStateMixin {
                                       child: Stack(
                                         children: [
                                           Center(
-                                            child: Icon(
-                                              _getIconData(
-                                                widget.category?.iconName ??
-                                                    'star',
-                                              ),
-                                              color: (widget.isSelected)
-                                                  ? const Color(0xFF4CAF50)
-                                                  : widget.isCompleted
-                                                  ? const Color(0xFF22C55E)
-                                                  : _parseColor(
-                                                      widget.category?.color ??
-                                                          '#6366F1',
-                                                    ),
-                                              size: iconSize,
+                                            child: Builder(
+                                              builder: (context) {
+                                                final categoryIconName =
+                                                    widget.category?.iconName;
+                                                final habitIconName =
+                                                    widget.habit.iconName;
+                                                final finalIconName =
+                                                    categoryIconName ??
+                                                    habitIconName ??
+                                                    'star';
+
+                                                print(
+                                                  '🔍 DEBUG HABIT_ITEM - widget.habit.name: "${widget.habit.name}"',
+                                                );
+                                                print(
+                                                  '🔍 DEBUG HABIT_ITEM - widget.category?.iconName: "$categoryIconName"',
+                                                );
+                                                print(
+                                                  '🔍 DEBUG HABIT_ITEM - widget.habit.iconName: "$habitIconName"',
+                                                );
+                                                print(
+                                                  '🔍 DEBUG HABIT_ITEM - finalIconName usado: "$finalIconName"',
+                                                );
+
+                                                return Icon(
+                                                  _getIconData(finalIconName),
+                                                  color: (widget.isSelected)
+                                                      ? const Color(0xFF4CAF50)
+                                                      : widget.isCompleted
+                                                      ? const Color(0xFF22C55E)
+                                                      : _getIconColor(),
+                                                  size: iconSize,
+                                                );
+                                              },
                                             ),
                                           ),
                                           if (widget.isCompleted)
@@ -851,26 +876,28 @@ class _HabitItemState extends State<HabitItem> with TickerProviderStateMixin {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     mainAxisSize: MainAxisSize.max,
                                     children: [
-                                      Text(
-                                        widget.habit.name,
-                                        style: TextStyle(
-                                          fontSize: titleFontSize,
-                                          fontWeight: FontWeight.w600,
-                                          color: (widget.isSelected)
-                                              ? const Color(0xFF4CAF50)
-                                              : widget.isCompleted
-                                              ? const Color(0xFF059669)
-                                              : const Color(0xFF111827),
-                                          decoration: widget.isCompleted
-                                              ? TextDecoration.lineThrough
-                                              : null,
+                                      Flexible(
+                                        child: Text(
+                                          widget.habit.name,
+                                          style: TextStyle(
+                                            fontSize: titleFontSize,
+                                            fontWeight: FontWeight.w600,
+                                            color: (widget.isSelected)
+                                                ? const Color(0xFF4CAF50)
+                                                : widget.isCompleted
+                                                ? const Color(0xFF059669)
+                                                : const Color(0xFF111827),
+                                            decoration: widget.isCompleted
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        textAlign: TextAlign.center,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
                                       if (widget.category?.name != null) ...[
-                                        const SizedBox(height: 2),
+                                        SizedBox(height: padding * 0.1),
                                         AnimatedContainer(
                                           duration: const Duration(
                                             milliseconds: 200,
@@ -1025,10 +1052,20 @@ class _HabitItemState extends State<HabitItem> with TickerProviderStateMixin {
   }
 
   Color _getIconColor() {
-    return _parseColor(widget.category?.color ?? '#6B7280');
+    return _parseColor(widget.habit.iconColor ?? '#6B7280');
   }
 
   IconData _getIconData(String iconName) {
+    // DEBUG: Log para diagnosticar iconos
+    print('🎯 DEBUG HABIT_ITEM - iconName recibido: "$iconName"');
+    print('🎯 DEBUG HABIT_ITEM - widget.habit.name: "${widget.habit.name}"');
+    print(
+      '🎯 DEBUG HABIT_ITEM - widget.habit.iconName: "${widget.habit.iconName}"',
+    );
+    print(
+      '🎯 DEBUG HABIT_ITEM - widget.habit.iconColor: "${widget.habit.iconColor}"',
+    );
+
     // Map icon names to Flutter icons
     switch (iconName.toLowerCase()) {
       // Iconos de las categorías de la base de datos

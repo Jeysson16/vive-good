@@ -10,7 +10,7 @@ class DatabaseService {
 
   Database? _database;
   static const String _databaseName = 'vive_good_offline.db';
-  static const int _databaseVersion = 1;
+  static const int _databaseVersion = 3;
 
   Future<Database> get database async {
     _database ??= await _initDatabase();
@@ -125,6 +125,23 @@ class DatabaseService {
       )
     ''');
 
+    // Tabla de notificaciones de hábitos
+    await db.execute('''
+      CREATE TABLE habit_notifications (
+        id TEXT PRIMARY KEY,
+        user_habit_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT,
+        is_enabled INTEGER DEFAULT 1,
+        notification_sound TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        is_synced INTEGER DEFAULT 0,
+        needs_sync INTEGER DEFAULT 0,
+        last_sync_at TEXT
+      )
+    ''');
+
     // Índices para mejorar el rendimiento
     await db.execute('CREATE INDEX idx_habits_user_id ON habits(user_id)');
     await db.execute('CREATE INDEX idx_progress_habit_id ON progress(habit_id)');
@@ -133,6 +150,7 @@ class DatabaseService {
     await db.execute('CREATE INDEX idx_chat_messages_session_id ON chat_messages(session_id)');
     await db.execute('CREATE INDEX idx_pending_operations_type ON pending_operations(operation_type)');
     await db.execute('CREATE INDEX idx_pending_operations_table ON pending_operations(table_name)');
+    await db.execute('CREATE INDEX idx_habit_notifications_user_habit_id ON habit_notifications(user_habit_id)');
     
     // Insertar metadatos iniciales
     await db.insert('app_metadata', {
@@ -151,8 +169,52 @@ class DatabaseService {
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     // Manejar actualizaciones de la base de datos aquí
     if (oldVersion < 2) {
-      // Ejemplo de migración para versión 2
-      // await db.execute('ALTER TABLE habits ADD COLUMN new_field TEXT');
+      // Migración para versión 2: Agregar columnas faltantes
+      try {
+        // Verificar y agregar columnas faltantes en la tabla habits
+        await db.execute('ALTER TABLE habits ADD COLUMN reminder_time TEXT');
+      } catch (e) {
+        // La columna ya existe, continuar
+      }
+      
+      try {
+        await db.execute('ALTER TABLE habits ADD COLUMN is_active INTEGER DEFAULT 1');
+      } catch (e) {
+        // La columna ya existe, continuar
+      }
+      
+      try {
+        // Verificar y agregar columna faltante en la tabla chat_messages
+        await db.execute('ALTER TABLE chat_messages ADD COLUMN created_at TEXT NOT NULL DEFAULT ""');
+      } catch (e) {
+        // La columna ya existe, continuar
+      }
+    }
+    
+    if (oldVersion < 3) {
+      // Migración para versión 3: Crear tabla habit_notifications
+      try {
+        await db.execute('''
+          CREATE TABLE habit_notifications (
+            id TEXT PRIMARY KEY,
+            user_habit_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT,
+            is_enabled INTEGER DEFAULT 1,
+            notification_sound TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            is_synced INTEGER DEFAULT 0,
+            needs_sync INTEGER DEFAULT 0,
+            last_sync_at TEXT
+          )
+        ''');
+        
+        await db.execute('CREATE INDEX idx_habit_notifications_user_habit_id ON habit_notifications(user_habit_id)');
+      } catch (e) {
+        // La tabla ya existe, continuar
+        print('Error creating habit_notifications table: $e');
+      }
     }
   }
 

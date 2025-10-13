@@ -27,9 +27,23 @@ class FormattedTextWidget extends StatelessWidget {
           color: textColor ?? Colors.black87,
         );
 
+    // Limpiar el texto antes de procesarlo
+    final cleanText = _cleanTextForDisplay(text);
+
     return RichText(
-      text: _parseFormattedText(text, defaultStyle, theme),
+      text: _parseFormattedText(cleanText, defaultStyle, theme),
     );
+  }
+
+  /// Limpia el texto para visualización eliminando símbolos residuales
+  String _cleanTextForDisplay(String text) {
+    return text
+        // Eliminar símbolos $1, $2, etc. que puedan haber quedado
+        .replaceAll(RegExp(r'\$\d+'), '')
+        // Limpiar múltiples espacios
+        .replaceAll(RegExp(r'\s+'), ' ')
+        // Eliminar espacios al inicio y final
+        .trim();
   }
 
   TextSpan _parseFormattedText(String text, TextStyle baseStyle, ThemeData theme) {

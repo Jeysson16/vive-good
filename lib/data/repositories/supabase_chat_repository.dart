@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:vive_good_app/data/datasources/assistant/supabase_assistant_datasource.dart';
+import 'package:vive_good_app/services/automatic_symptom_registration_service.dart';
 
 import '../../domain/entities/chat_session.dart';
 import '../../domain/entities/chat/chat_message.dart';
@@ -8,7 +9,7 @@ import '../../domain/entities/assistant/assistant_response.dart';
 import '../../domain/repositories/chat_repository.dart';
 import '../datasources/chat_remote_datasource.dart';
 import '../datasources/assistant/gemini_assistant_datasource.dart';
-import '../datasources/deep_learning_datasource.dart';
+import '../datasources/assistant/deep_learning_datasource.dart';
 
 /// Implementación del repositorio de chat usando Supabase
 class SupabaseChatRepository implements ChatRepository {
@@ -58,9 +59,15 @@ class SupabaseChatRepository implements ChatRepository {
     String sessionId,
     String content,
     MessageType messageType,
+    {Map<String, dynamic>? metadata}
   ) async {
     try {
-      return await _remoteDataSource.sendMessage(sessionId, content, messageType);
+      return await _remoteDataSource.sendMessage(
+        sessionId,
+        content,
+        messageType,
+        metadata: metadata,
+      );
     } catch (e) {
       throw Exception('Error al enviar mensaje: ${e.toString()}');
     }
@@ -98,6 +105,7 @@ class SupabaseChatRepository implements ChatRepository {
         sessionId,
         responseContent,
         MessageType.assistant,
+        metadata: null,
       );
     } catch (e) {
       throw Exception('Error al regenerar respuesta: ${e.toString()}');
@@ -210,13 +218,51 @@ class SupabaseChatRepository implements ChatRepository {
       throw Exception('Gemini datasource no está configurado');
     }
     try {
-      return await _geminiDatasource!.sendMessage(
+      print('🔥 DEBUG: SupabaseChatRepository.sendMessageToGemini iniciado');
+      print('🔥 DEBUG: Mensaje del usuario: "$message"');
+      
+      // 1. Procesar síntomas automáticamente ANTES de enviar a Gemini
+      print('🔥 DEBUG: Procesando síntomas automáticamente...');
+      final registeredSymptoms = await AutomaticSymptomRegistrationService.processMessageForSymptoms(
+        message: message,
+        userId: userId,
+      );
+      
+      // 2. Obtener respuesta de Gemini
+      print('🔥 DEBUG: Enviando mensaje a Gemini...');
+      final geminiResponse = await _geminiDatasource!.sendMessage(
         message: message,
         sessionId: sessionId,
         userId: userId,
         conversationHistory: conversationHistory ?? [],
       );
+      
+      // 3. Agregar información de síntomas registrados a la respuesta si hay alguno
+      String finalContent = geminiResponse.content;
+      if (registeredSymptoms.isNotEmpty) {
+        final symptomsSummary = AutomaticSymptomRegistrationService.generateSymptomsRegistrationSummary(registeredSymptoms);
+        finalContent += symptomsSummary;
+        print('🔥 DEBUG: Síntomas registrados automáticamente: ${registeredSymptoms.length}');
+      }
+      
+      // 4. Crear respuesta final con contenido actualizado
+      final finalResponse = AssistantResponse(
+        id: geminiResponse.id,
+        sessionId: geminiResponse.sessionId,
+        content: finalContent,
+        type: geminiResponse.type,
+        timestamp: geminiResponse.timestamp,
+        metadata: {
+          ...?geminiResponse.metadata,
+          'auto_registered_symptoms': registeredSymptoms.length,
+          'symptoms_detected': registeredSymptoms.isNotEmpty,
+        },
+      );
+      
+      print('🔥 DEBUG: SupabaseChatRepository.sendMessageToGemini completado');
+      return finalResponse;
     } catch (e) {
+      print('🔥 DEBUG: Error en SupabaseChatRepository.sendMessageToGemini: $e');
       throw Exception('Error al enviar mensaje a Gemini: ${e.toString()}');
     }
   }
@@ -248,22 +294,53 @@ class SupabaseChatRepository implements ChatRepository {
     required Map<String, dynamic> symptoms,
     required List<Map<String, dynamic>> habitHistory,
   }) async {
-    if (_deepLearningDatasource == null) {
-      throw Exception('Deep Learning datasource no está configurado');
-    }
     try {
-      // Por ahora retornamos un análisis simulado
+      print('🔥 DEBUG: SupabaseChatRepository.analyzeGastritisRisk llamado');
+      
+      // Si tenemos el datasource de Gemini, usarlo para Deep Learning
+      if (_geminiDatasource != null) {
+        print('🔥 DEBUG: Usando GeminiDatasource para Deep Learning');
+        
+        // Crear un mensaje descriptivo de los síntomas para el análisis
+        final symptomsText = symptoms.entries
+            .where((entry) => entry.value == true)
+            .map((entry) => entry.key)
+            .join(', ');
+        
+        final message = 'Síntomas reportados: $symptomsText';
+        
+        // Llamar al datasource de Gemini para procesar Deep Learning
+        final result = await _geminiDatasource!.processDeepLearningAnalysis(
+          message: message,
+          userId: userId,
+        );
+        
+        print('🔥 DEBUG: Resultado de Deep Learning obtenido: $result');
+        return result;
+      }
+      
+      // Fallback si no hay datasource de Gemini
+      print('🔥 DEBUG: Usando análisis de fallback (sin Gemini)');
       return {
-        'risk_level': 'medium',
         'confidence': 0.75,
-        'recommendations': ['Evitar comidas picantes', 'Reducir el estrés'],
+        'riskLevel': 'Moderado',
+        'suggestions': ['Evitar comidas picantes', 'Reducir el estrés', 'Consultar con un médico'],
+        'dlChatResponse': 'Análisis básico completado. Se recomienda consultar con un profesional de la salud para un diagnóstico completo.',
         'analysis_date': DateTime.now().toIso8601String(),
         'user_id': userId,
         'symptoms_analyzed': symptoms.keys.length,
         'habits_analyzed': habitHistory.length,
       };
     } catch (e) {
-      throw Exception('Error al analizar riesgo de gastritis: ${e.toString()}');
+      print('🔥 DEBUG: Error en analyzeGastritisRisk: $e');
+      // Retornar un análisis de fallback en caso de error
+      return {
+        'confidence': 0.5,
+        'riskLevel': 'Moderado',
+        'suggestions': ['Consultar con un médico', 'Mantener una dieta balanceada'],
+        'dlChatResponse': 'No se pudo completar el análisis de Deep Learning. Se recomienda consultar con un profesional de la salud.',
+        'error': e.toString(),
+      };
     }
   }
 
@@ -348,7 +425,12 @@ class SupabaseChatRepository implements ChatRepository {
   // Métodos de compatibilidad con AssistantBloc
   @override
   Future<ChatMessage> createChatMessage(ChatMessage message) async {
-    return await sendMessage(message.sessionId, message.content, message.type);
+    return await sendMessage(
+      message.sessionId,
+      message.content,
+      message.type,
+      metadata: message.metadata,
+    );
   }
 
   @override
@@ -374,5 +456,95 @@ class SupabaseChatRepository implements ChatRepository {
   @override
   Future<void> deleteChatSession(String sessionId) async {
     await deleteSession(sessionId);
+  }
+
+  @override
+  Future<ChatMessage> updateChatMessage(ChatMessage message) async {
+    try {
+      return await _remoteDataSource.editMessage(message.id, message.content);
+    } catch (e) {
+      throw Exception('Error al actualizar mensaje: ${e.toString()}');
+    }
+  }
+
+  /// Genera automáticamente un título para una sesión basado en el primer mensaje
+  Future<ChatSession> generateAndUpdateSessionTitle(String sessionId, String firstMessage) async {
+    try {
+      if (_geminiDatasource == null) {
+        // Si no hay Gemini disponible, usar un título por defecto
+        return await updateSessionTitle(sessionId, 'Nueva conversación');
+      }
+
+      // Generar título con Gemini
+      final generatedTitle = await _geminiDatasource!.generateConversationTitle(firstMessage);
+      
+      // Actualizar la sesión con el nuevo título
+      return await updateSessionTitle(sessionId, generatedTitle);
+    } catch (e) {
+      print('❌ Error al generar título automático: $e');
+      // En caso de error, usar un título por defecto
+      return await updateSessionTitle(sessionId, 'Nueva conversación');
+    }
+  }
+
+  // Métodos para feedback de mensajes
+
+  @override
+  Future<bool> sendMessageFeedback({
+    required String messageId,
+    required String userId,
+    required String feedbackType,
+  }) async {
+    if (_supabaseDatasource == null) {
+      throw Exception('Supabase datasource no está configurado');
+    }
+    try {
+      return await _supabaseDatasource!.sendMessageFeedback(
+        messageId: messageId,
+        userId: userId,
+        feedbackType: feedbackType,
+      );
+    } catch (e) {
+      print('❌ Error al enviar feedback: $e');
+      return false;
+    }
+  }
+
+  @override
+  Future<String?> getMessageFeedback({
+    required String messageId,
+    required String userId,
+  }) async {
+    if (_supabaseDatasource == null) {
+      throw Exception('Supabase datasource no está configurado');
+    }
+    try {
+      return await _supabaseDatasource!.getMessageFeedback(
+        messageId: messageId,
+        userId: userId,
+      );
+    } catch (e) {
+      print('❌ Error al obtener feedback: $e');
+      return null;
+    }
+  }
+
+  @override
+  Future<bool> removeMessageFeedback({
+    required String messageId,
+    required String userId,
+  }) async {
+    if (_supabaseDatasource == null) {
+      throw Exception('Supabase datasource no está configurado');
+    }
+    try {
+      return await _supabaseDatasource!.removeMessageFeedback(
+        messageId: messageId,
+        userId: userId,
+      );
+    } catch (e) {
+      print('❌ Error al eliminar feedback: $e');
+      return false;
+    }
   }
 }

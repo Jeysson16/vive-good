@@ -4,6 +4,8 @@ import 'package:vive_good_app/domain/entities/habit.dart';
 import 'package:vive_good_app/domain/entities/category.dart';
 import 'package:vive_good_app/domain/entities/user_habit.dart';
 import 'package:vive_good_app/domain/entities/habit_breakdown.dart';
+import 'package:vive_good_app/domain/entities/habit_statistics.dart';
+import 'package:vive_good_app/domain/entities/category_evolution.dart';
 
 abstract class HabitRepository {
   Future<Either<Failure, List<UserHabit>>> getUserHabits(String userId);
@@ -32,4 +34,18 @@ abstract class HabitRepository {
     int year,
     int month,
   );
+  
+  /// Obtiene estadísticas detalladas de hábitos por categoría
+  Future<Either<Failure, List<HabitStatistics>>> getHabitStatistics({
+    required String userId,
+    required int year,
+    required int month,
+  });
+  
+  /// Obtiene análisis temporal de evolución por categoría
+  Future<Either<Failure, List<CategoryEvolution>>> getCategoryEvolution({
+    required String userId,
+    required int year,
+    required int month,
+  });
 }

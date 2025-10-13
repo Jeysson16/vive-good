@@ -3,12 +3,12 @@ import 'package:vive_good_app/domain/usecases/get_monthly_habits_breakdown.dart'
 import 'habit_breakdown_event.dart';
 import 'habit_breakdown_state.dart';
 
-class HabitBreakdownBloc extends Bloc<HabitBreakdownEvent, HabitBreakdownState> {
+class HabitBreakdownBloc
+    extends Bloc<HabitBreakdownEvent, HabitBreakdownState> {
   final GetMonthlyHabitsBreakdown getMonthlyHabitsBreakdown;
 
-  HabitBreakdownBloc({
-    required this.getMonthlyHabitsBreakdown,
-  }) : super(HabitBreakdownInitial()) {
+  HabitBreakdownBloc({required this.getMonthlyHabitsBreakdown})
+    : super(HabitBreakdownInitial()) {
     on<LoadMonthlyHabitsBreakdown>(_onLoadMonthlyHabitsBreakdown);
   }
 
