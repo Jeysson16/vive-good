@@ -11,10 +11,10 @@ class HabitNotificationsPage extends StatefulWidget {
   final String habitName;
 
   const HabitNotificationsPage({
-    Key? key,
+    super.key,
     required this.habitId,
     required this.habitName,
-  }) : super(key: key);
+  });
 
   @override
   State<HabitNotificationsPage> createState() => _HabitNotificationsPageState();

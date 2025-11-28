@@ -97,6 +97,7 @@ class NotificationLogModel extends NotificationLog {
     };
   }
 
+  @override
   NotificationLogModel copyWith({
     String? id,
     String? notificationScheduleId,

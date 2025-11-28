@@ -10,9 +10,9 @@ class NotificationSettingsPage extends StatefulWidget {
   final String userId;
 
   const NotificationSettingsPage({
-    Key? key,
+    super.key,
     required this.userId,
-  }) : super(key: key);
+  });
 
   @override
   State<NotificationSettingsPage> createState() => _NotificationSettingsPageState();

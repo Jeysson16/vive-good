@@ -79,11 +79,11 @@ class HabitNotificationLocalModel extends HiveObject {
   factory HabitNotificationLocalModel.fromMap(Map<String, dynamic> map) {
     return HabitNotificationLocalModel(
       id: map['id'] as String,
-      userHabitId: map['user_habit_id'] as String,
+      userHabitId: map['related_id'] as String, // related_id contiene el user_habit_id
       title: map['title'] as String,
-      message: map['message'] as String?,
-      isEnabled: (map['is_enabled'] as int) == 1,
-      notificationSound: map['notification_sound'] as String?,
+      message: map['body'] as String?, // body en lugar de message
+      isEnabled: (map['is_read'] as int?) != 1, // invertir lógica: no leído = habilitado
+      notificationSound: null, // no hay campo notification_sound en la nueva tabla
       schedules: [], // Los schedules se cargan por separado
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
@@ -112,14 +112,19 @@ class HabitNotificationLocalModel extends HiveObject {
   }
 
   // Convertir a Map (para base de datos)
+  // Nota: user_id se establece en el repositorio usando el usuario autenticado
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'user_habit_id': userHabitId,
       'title': title,
-      'message': message,
-      'is_enabled': isEnabled ? 1 : 0,
-      'notification_sound': notificationSound,
+      'body': message,
+      'type': 'habit_reminder',
+      'related_id': userHabitId,
+      'data': null,
+      'is_read': isEnabled ? 0 : 1, // invertir lógica
+      'read_at': null,
+      'scheduled_for': null,
+      'sent_at': null,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'is_synced': isSynced ? 1 : 0,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
 import 'package:vive_good_app/core/theme/app_text_styles.dart';
 import '../../../domain/entities/user_habit.dart';
 import '../../../widgets/common/loading_widget.dart';
@@ -24,24 +26,19 @@ class HabitProgressScreen extends StatefulWidget {
 
 class _HabitProgressScreenState extends State<HabitProgressScreen> {
   bool _isLoading = true;
-  List<bool> _weeklyProgress = [true, true, false, false, false, true, true]; // Mock data
-  double _completionPercentage = 0.66; // Mock data
-  int _currentStreak = 5; // Mock data
-  List<double> _weeklyChart = [0.4, 0.6, 1.0, 0.5, 0.8]; // Mock data for 4 weeks
+  List<bool> _weeklyProgress = List<bool>.filled(7, false);
+  double _completionPercentage = 0.0;
+  int _currentStreak = 0;
+  List<double> _weeklyChart = List<double>.filled(4, 0.0);
 
   @override
   void initState() {
     super.initState();
     _loadHabitProgress();
   }
-
+  
   void _loadHabitProgress() {
-    // Load habit progress data immediately - no artificial delay needed
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+    _refreshFromRemote();
   }
 
   @override
@@ -105,11 +102,12 @@ class _HabitProgressScreenState extends State<HabitProgressScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
+                flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${(_completionPercentage * 7).round()}/7 días',
+                      '${(_completionPercentage * _expectedDaysThisWeek()).round()}/${_expectedDaysThisWeek()} días',
                       style: AppTextStyles.headingLarge.copyWith(
                         color: Colors.black,
                         fontWeight: FontWeight.bold,
@@ -121,28 +119,38 @@ class _HabitProgressScreenState extends State<HabitProgressScreen> {
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: Colors.grey[700],
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
                     ),
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    habitName,
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      fontWeight: FontWeight.w600,
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      habitName,
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
+                      maxLines: 2,
+                      textAlign: TextAlign.right,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Último día\nmarcado',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.grey[600],
+                    const SizedBox(height: 4),
+                    Text(
+                      'Último día\nmarcado',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: Colors.grey[600],
+                      ),
+                      textAlign: TextAlign.right,
                     ),
-                    textAlign: TextAlign.right,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -150,7 +158,7 @@ class _HabitProgressScreenState extends State<HabitProgressScreen> {
           Row(
             children: [
               Text(
-                'Miércoles, 10 julio',
+                _lastCompletedDateLabel(),
                 style: AppTextStyles.bodyMedium.copyWith(
                   fontWeight: FontWeight.w500,
                 ),
@@ -176,7 +184,7 @@ class _HabitProgressScreenState extends State<HabitProgressScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: List.generate(7, (index) {
         final isCompleted = _weeklyProgress[index];
-        final isToday = index == 3; // Wednesday as today for demo
+        final isToday = index == DateTime.now().weekday - 1;
         
         return Column(
           children: [
@@ -268,7 +276,7 @@ class _HabitProgressScreenState extends State<HabitProgressScreen> {
         const SizedBox(height: 16),
         
         // Chart bars
-        Container(
+        SizedBox(
           height: 150,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -377,5 +385,90 @@ class _HabitProgressScreenState extends State<HabitProgressScreen> {
         ),
       ),
     );
+  }
+
+  String _lastCompletedDateLabel() {
+    final date = widget.userHabit.lastCompletedAt;
+    if (date == null) return 'Sin registros';
+    final formatter = DateFormat('EEEE, d MMMM', 'es_ES');
+    return formatter.format(date);
+  }
+  Future<void> _refreshFromRemote() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final now = DateTime.now();
+      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+      final endOfWeek = startOfWeek.add(const Duration(days: 6));
+
+      // Fetch logs for current week for this user_habit
+      final logsWeek = await supabase
+          .from('user_habit_logs')
+          .select('user_habit_id, completed_at, status')
+          .eq('user_habit_id', widget.userHabit.id)
+          .eq('status', 'completed')
+          .gte('completed_at', startOfWeek.toIso8601String().split('T')[0])
+          .lte('completed_at', endOfWeek.toIso8601String().split('T')[0]);
+
+      // Map of day index (0=Mon .. 6=Sun) to completion
+      final dayCompleted = List<bool>.filled(7, false);
+      for (final log in logsWeek) {
+        final completedAt = DateTime.parse(log['completed_at'] as String);
+        final idx = (completedAt.weekday - 1).clamp(0, 6);
+        dayCompleted[idx] = true;
+      }
+
+      // Expected days this week based on frequency
+      final expectedDays = _expectedDaysThisWeek();
+      final completedDays = dayCompleted.where((e) => e).length;
+      final completionPct = expectedDays > 0 ? completedDays / expectedDays : 0.0;
+
+      // Compute 4-week chart for this habit
+      final chart = <double>[];
+      for (int i = 3; i >= 0; i--) {
+        final start = startOfWeek.subtract(Duration(days: i * 7));
+        final end = start.add(const Duration(days: 6));
+        final logs = await supabase
+            .from('user_habit_logs')
+            .select('completed_at, status')
+            .eq('user_habit_id', widget.userHabit.id)
+            .eq('status', 'completed')
+            .gte('completed_at', start.toIso8601String().split('T')[0])
+            .lte('completed_at', end.toIso8601String().split('T')[0]);
+
+        final completedInWeek = (logs as List).map((e) => DateTime.parse(e['completed_at'] as String).toIso8601String().split('T')[0]).toSet().length;
+        final weekExpected = _expectedDaysThisWeek();
+        chart.add(weekExpected > 0 ? (completedInWeek / weekExpected).clamp(0.0, 1.0) : 0.0);
+      }
+
+      // Streak from UserHabit if available
+      final streak = widget.userHabit.streakCount;
+
+      if (mounted) {
+        setState(() {
+          _weeklyProgress = dayCompleted;
+          _completionPercentage = completionPct;
+          _weeklyChart = chart;
+          _currentStreak = streak;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  int _expectedDaysThisWeek() {
+    final freq = widget.userHabit.frequency.toLowerCase();
+    if (freq == 'daily' || freq == 'diario') return 7;
+    if (freq == 'weekly' || freq == 'semanal') {
+      final days = widget.userHabit.frequencyDetails?['days_of_week'] as List<dynamic>?;
+      if (days == null) return 0;
+      return days.length;
+    }
+    return 0;
   }
 }

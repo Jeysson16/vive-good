@@ -41,14 +41,14 @@ class WelcomeView extends StatelessWidget {
               maxWidth: isLargeScreen ? 500 : double.infinity,
             ),
             child: Center(
-              child: Container(
+              child: SizedBox(
                 width: double.infinity,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     // Logo/Image
-                    Container(
+                    SizedBox(
                       width: isSmallScreen ? 100 : (isLargeScreen ? 140 : 124),
                       height: isSmallScreen ? 104 : (isLargeScreen ? 145 : 129),
                       child: Image.asset(

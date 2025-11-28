@@ -2,7 +2,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/entities/chat/chat_message.dart';
 import '../../domain/entities/chat_session.dart';
-import '../../core/error/exceptions.dart';
 import '../../services/supabase_realtime_service.dart';
 
 /// Excepción personalizada para errores del datasource de chat

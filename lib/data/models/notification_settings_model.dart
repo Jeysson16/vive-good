@@ -107,6 +107,7 @@ class NotificationSettingsModel extends NotificationSettings {
     };
   }
 
+  @override
   NotificationSettingsModel copyWith({
     String? userId,
     bool? globalNotificationsEnabled,

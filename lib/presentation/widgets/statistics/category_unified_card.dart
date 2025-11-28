@@ -9,10 +9,10 @@ class CategoryUnifiedCard extends StatefulWidget {
   final HabitStatistics? statistics;
 
   const CategoryUnifiedCard({
-    Key? key,
+    super.key,
     required this.evolution,
     this.statistics,
-  }) : super(key: key);
+  });
 
   @override
   State<CategoryUnifiedCard> createState() => _CategoryUnifiedCardState();
@@ -20,7 +20,7 @@ class CategoryUnifiedCard extends StatefulWidget {
 
 class _CategoryUnifiedCardState extends State<CategoryUnifiedCard> {
   // Mostrar gráfico automáticamente, sin lazy loading
-  bool _showChart = true;
+  final bool _showChart = true;
 
   @override
   Widget build(BuildContext context) {

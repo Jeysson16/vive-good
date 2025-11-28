@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../blocs/chat/chat_bloc.dart';
 import '../../blocs/chat/chat_event.dart';
 import '../../blocs/chat/chat_state.dart';
@@ -14,10 +13,8 @@ import '../../../domain/entities/chat/chat_message.dart';
 import '../../../domain/entities/user_habit.dart';
 import 'chat_history_page.dart';
 import '../../widgets/dialogs/register_symptom_dialog.dart';
-import '../../widgets/dialogs/register_habit_dialog.dart';
 import '../habits/new_habit_screen.dart';
 import '../daily_progress_page.dart';
-import '../pending_activities_page.dart';
 import 'pending_activities_selection_page.dart';
 
 /// Página de conversación de chat siguiendo el diseño de Figma 2067_518

@@ -61,7 +61,7 @@ class OnboardingStepWidget extends StatelessWidget {
       case '1':
         // Persona con corazón verde y estrellas (Gestiona el Estrés)
         return Center(
-          child: Container(
+          child: SizedBox(
             width: 303,
             height: 312,
             child: Image.asset(
@@ -89,7 +89,7 @@ class OnboardingStepWidget extends StatelessWidget {
       case '2':
         // Estómago con rayos (síntomas de gastritis)
         return Center(
-          child: Container(
+          child: SizedBox(
             width: 276,
             height: 282,
             child: Image.asset(
@@ -117,7 +117,7 @@ class OnboardingStepWidget extends StatelessWidget {
       case '3':
         // Persona con sombrero y zanahoria
         return Center(
-          child: Container(
+          child: SizedBox(
             width: 250,
             height: 296,
             child: Image.asset(

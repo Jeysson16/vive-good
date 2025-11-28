@@ -8,13 +8,13 @@ class MetricCard extends StatelessWidget {
   final IconData? icon;
 
   const MetricCard({
-    Key? key,
+    super.key,
     required this.title,
     required this.value,
     required this.color,
     this.isCompact = false,
     this.icon,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

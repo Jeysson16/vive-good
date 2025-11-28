@@ -26,7 +26,7 @@ class SaveMessageOfflineUseCase implements UseCase<void, SaveMessageOfflineParam
       );
       
       // Si está offline, mostrar mensaje informativo
-      final connectivityStatus = await connectivityService.currentStatus;
+      final connectivityStatus = connectivityService.currentStatus;
       if (connectivityStatus.isOffline) {
         // El mensaje se guardó localmente y se sincronizará cuando haya conexión
         return const Right(null);

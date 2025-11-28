@@ -166,7 +166,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: _eventType,
+          initialValue: _eventType,
           decoration: const InputDecoration(
             labelText: 'Tipo de Evento',
             border: OutlineInputBorder(),
@@ -251,7 +251,7 @@ class _AddEventDialogState extends State<AddEventDialog> {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: _recurrenceType,
+          initialValue: _recurrenceType,
           decoration: const InputDecoration(
             labelText: 'Tipo de Recurrencia',
             border: OutlineInputBorder(),

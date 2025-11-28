@@ -1,32 +1,33 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../core/routes/app_routes.dart';
+import '../../../data/datasources/chat_remote_datasource.dart';
+import '../../../data/repositories/supabase_chat_repository.dart';
+import '../../../domain/entities/user_habit.dart';
 import '../../blocs/assistant/assistant_bloc.dart';
-import '../../blocs/assistant/assistant_state.dart';
 import '../../blocs/assistant/assistant_event.dart';
+import '../../blocs/assistant/assistant_state.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_state.dart';
+import '../../blocs/chat/chat_bloc.dart';
 import '../../blocs/habit/habit_bloc.dart';
 import '../../blocs/habit/habit_state.dart';
-import '../../widgets/assistant/voice_animation_widget.dart';
+import '../../widgets/assistant/assistant_avatar_widget.dart';
+import '../../widgets/assistant/attached_habits_widget.dart';
 import '../../widgets/assistant/enhanced_voice_animation_widget.dart';
 import '../../widgets/assistant/suggestion_chip_widget.dart';
 import '../../widgets/chat/chat_message_widget.dart';
-import '../../widgets/assistant/assistant_avatar_widget.dart';
-import '../../widgets/assistant/attached_habits_widget.dart';
 import '../chat/chat_intro_page.dart';
-import '../../blocs/chat/chat_bloc.dart';
-import '../../../data/repositories/supabase_chat_repository.dart';
-import '../../../data/datasources/chat_remote_datasource.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../core/routes/app_routes.dart';
 import '../habits/new_habit_screen.dart';
-import '../../../domain/entities/user_habit.dart';
 
 class AssistantPage extends StatefulWidget {
   final List<UserHabit>? attachedHabits;
-  
+
   const AssistantPage({super.key, this.attachedHabits});
 
   @override
@@ -66,17 +67,17 @@ class _AssistantPageState extends State<AssistantPage>
     _textController = TextEditingController();
     _scrollController = ScrollController();
     _suggestionsScrollController = ScrollController();
-    
+
     // Auto-scroll para sugerencias
     _startAutoScroll();
-    
+
     _fadeAnimationController.forward();
-    
+
     // Initialize assistant with current user ID
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userId = _getCurrentUserId(context);
       context.read<AssistantBloc>().add(InitializeAssistant(userId: userId));
-      
+
       // Si hay hábitos adjuntados, mostrarlos como contexto pero permitir al usuario escribir su mensaje
       // Ya no enviamos mensaje automático, solo mostramos los hábitos adjuntados
     });
@@ -87,7 +88,7 @@ class _AssistantPageState extends State<AssistantPage>
       if (_suggestionsScrollController.hasClients) {
         final maxScroll = _suggestionsScrollController.position.maxScrollExtent;
         final currentScroll = _suggestionsScrollController.offset;
-        
+
         if (currentScroll >= maxScroll) {
           _suggestionsScrollController.animateTo(
             0,
@@ -136,7 +137,12 @@ class _AssistantPageState extends State<AssistantPage>
           end: Alignment.bottomCenter,
           colors: [
             Color(0xFFF8F9FA), // Gris muy claro en la parte superior
-            Color.fromARGB(255, 213, 245, 213), // Verde muy suave en la parte inferior
+            Color.fromARGB(
+              255,
+              213,
+              245,
+              213,
+            ), // Verde muy suave en la parte inferior
           ],
           stops: [0.0, 1.0],
         ),
@@ -145,105 +151,126 @@ class _AssistantPageState extends State<AssistantPage>
         backgroundColor: Colors.transparent,
         // Eliminamos el AppBar para optimizar espacio
         body: BlocConsumer<AssistantBloc, AssistantState>(
-              listener: (context, state) {
-                if (state.error != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(state.error!),
-                      backgroundColor: Colors.red,
-                    ),
+          listener: (context, state) {
+            if (state.error != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(state.error!),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+
+            // Handle voice animation
+            if (state.isRecording) {
+              _voiceAnimationController.repeat();
+              _iconAnimationController.forward();
+            } else {
+              _voiceAnimationController.stop();
+              _iconAnimationController.reverse();
+            }
+
+            // Auto-scroll to bottom when new messages arrive
+            if (state.messages.isNotEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_scrollController.hasClients) {
+                  _scrollController.animateTo(
+                    _scrollController.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
                   );
                 }
-                
-                // Handle voice animation
-                if (state.isRecording) {
-                  _voiceAnimationController.repeat();
-                  _iconAnimationController.forward();
-                } else {
-                  _voiceAnimationController.stop();
-                  _iconAnimationController.reverse();
-                }
-                
-                // Auto-scroll to bottom when new messages arrive
-                if (state.messages.isNotEmpty) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (_scrollController.hasClients) {
-                      _scrollController.animateTo(
-                        _scrollController.position.maxScrollExtent,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOut,
-                      );
-                    }
-                  });
-                }
-              },
-              builder: (context, state) {
-                return SafeArea(
-                  child: Column(
-                    children: [
-                      // Hábitos adjuntados (si existen)
-                      if (widget.attachedHabits != null && widget.attachedHabits!.isNotEmpty)
-                        AttachedHabitsWidget(
-                          attachedHabits: widget.attachedHabits!,
-                          onRemoveAll: () {
-                            // Navegar de vuelta sin hábitos adjuntados
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (context) => const AssistantPage(),
-                              ),
-                            );
-                          },
-                          onRemoveHabit: (habit) {
-                            // Crear nueva lista sin el hábito removido
-                            final updatedHabits = widget.attachedHabits!
-                                .where((h) => h.id != habit.id)
-                                .toList();
-                            
-                            if (updatedHabits.isEmpty) {
-                              // Si no quedan hábitos, navegar sin hábitos adjuntados
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                  builder: (context) => const AssistantPage(),
-                                ),
-                              );
-                            } else {
-                              // Navegar con la lista actualizada
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                  builder: (context) => AssistantPage(
-                                    attachedHabits: updatedHabits,
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                      
-                      // Contenido principal
-                      Expanded(
-                        child: state.messages.isEmpty 
-                                ? _buildWelcomeScreen(context, state)
-                                : _buildChatView(context, state),
-                      ),
-                      
-                      // Completion button (appears when there are messages)
-                      if (state.messages.isNotEmpty && state.currentSession != null)
-                        _buildCompletionButton(context, state),
-                      
-                      // Bottom input area
-                      _buildBottomInputArea(context, state),
-                    ],
+              });
+            }
+          },
+          builder: (context, state) {
+            return SafeArea(
+              child: Column(
+                children: [
+                  // Hábitos adjuntados (si existen)
+                  if (widget.attachedHabits != null &&
+                      widget.attachedHabits!.isNotEmpty)
+                    AttachedHabitsWidget(
+                      attachedHabits: widget.attachedHabits!,
+                      onRemoveAll: () {
+                        // Navegar de vuelta sin hábitos adjuntados
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) => const AssistantPage(),
+                          ),
+                        );
+                      },
+                      onRemoveHabit: (habit) {
+                        // Crear nueva lista sin el hábito removido
+                        final updatedHabits = widget.attachedHabits!
+                            .where((h) => h.id != habit.id)
+                            .toList();
+
+                        if (updatedHabits.isEmpty) {
+                          // Si no quedan hábitos, navegar sin hábitos adjuntados
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (context) => const AssistantPage(),
+                            ),
+                          );
+                        } else {
+                          // Navegar con la lista actualizada
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  AssistantPage(attachedHabits: updatedHabits),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+
+                  // Contenido principal
+                  Expanded(
+                    child: state.messages.isEmpty
+                        ? _buildWelcomeScreen(context, state)
+                        : _buildChatView(context, state),
                   ),
-                );
-              },
-            ),
-          ),
-        );
+                  _buildHealthDisclaimer(),
+
+                  // Completion button (appears when there are messages)
+                  if (state.messages.isNotEmpty && state.currentSession != null)
+                    _buildCompletionButton(context, state),
+
+                  // Bottom input area
+                  _buildBottomInputArea(context, state),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHealthDisclaimer() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F5F5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
+        ),
+        child: const Text(
+          'Las recomendaciones del asistente son sugerencias generales. Ante dudas o síntomas, consulta a un profesional de la salud.',
+          style: TextStyle(fontSize: 11, color: Color(0xFF666666)),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
   }
 
   Widget _buildSuggestionChips(AssistantState state) {
-    final suggestions = state.suggestions.isNotEmpty 
-        ? state.suggestions 
+    final suggestions = state.suggestions.isNotEmpty
+        ? state.suggestions
         : [
             'Reprograma el almuerzo',
             'Cambia mi rutina',
@@ -255,7 +282,7 @@ class _AssistantPageState extends State<AssistantPage>
             'Control de estrés',
           ];
 
-    return Container(
+    return SizedBox(
       height: 40,
       child: ListView.builder(
         controller: _suggestionsScrollController,
@@ -294,9 +321,9 @@ class _AssistantPageState extends State<AssistantPage>
               _buildSuggestionChips(state),
             ],
           ),
-          
+
           const SizedBox(height: 40),
-          
+
           // Greeting and main question
           Text(
             'Hola, ${context.read<AuthBloc>().state is AuthAuthenticated ? (context.read<AuthBloc>().state as AuthAuthenticated).user.firstName : 'Usuario'}',
@@ -316,7 +343,7 @@ class _AssistantPageState extends State<AssistantPage>
             ),
           ),
           const SizedBox(height: 24),
-          
+
           // Voice animation and avatar with circular gradient background
           Container(
             height: 250,
@@ -347,7 +374,10 @@ class _AssistantPageState extends State<AssistantPage>
                       amplitude: state.recordingAmplitude ?? 0.0,
                       color: _getAnimationColor(state),
                       isListening: state.isRecording,
-                      isActive: state.isRecording || state.isPlayingAudio || state.isLoading,
+                      isActive:
+                          state.isRecording ||
+                          state.isPlayingAudio ||
+                          state.isLoading,
                     ),
                     // Assistant avatar
                     AssistantAvatarWidget(
@@ -360,7 +390,7 @@ class _AssistantPageState extends State<AssistantPage>
               ),
             ),
           ),
-          
+
           const SizedBox(height: 60),
         ],
       ),
@@ -392,16 +422,16 @@ class _AssistantPageState extends State<AssistantPage>
               child: _buildTypingIndicator(),
             );
           }
-          
+
           final message = state.messages[index];
           return Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: BlocBuilder<HabitBloc, HabitState>(
               builder: (context, habitState) {
-                final existingUserHabits = habitState is HabitLoaded 
-                    ? habitState.filteredHabits 
+                final existingUserHabits = habitState is HabitLoaded
+                    ? habitState.filteredHabits
                     : <UserHabit>[];
-                
+
                 return ChatMessageWidget(
                   message: message,
                   existingUserHabits: existingUserHabits,
@@ -411,8 +441,11 @@ class _AssistantPageState extends State<AssistantPage>
                       MaterialPageRoute(
                         builder: (context) => NewHabitScreen(
                           prefilledHabitName: habitName,
-                          prefilledDescription: habitData['description'] as String?,
-                          prefilledCategoryId: _getCategoryIdFromName(habitData['category'] as String?),
+                          prefilledDescription:
+                              habitData['description'] as String?,
+                          prefilledCategoryId: _getCategoryIdFromName(
+                            habitData['category'] as String?,
+                          ),
                         ),
                       ),
                     );
@@ -428,19 +461,18 @@ class _AssistantPageState extends State<AssistantPage>
 
   Widget _buildBottomInputArea(BuildContext context, AssistantState state) {
     // Si hay hábitos adjuntados y no hay mensajes, mostrar campo de texto
-    final bool showTextInput = widget.attachedHabits != null && 
-                               widget.attachedHabits!.isNotEmpty && 
-                               state.messages.isEmpty;
+    final bool showTextInput =
+        widget.attachedHabits != null &&
+        widget.attachedHabits!.isNotEmpty &&
+        state.messages.isEmpty;
 
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Colors.transparent,
-      ),
+      decoration: const BoxDecoration(color: Colors.transparent),
       child: SafeArea(
-        child: showTextInput 
-          ? _buildTextInputArea(context, state)
-          : _buildVoiceInputArea(context, state),
+        child: showTextInput
+            ? _buildTextInputArea(context, state)
+            : _buildVoiceInputArea(context, state),
       ),
     );
   }
@@ -477,10 +509,7 @@ class _AssistantPageState extends State<AssistantPage>
                   controller: _textController,
                   decoration: InputDecoration(
                     hintText: 'Escribe sobre tus hábitos: $habitNames',
-                    hintStyle: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
-                    ),
+                    hintStyle: TextStyle(color: Colors.grey[600], fontSize: 14),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 20,
@@ -497,10 +526,7 @@ class _AssistantPageState extends State<AssistantPage>
                 margin: const EdgeInsets.only(right: 8),
                 child: IconButton(
                   onPressed: () => _sendTextMessage(context, state),
-                  icon: const Icon(
-                    Icons.send,
-                    color: Color(0xFF2E7D32),
-                  ),
+                  icon: const Icon(Icons.send, color: Color(0xFF2E7D32)),
                 ),
               ),
             ],
@@ -526,9 +552,13 @@ class _AssistantPageState extends State<AssistantPage>
               child: IconButton(
                 onPressed: () {
                   if (state.isRecording) {
-                    context.read<AssistantBloc>().add(const StopVoiceRecording());
+                    context.read<AssistantBloc>().add(
+                      const StopVoiceRecording(),
+                    );
                   } else {
-                    context.read<AssistantBloc>().add(const StartVoiceRecording());
+                    context.read<AssistantBloc>().add(
+                      const StartVoiceRecording(),
+                    );
                   }
                 },
                 icon: Icon(
@@ -536,7 +566,9 @@ class _AssistantPageState extends State<AssistantPage>
                   color: const Color(0xFF2E7D32),
                   size: 24,
                 ),
-                tooltip: state.isRecording ? 'Detener grabación' : 'Grabar mensaje',
+                tooltip: state.isRecording
+                    ? 'Detener grabación'
+                    : 'Grabar mensaje',
               ),
             ),
             // Botón de cerrar
@@ -593,14 +625,10 @@ class _AssistantPageState extends State<AssistantPage>
                   builder: (context) => BlocProvider(
                     create: (context) => ChatBloc(
                       chatRepository: SupabaseChatRepository(
-                        ChatRemoteDataSource(
-                          Supabase.instance.client,
-                        ),
+                        ChatRemoteDataSource(Supabase.instance.client),
                       ),
                     ),
-                    child: ChatIntroPage(
-                      attachedHabits: widget.attachedHabits,
-                    ),
+                    child: ChatIntroPage(attachedHabits: widget.attachedHabits),
                   ),
                 ),
               );
@@ -613,7 +641,7 @@ class _AssistantPageState extends State<AssistantPage>
             tooltip: 'Mensajes',
           ),
         ),
-        
+
         // Voice recording button (center)
         GestureDetector(
           onTap: () {
@@ -628,38 +656,40 @@ class _AssistantPageState extends State<AssistantPage>
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: state.isRecording 
-                ? const Color(0xFF4CAF50) // Verde cuando está grabando
-                : Colors.transparent, // Transparente cuando no está grabando
+              color: state.isRecording
+                  ? const Color(0xFF4CAF50) // Verde cuando está grabando
+                  : Colors.transparent, // Transparente cuando no está grabando
               shape: BoxShape.circle,
-              border: state.isRecording 
-                ? null 
-                : Border.all(
-                    color: const Color(0xFF2E7D32).withOpacity(0.3),
-                    width: 2,
-                  ),
-              boxShadow: state.isRecording ? [
-                BoxShadow(
-                  color: const Color(0xFF4CAF50).withOpacity(0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
-                ),
-              ] : null,
+              border: state.isRecording
+                  ? null
+                  : Border.all(
+                      color: const Color(0xFF2E7D32).withOpacity(0.3),
+                      width: 2,
+                    ),
+              boxShadow: state.isRecording
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF4CAF50).withOpacity(0.3),
+                        blurRadius: 20,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
             ),
             child: AnimatedScale(
               duration: const Duration(milliseconds: 100),
               scale: state.isRecording ? 0.9 : 1.0,
               child: Icon(
                 state.isRecording ? Icons.stop : Icons.mic,
-                color: state.isRecording 
-                  ? Colors.white 
-                  : const Color(0xFF2E7D32),
+                color: state.isRecording
+                    ? Colors.white
+                    : const Color(0xFF2E7D32),
                 size: 32,
               ),
             ),
           ),
         ),
-        
+
         // Close button (right)
         Container(
           width: 56,
@@ -674,13 +704,13 @@ class _AssistantPageState extends State<AssistantPage>
           ),
           child: IconButton(
             onPressed: () {
-              Navigator.of(context).pop();
+              context.go(AppRoutes.main);
             },
             icon: Icon(
-               Icons.close_rounded,
-               color: const Color(0xFF2E7D32),
-               size: 22,
-             ),
+              Icons.close_rounded,
+              color: const Color(0xFF2E7D32),
+              size: 22,
+            ),
             tooltip: 'Cerrar',
           ),
         ),
@@ -693,21 +723,19 @@ class _AssistantPageState extends State<AssistantPage>
     if (text.isEmpty) return;
 
     final userId = _getCurrentUserId(context);
-    
+
     // Incluir información de hábitos adjuntados en el contexto
     String messageWithContext = text;
     if (widget.attachedHabits != null && widget.attachedHabits!.isNotEmpty) {
       final habitNames = widget.attachedHabits!
           .map((habit) => habit.customName ?? habit.habit?.name ?? 'Hábito')
           .join(', ');
-      messageWithContext = 'Contexto: Hábitos adjuntados: $habitNames\n\nMensaje del usuario: $text';
+      messageWithContext =
+          'Contexto: Hábitos adjuntados: $habitNames\n\nMensaje del usuario: $text';
     }
 
     context.read<AssistantBloc>().add(
-      SendTextMessage(
-        content: messageWithContext,
-        userId: userId,
-      ),
+      SendTextMessage(content: messageWithContext, userId: userId),
     );
 
     _textController.clear();
@@ -766,8 +794,9 @@ class _AssistantPageState extends State<AssistantPage>
 
   Widget _buildTranscriptionDisplay(AssistantState state) {
     // Mostrar siempre el contenedor pero con animación suave
-    final bool shouldShow = state.isRecording || state.partialTranscription.isNotEmpty;
-    
+    final bool shouldShow =
+        state.isRecording || state.partialTranscription.isNotEmpty;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeInOut,
@@ -783,7 +812,9 @@ class _AssistantPageState extends State<AssistantPage>
             color: const Color(0xFF4CAF50).withOpacity(shouldShow ? 0.1 : 0.0),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color(0xFF4CAF50).withOpacity(shouldShow ? 0.3 : 0.0),
+              color: const Color(
+                0xFF4CAF50,
+              ).withOpacity(shouldShow ? 0.3 : 0.0),
               width: 1,
             ),
           ),
@@ -840,15 +871,19 @@ class _AssistantPageState extends State<AssistantPage>
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
                     child: Text(
-                      state.partialTranscription.isEmpty 
+                      state.partialTranscription.isEmpty
                           ? (state.isRecording ? 'Escuchando...' : '')
                           : state.partialTranscription,
-                      key: ValueKey(state.partialTranscription.isEmpty ? 'listening' : 'transcription'),
+                      key: ValueKey(
+                        state.partialTranscription.isEmpty
+                            ? 'listening'
+                            : 'transcription',
+                      ),
                       style: TextStyle(
                         fontSize: 14,
                         color: const Color(0xFF1B5E20),
-                        fontStyle: state.partialTranscription.isEmpty 
-                            ? FontStyle.italic 
+                        fontStyle: state.partialTranscription.isEmpty
+                            ? FontStyle.italic
                             : FontStyle.normal,
                       ),
                     ),
@@ -864,8 +899,12 @@ class _AssistantPageState extends State<AssistantPage>
 
   Widget _buildCompletionButton(BuildContext context, AssistantState state) {
     // Check if conversation already has a summary
-    final hasSummary = state.messages.any((message) => message.content.contains('Resumen de la conversación') || message.content.contains('Summary'));
-    
+    final hasSummary = state.messages.any(
+      (message) =>
+          message.content.contains('Resumen de la conversación') ||
+          message.content.contains('Summary'),
+    );
+
     if (hasSummary) {
       return const SizedBox.shrink(); // Don't show button if already completed
     }
@@ -943,15 +982,19 @@ class _AssistantPageState extends State<AssistantPage>
       'Hidratación': '93688043-4d35-4b2a-9dcd-17482125b1a9',
       'Bienestar Mental': 'ff9800bb-5678-4567-89ab-cdef12345678',
       'Productividad': '795548cc-9012-4567-89ab-cdef12345678',
-      
+
       // Alias y variaciones comunes
-      'Ejercicio': '2196f3aa-1234-4567-89ab-cdef12345678', // Alias para Actividad Física
-      'Salud': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Alias para Alimentación
-      'Bienestar': 'ff9800bb-5678-4567-89ab-cdef12345678', // Alias para Bienestar Mental
+      'Ejercicio':
+          '2196f3aa-1234-4567-89ab-cdef12345678', // Alias para Actividad Física
+      'Salud':
+          'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Alias para Alimentación
+      'Bienestar':
+          'ff9800bb-5678-4567-89ab-cdef12345678', // Alias para Bienestar Mental
       'Descanso': '6d1f2f1b-04ef-497e-97b7-8077ff3b3c69', // Alias para Sueño
-      'General': 'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Fallback a Alimentación
+      'General':
+          'b0231bea-a750-4984-97d8-8ccb3a2bae1c', // Fallback a Alimentación
     };
-    
+
     return categoryMap[categoryName];
   }
 
@@ -968,10 +1011,7 @@ class _AssistantPageState extends State<AssistantPage>
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                const Color(0xFF4CAF50),
-                const Color(0xFF81C784),
-              ],
+              colors: [const Color(0xFF4CAF50), const Color(0xFF81C784)],
             ),
             boxShadow: [
               BoxShadow(
@@ -997,23 +1037,17 @@ class _AssistantPageState extends State<AssistantPage>
             ),
           ),
         ),
-        
+
         const SizedBox(width: 8),
-        
+
         // Contenedor del indicador de escritura
         Expanded(
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: const Color(0xFFF5F5F5),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: const Color(0xFFE0E0E0),
-                width: 1,
-              ),
+              border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1044,7 +1078,7 @@ class _AssistantPageState extends State<AssistantPage>
             ),
           ),
         ),
-        
+
         // Espaciador para alinear a la izquierda
         const SizedBox(width: 48),
       ],
@@ -1059,8 +1093,11 @@ class _AssistantPageState extends State<AssistantPage>
         final animationValue = _voiceAnimationController.value;
         final delay = index * 0.2;
         final dotValue = ((animationValue + delay) % 1.0);
-        final opacity = (0.3 + 0.7 * (1 - (dotValue - 0.5).abs() * 2)).clamp(0.3, 1.0);
-        
+        final opacity = (0.3 + 0.7 * (1 - (dotValue - 0.5).abs() * 2)).clamp(
+          0.3,
+          1.0,
+        );
+
         return Container(
           width: 4,
           height: 4,

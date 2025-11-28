@@ -5,18 +5,23 @@ part 'onboarding_step_model.g.dart';
 
 @HiveType(typeId: 1)
 class OnboardingStepModel extends OnboardingStep {
+  @override
   @HiveField(0)
   final String id;
   
+  @override
   @HiveField(1)
   final String title;
   
+  @override
   @HiveField(2)
   final String description;
   
+  @override
   @HiveField(3)
   final String imagePath;
   
+  @override
   @HiveField(4)
   final int order;
 

@@ -24,7 +24,7 @@ class ProgressRepositoryImpl implements ProgressRepository {
   Future<Either<Failure, Progress>> getUserProgress(String userId) async {
     try {
       // Verificar conectividad
-      final connectivityStatus = await connectivityService.currentStatus;
+      final connectivityStatus = connectivityService.currentStatus;
       
       if (connectivityStatus.isOnline) {
         try {
@@ -53,7 +53,7 @@ class ProgressRepositoryImpl implements ProgressRepository {
   ) async {
     try {
       // Verificar conectividad
-      final connectivityStatus = await connectivityService.currentStatus;
+      final connectivityStatus = connectivityService.currentStatus;
       
       if (connectivityStatus.isOnline) {
         try {

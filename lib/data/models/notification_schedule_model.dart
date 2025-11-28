@@ -100,6 +100,7 @@ class NotificationScheduleModel extends NotificationSchedule {
     };
   }
 
+  @override
   NotificationScheduleModel copyWith({
     String? id,
     String? habitNotificationId,

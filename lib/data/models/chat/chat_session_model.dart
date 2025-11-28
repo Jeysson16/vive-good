@@ -1,5 +1,4 @@
 import '../../../domain/entities/chat/chat_session.dart';
-import '../../../domain/entities/chat/chat_message.dart';
 import 'chat_message_model.dart';
 
 class ChatSessionModel extends ChatSession {

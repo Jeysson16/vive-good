@@ -104,6 +104,7 @@ abstract class ChatRepository {
   /// [userId] - ID del usuario
   /// [conversationHistory] - Historial de mensajes para contexto
   /// [userContext] - Contexto adicional del usuario
+  /// [isInitialResponse] - Indica si es la respuesta inicial rápida (sin deep learning)
   /// Retorna la respuesta del asistente
   Future<AssistantResponse> sendMessageToGemini({
     required String message,
@@ -111,6 +112,7 @@ abstract class ChatRepository {
     required String userId,
     List<ChatMessage>? conversationHistory,
     Map<String, dynamic>? userContext,
+    bool isInitialResponse = false,
   });
 
   /// Procesa un mensaje de voz

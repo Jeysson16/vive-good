@@ -297,6 +297,8 @@ class DeepLearningDatasource {
     }
   }
 
+
+
   /// Obtiene información del modelo
   Future<ModelInfo> getModelInfo() async {
     try {
@@ -348,6 +350,81 @@ class DeepLearningDatasource {
         name: 'DeepLearningDatasource',
       );
       throw Exception('Error al obtener información del modelo: $e');
+    }
+  }
+
+  /// Analiza síntomas médicos usando el endpoint de análisis médico
+  Future<Map<String, dynamic>> analyzeMedicalSymptoms({
+    required String message,
+    required String userId,
+    Map<String, dynamic>? additionalContext,
+  }) async {
+    try {
+      final headers = await _getAuthenticatedHeaders();
+      final url = '$_baseUrl/medical-analysis/analyze';
+      
+      developer.log(
+        '🏥 [DL DATASOURCE] Analizando síntomas médicos...',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        '🏥 [DL DATASOURCE] URL: $url',
+        name: 'DeepLearningDatasource',
+      );
+      
+      final requestBody = {
+        'message': message,
+        'user_id': userId,
+        'context': additionalContext ?? {},
+        'timestamp': DateTime.now().toIso8601String(),
+        'analysis_type': 'gastritis_prevention',
+        'target_population': 'university_students',
+      };
+      
+      developer.log(
+        '🏥 [DL DATASOURCE] Request body: ${jsonEncode(requestBody)}',
+        name: 'DeepLearningDatasource',
+      );
+
+      final response = await _httpClient.post(
+        Uri.parse(url),
+        headers: headers,
+        body: jsonEncode(requestBody),
+      );
+
+      developer.log(
+        '🏥 [DL DATASOURCE] Response status: ${response.statusCode}',
+        name: 'DeepLearningDatasource',
+      );
+      
+      developer.log(
+        '🏥 [DL DATASOURCE] Response body: ${response.body}',
+        name: 'DeepLearningDatasource',
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        developer.log(
+          '✅ [DL DATASOURCE] Análisis médico exitoso',
+          name: 'DeepLearningDatasource',
+        );
+        
+        return responseData;
+      } else {
+        developer.log(
+          '❌ [DL DATASOURCE] Error en análisis médico: ${response.statusCode} - ${response.body}',
+          name: 'DeepLearningDatasource',
+        );
+        throw Exception('Error del servidor: ${response.statusCode}');
+      }
+    } catch (e) {
+      developer.log(
+        '💥 [DL DATASOURCE] Excepción en análisis médico: $e',
+        name: 'DeepLearningDatasource',
+      );
+      throw Exception('Error al conectar con el análisis médico: $e');
     }
   }
 

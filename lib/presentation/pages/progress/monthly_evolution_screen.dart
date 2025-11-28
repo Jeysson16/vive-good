@@ -57,7 +57,7 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
   // Helper method to get current user ID
   String? _getCurrentUserId() {
     final currentUser = Supabase.instance.client.auth.currentUser;
-    if (currentUser?.id?.isNotEmpty == true) {
+    if (currentUser?.id.isNotEmpty == true) {
       return currentUser!.id;
     }
     return null;
@@ -99,8 +99,11 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
 
   void _loadMonthlyData() async {
     final userId = _getCurrentUserId();
+    print('🔄 _loadMonthlyData: Starting data load for ${_selectedDate.year}-${_selectedDate.month}, userId: $userId');
+    
     if (userId != null) {
       // Cargar datos de progreso para el mes específico seleccionado
+      print('🔄 _loadMonthlyData: Dispatching LoadMonthlyProgressForDate');
       context.read<ProgressBloc>().add(
         LoadMonthlyProgressForDate(
           userId: userId,
@@ -117,10 +120,11 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
         _animationController.forward();
       }
 
-      // Phase 2: Secondary data - load in background after UI is shown
-      await Future.delayed(const Duration(milliseconds: 100));
+      // Phase 2: Secondary data - load immediately to show loading states
+      print('🔄 _loadMonthlyData: Loading secondary data immediately');
       _loadSecondaryDataInParallel(userId);
     } else {
+      print('❌ _loadMonthlyData: userId is null');
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleUserIdError();
       });
@@ -128,37 +132,51 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
   }
 
   void _loadSecondaryDataInParallel(String userId) {
+    print('🔄 _loadSecondaryDataInParallel: Starting parallel data load for ${_selectedDate.year}-${_selectedDate.month}');
+    
     // Execute all secondary BLoC loads simultaneously without waiting
     Future.wait([
       Future.microtask(
-        () => context.read<HabitBreakdownBloc>().add(
-          LoadMonthlyHabitsBreakdown(
-            userId: userId,
-            year: _selectedDate.year,
-            month: _selectedDate.month,
-          ),
-        ),
+        () {
+          print('🔄 Dispatching LoadMonthlyHabitsBreakdown for ${_selectedDate.year}-${_selectedDate.month}');
+          return context.read<HabitBreakdownBloc>().add(
+            LoadMonthlyHabitsBreakdown(
+              userId: userId,
+              year: _selectedDate.year,
+              month: _selectedDate.month,
+            ),
+          );
+        },
       ),
       Future.microtask(
-        () => context.read<HabitStatisticsBloc>().add(
-          LoadHabitStatistics(
-            userId: userId,
-            year: _selectedDate.year,
-            month: _selectedDate.month,
-          ),
-        ),
+        () {
+          print('🔄 Dispatching LoadHabitStatistics for ${_selectedDate.year}-${_selectedDate.month}');
+          return context.read<HabitStatisticsBloc>().add(
+            LoadHabitStatistics(
+              userId: userId,
+              year: _selectedDate.year,
+              month: _selectedDate.month,
+            ),
+          );
+        },
       ),
       Future.microtask(
-        () => context.read<CategoryEvolutionBloc>().add(
-          LoadCategoryEvolution(
-            userId: userId,
-            year: _selectedDate.year,
-            month: _selectedDate.month,
-          ),
-        ),
+        () {
+          print('🔄 Dispatching LoadCategoryEvolution for ${_selectedDate.year}-${_selectedDate.month}');
+          return context.read<CategoryEvolutionBloc>().add(
+            LoadCategoryEvolution(
+              userId: userId,
+              year: _selectedDate.year,
+              month: _selectedDate.month,
+            ),
+          );
+        },
       ),
-    ]).catchError((error) {
+    ]).then((_) {
+      print('✅ _loadSecondaryDataInParallel: All secondary data loads dispatched successfully');
+    }).catchError((error) {
       // Handle any errors in secondary data loading
+      print('❌ Error loading secondary data: $error');
       debugPrint('Error loading secondary data: $error');
     });
   }
@@ -176,12 +194,16 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
     );
 
     if (picked != null && picked != _selectedDate) {
+      print('📅 Date changed from ${_selectedDate.year}-${_selectedDate.month} to ${picked.year}-${picked.month}');
       setState(() {
         _selectedDate = picked;
         _isInitialLoad = true;
       });
       _animationController.reset();
+      print('📅 Calling _loadMonthlyData after date change');
       _loadMonthlyData();
+    } else {
+      print('📅 Date picker cancelled or same date selected');
     }
   }
 
@@ -542,8 +564,11 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
   Widget _buildStatisticsSummaryWithSkeleton() {
     return BlocBuilder<HabitStatisticsBloc, HabitStatisticsState>(
       builder: (context, statisticsState) {
+        print('DEBUG: HabitStatisticsState: ${statisticsState.runtimeType}');
+        
         if (statisticsState is HabitStatisticsLoaded &&
             statisticsState.statistics.isNotEmpty) {
+          print('DEBUG: Showing statistics data with ${statisticsState.statistics.length} items');
           return StatisticsSummaryWidget(
             statistics: statisticsState.statistics,
           );
@@ -551,13 +576,94 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
 
         if (statisticsState is HabitStatisticsRefreshing &&
             statisticsState.currentStatistics.isNotEmpty) {
+          print('DEBUG: Showing refreshing statistics with ${statisticsState.currentStatistics.length} items');
           return StatisticsSummaryWidget(
             statistics: statisticsState.currentStatistics,
           );
         }
 
-        // Sin skeleton: no mostrar nada mientras carga
-        return const SizedBox.shrink();
+        if (statisticsState is HabitStatisticsError) {
+          print('DEBUG: HabitStatisticsError: ${statisticsState.message}');
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: Colors.grey,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Error al cargar datos: Servicio temporalmente no disponible. Intenta nuevamente en unos momentos.',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (statisticsState is HabitStatisticsLoaded &&
+            statisticsState.statistics.isEmpty) {
+          print('DEBUG: No statistics data available');
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.analytics_outlined,
+                    color: Colors.grey,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No hay datos disponibles para este período',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Mostrar skeleton mientras carga
+        print('DEBUG: Showing statistics skeleton');
+        return _buildStatisticsSkeleton();
       },
     );
   }
@@ -797,7 +903,57 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
 
               if (breakdownState is HabitBreakdownLoaded &&
                   breakdownState.breakdown.isNotEmpty) {
-                return _buildPieChartWidget(breakdownState.breakdown);
+                // Verificar si hay datos significativos (al menos un hábito completado)
+                final hasSignificantData = breakdownState.breakdown.any((item) => 
+                  (item.completedHabits ?? 0) > 0 || (item.completionPercentage ?? 0) > 0);
+                
+                if (hasSignificantData) {
+                  return _buildPieChartWidget(breakdownState.breakdown);
+                } else {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.pie_chart_outline,
+                            color: Colors.grey,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'No hay actividad registrada en este período',
+                            style: TextStyle(color: Colors.grey, fontSize: 14),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+              }
+
+              if (breakdownState is HabitBreakdownError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.grey,
+                          size: 48,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Error al cargar distribución: ${breakdownState.message}',
+                          style: const TextStyle(color: Colors.grey, fontSize: 14),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
               }
 
               return const Center(
@@ -919,14 +1075,145 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
         // Cards unificados por categoría
         BlocBuilder<CategoryEvolutionBloc, CategoryEvolutionState>(
           builder: (context, evolutionState) {
+            print('DEBUG: CategoryEvolutionState: ${evolutionState.runtimeType}');
             return BlocBuilder<HabitStatisticsBloc, HabitStatisticsState>(
               builder: (context, statisticsState) {
+                print('DEBUG: HabitStatisticsState in categories: ${statisticsState.runtimeType}');
+                
+                // Manejar errores
+                if (evolutionState is CategoryEvolutionError) {
+                  print('DEBUG: CategoryEvolutionError: ${evolutionState.message}');
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          spreadRadius: 1,
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            color: Colors.grey,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Error al cargar datos: Servicio temporalmente no disponible. Intenta nuevamente en unos momentos.',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                if (statisticsState is HabitStatisticsError) {
+                  print('DEBUG: HabitStatisticsError in categories: ${statisticsState.message}');
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          spreadRadius: 1,
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            color: Colors.grey,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Error al cargar datos: Servicio temporalmente no disponible. Intenta nuevamente en unos momentos.',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                // Si ambos están cargados pero no hay datos
+                if (evolutionState is CategoryEvolutionLoaded &&
+                    statisticsState is HabitStatisticsLoaded &&
+                    evolutionState.evolution.isEmpty &&
+                    statisticsState.statistics.isEmpty) {
+                  print('DEBUG: No data available for both evolution and statistics');
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          spreadRadius: 1,
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.analytics_outlined,
+                            color: Colors.grey,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No hay datos disponibles para este período',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                // Si hay datos de evolución
                 if (evolutionState is CategoryEvolutionLoaded &&
                     evolutionState.evolution.isNotEmpty) {
+                  print('DEBUG: Showing category evolution data with ${evolutionState.evolution.length} categories');
                   // Obtener estadísticas si están disponibles
                   final statistics = statisticsState is HabitStatisticsLoaded
                       ? statisticsState.statistics
                       : <dynamic>[];
+                  print('DEBUG: Statistics available: ${statistics.length} items');
 
                   return Column(
                     children: evolutionState.evolution.map((evolution) {
@@ -952,7 +1239,8 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
                   );
                 }
 
-                // Show optimized skeleton while loading
+                // Mostrar skeleton mientras carga
+                print('DEBUG: Showing category skeleton - evolutionState: ${evolutionState.runtimeType}, statisticsState: ${statisticsState.runtimeType}');
                 return _buildCategorySkeleton();
               },
             );
@@ -1166,7 +1454,7 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
                           evolution: evolution,
                           statistics: categoryStats,
                         );
-                      }).toList(),
+                      }),
                     ],
                   );
                 }
@@ -1292,7 +1580,7 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
                             child: CategoryEvolutionChart(evolution: evolution),
                           ),
                         )
-                        .toList(),
+                        ,
                   ],
                 );
               }
@@ -1330,7 +1618,7 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
                             child: CategoryEvolutionChart(evolution: evolution),
                           ),
                         )
-                        .toList(),
+                        ,
                   ],
                 );
               }
@@ -1451,7 +1739,7 @@ class _MonthlyEvolutionScreenState extends State<MonthlyEvolutionScreen>
                         padding: const EdgeInsets.only(bottom: 16),
                         child: HabitStatisticsCard(statistics: statistics),
                       );
-                    }).toList(),
+                    }),
                   ],
                 );
               }

@@ -44,7 +44,7 @@ abstract class NotificationLocalDataSource {
 }
 
 class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
-  static const String _habitNotificationsBox = 'habit_notifications';
+  static const String _habitNotificationsBox = 'notifications';
   static const String _notificationSchedulesBox = 'notification_schedules';
   static const String _notificationLogsBox = 'notification_logs';
   static const String _notificationSettingsBox = 'notification_settings';

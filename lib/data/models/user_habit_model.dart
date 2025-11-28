@@ -3,6 +3,7 @@ import 'package:vive_good_app/data/models/habit_model.dart';
 import 'package:vive_good_app/data/models/category_model.dart';
 
 class UserHabitModel extends UserHabit {
+  @override
   final HabitModel? habit;
   final CategoryModel? category;
 

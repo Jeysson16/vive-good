@@ -7,6 +7,7 @@ import '../../../domain/entities/user_habit.dart';
 import '../../../domain/repositories/chat_repository.dart';
 import 'formatted_text_widget.dart';
 import 'auto_created_habits_widget.dart';
+import 'typewriter_text_widget.dart';
 
 import 'enhanced_habits_dropdown_widget.dart';
 import '../../pages/habits/new_habit_screen.dart';
@@ -50,18 +51,24 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
   bool _isEditing = false;
   late TextEditingController _editController;
   final FocusNode _editFocusNode = FocusNode();
-  bool _showSuggestedHabits = false;
+  final bool _showSuggestedHabits = false;
   List<Map<String, dynamic>>? _cachedSuggestedHabits;
   
   // Estado del feedback
   String? _currentFeedback; // 'like' o 'dislike'
   bool _isLoadingFeedback = false;
+  
+  // Control del efecto typewriter
+  bool _shouldShowTypewriter = false;
 
   @override
   void initState() {
     super.initState();
     _editController = TextEditingController(text: widget.message.content);
     _loadExistingFeedback();
+    
+    // Determinar si debe mostrar efecto typewriter
+    _shouldShowTypewriter = _shouldUseTypewriterEffect();
   }
 
   Future<void> _loadExistingFeedback() async {
@@ -249,7 +256,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
     final meta = widget.message.metadata;
     final isImage =
         meta != null && meta['type'] == 'image' && meta['url'] is String;
-    final imageUrl = isImage ? meta!['url'] as String : null;
+    final imageUrl = isImage ? meta['url'] as String : null;
 
     if (isImage) {
       return ClipRRect(
@@ -279,18 +286,29 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
         style: const TextStyle(fontSize: 16, color: Colors.white, height: 1.4),
       );
     } else {
-      // Para mensajes del asistente, usar el widget de formato
+      // Para mensajes del asistente, usar el widget de formato con efecto typewriter si es necesario
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FormattedTextWidget(
-            text: widget.message.content,
-            baseStyle: const TextStyle(
-              fontSize: 16,
-              color: Color(0xFF333333),
-              height: 1.4,
-            ),
-          ),
+          _shouldShowTypewriter
+              ? TypewriterTextWidget(
+                  text: widget.message.content,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF333333),
+                    height: 1.4,
+                  ),
+                  speed: const Duration(milliseconds: 30),
+                  autoStart: true,
+                )
+              : FormattedTextWidget(
+                  text: widget.message.content,
+                  baseStyle: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF333333),
+                    height: 1.4,
+                  ),
+                ),
 
           // Desplegable de hábitos recomendados
           _buildSuggestedHabitsDropdown(),
@@ -2039,6 +2057,35 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
   String _getColorHexFromCategory(String category) {
     final color = _getCategoryColor(category);
     return '#${color.value.toRadixString(16).substring(2)}';
+  }
+
+  /// Determina si debe usar el efecto typewriter para este mensaje
+  bool _shouldUseTypewriterEffect() {
+    // Solo para mensajes del asistente
+    if (widget.message.type != MessageType.assistant) return false;
+    
+    // Verificar si es un mensaje reciente (últimos 5 segundos)
+    final now = DateTime.now();
+    final messageTime = widget.message.createdAt;
+    final timeDifference = now.difference(messageTime).inSeconds;
+    
+    // Usar typewriter solo para mensajes muy recientes
+    if (timeDifference > 10) return false;
+    
+    // Verificar si el mensaje tiene metadata que indique que es una respuesta progresiva
+    final metadata = widget.message.metadata;
+    if (metadata != null) {
+      // Si tiene análisis de deep learning, usar typewriter
+      if (metadata['hasDeepLearning'] == true) return true;
+      
+      // Si es una respuesta completa reciente, usar typewriter
+      if (metadata['isCompleteResponse'] == true) return true;
+    }
+    
+    // Para mensajes largos (más de 100 caracteres), usar typewriter
+    if (widget.message.content.length > 100) return true;
+    
+    return false;
   }
 
   /// Verifica si el mensaje contiene contenido de reprogramación

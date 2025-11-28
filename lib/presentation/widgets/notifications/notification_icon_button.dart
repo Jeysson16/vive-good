@@ -10,9 +10,9 @@ class NotificationIconButton extends StatefulWidget {
   final String userId;
 
   const NotificationIconButton({
-    Key? key,
+    super.key,
     required this.userId,
-  }) : super(key: key);
+  });
 
   @override
   State<NotificationIconButton> createState() => _NotificationIconButtonState();

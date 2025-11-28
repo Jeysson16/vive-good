@@ -5,8 +5,7 @@ class HabitStatisticsCard extends StatelessWidget {
   final HabitStatistics statistics;
   final VoidCallback? onTap;
 
-  const HabitStatisticsCard({Key? key, required this.statistics, this.onTap})
-    : super(key: key);
+  const HabitStatisticsCard({super.key, required this.statistics, this.onTap});
 
   @override
   Widget build(BuildContext context) {

@@ -154,11 +154,6 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
       final response = await supabaseClient.from('categories').select();
       print('🔍 [DEBUG] Raw response from categories: $response');
 
-      if (response == null) {
-        print('❌ [DEBUG] No data received from Supabase');
-        throw ServerException('No data received from Supabase');
-      }
-
       final categories = (response as List)
           .map((json) => CategoryModel.fromJson(json))
           .toList();
@@ -273,6 +268,7 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
     int? limit,
   }) async {
     try {
+      print('DEBUG getHabitSuggestions - params: userId=' + (userId ?? 'null') + ', categoryId=' + (categoryId ?? 'null') + ', limit=' + ((limit ?? 10).toString()));
       // Llamar al stored procedure get_popular_habit_suggestions
       final response = await supabaseClient.rpc(
         'get_popular_habit_suggestions',
@@ -287,9 +283,20 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
         throw ServerException('No data received from Supabase');
       }
 
-      return (response as List)
-          .map((json) => HabitModel.fromJson(json))
+      final list = (response as List)
+          .map((json) {
+            try {
+              print('DEBUG getHabitSuggestions - processing item: ' + json.toString());
+              return HabitModel.fromJson(json);
+            } catch (e) {
+              print('DEBUG getHabitSuggestions - error processing item: $e');
+              print('DEBUG getHabitSuggestions - problematic json: ' + json.toString());
+              throw e;
+            }
+          })
           .toList();
+      print('DEBUG getHabitSuggestions - received count: ' + list.length.toString());
+      return list;
     } catch (e) {
       throw ServerException(e.toString());
     }

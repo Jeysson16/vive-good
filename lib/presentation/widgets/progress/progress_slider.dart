@@ -9,14 +9,14 @@ class ProgressSlider extends StatelessWidget {
   final double spacing;
 
   const ProgressSlider({
-    Key? key,
+    super.key,
     required this.currentStep,
     required this.totalSteps,
     this.activeColor = const Color(0xFF4CAF50),
     this.inactiveColor = const Color(0xFFE0E0E0),
     this.dotSize = 12,
     this.spacing = 16,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -82,14 +82,14 @@ class LinearProgressSlider extends StatelessWidget {
   final String? label;
 
   const LinearProgressSlider({
-    Key? key,
+    super.key,
     required this.progress,
     this.activeColor = const Color(0xFF4CAF50),
     this.backgroundColor = const Color(0xFFE0E0E0),
     this.height = 8,
     this.borderRadius,
     this.label,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -146,14 +146,14 @@ class StepProgressSlider extends StatelessWidget {
   final double lineHeight;
 
   const StepProgressSlider({
-    Key? key,
+    super.key,
     required this.currentStep,
     required this.stepLabels,
     this.activeColor = const Color(0xFF4CAF50),
     this.inactiveColor = const Color(0xFFE0E0E0),
     this.completedColor = const Color(0xFF4CAF50),
     this.lineHeight = 2,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

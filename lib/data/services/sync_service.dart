@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dartz/dartz.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vive_good_app/core/error/failures.dart';
 import 'package:vive_good_app/data/services/connectivity_service.dart';
 import 'package:vive_good_app/data/repositories/local/habit_local_repository.dart';
@@ -11,6 +12,8 @@ import 'package:vive_good_app/data/datasources/habit_remote_datasource.dart';
 import 'package:vive_good_app/data/datasources/progress_remote_datasource.dart';
 import 'package:vive_good_app/data/datasources/user_remote_datasource.dart';
 import 'package:vive_good_app/data/datasources/chat_remote_datasource.dart';
+import 'package:vive_good_app/data/datasources/remote/notification_remote_datasource.dart';
+import 'package:vive_good_app/data/repositories/local/notification_local_repository.dart';
 import 'package:vive_good_app/data/models/habit_model.dart';
 import 'package:vive_good_app/data/models/local/progress_local_model.dart';
 import 'package:vive_good_app/data/models/user_model.dart';
@@ -26,11 +29,13 @@ class SyncService {
   final ProgressLocalRepository _progressLocalRepository;
   final UserLocalRepository _userLocalRepository;
   final ChatLocalRepository _chatLocalRepository;
+  final NotificationLocalRepository _notificationLocalRepository;
   final PendingOperationsLocalRepository _pendingOperationsRepository;
   final HabitRemoteDataSource _habitRemoteDataSource;
   final ProgressRemoteDataSource _progressRemoteDataSource;
   final UserRemoteDataSource _userRemoteDataSource;
   final ChatRemoteDataSource _chatRemoteDataSource;
+  final NotificationRemoteDataSource _notificationRemoteDataSource;
 
   StreamSubscription<ConnectivityStatus>? _connectivitySubscription;
   bool _isSyncing = false;
@@ -49,21 +54,25 @@ class SyncService {
     required ProgressLocalRepository progressLocalRepository,
     required UserLocalRepository userLocalRepository,
     required ChatLocalRepository chatLocalRepository,
+    required NotificationLocalRepository notificationLocalRepository,
     required PendingOperationsLocalRepository pendingOperationsRepository,
     required HabitRemoteDataSource habitRemoteDataSource,
     required ProgressRemoteDataSource progressRemoteDataSource,
     required UserRemoteDataSource userRemoteDataSource,
     required ChatRemoteDataSource chatRemoteDataSource,
+    required NotificationRemoteDataSource notificationRemoteDataSource,
   })  : _connectivityService = connectivityService,
         _habitLocalRepository = habitLocalRepository,
         _progressLocalRepository = progressLocalRepository,
         _userLocalRepository = userLocalRepository,
         _chatLocalRepository = chatLocalRepository,
+        _notificationLocalRepository = notificationLocalRepository,
         _pendingOperationsRepository = pendingOperationsRepository,
         _habitRemoteDataSource = habitRemoteDataSource,
         _progressRemoteDataSource = progressRemoteDataSource,
         _userRemoteDataSource = userRemoteDataSource,
-        _chatRemoteDataSource = chatRemoteDataSource;
+        _chatRemoteDataSource = chatRemoteDataSource,
+        _notificationRemoteDataSource = notificationRemoteDataSource;
 
   /// Inicializa el servicio de sincronización
   void initialize() {
@@ -92,7 +101,7 @@ class SyncService {
       return Left(CacheFailure('Sync already in progress'));
     }
 
-    final connectivityStatus = await _connectivityService.currentStatus;
+    final connectivityStatus = _connectivityService.currentStatus;
     if (!connectivityStatus.isOnline) {
       return Left(NetworkFailure('No internet connection'));
     }
@@ -121,6 +130,9 @@ class SyncService {
 
       // Sincronizar mensajes de chat pendientes
       await _syncPendingChatMessages();
+
+      // Sincronizar notificaciones de hábitos pendientes
+      await _syncPendingNotifications();
 
       // Actualizar el conteo de operaciones pendientes después de la sincronización
       await _updatePendingOperationsCount();
@@ -264,6 +276,40 @@ class SyncService {
     }
   }
 
+  /// Sincroniza notificaciones de hábitos pendientes
+  Future<void> _syncPendingNotifications() async {
+    try {
+      final pendingNotificationsResult = await _notificationLocalRepository.getUnsyncedNotifications();
+      
+      await pendingNotificationsResult.fold(
+        (failure) async {
+          // Log error but continue with other syncs
+          print('Failed to get pending notifications: $failure');
+        },
+        (pendingNotifications) async {
+          for (final notification in pendingNotifications) {
+            try {
+              // Obtener el userId del usuario autenticado
+              final currentUser = Supabase.instance.client.auth.currentUser;
+              if (currentUser == null) {
+                print('No authenticated user found, skipping notification sync');
+                continue;
+              }
+              
+              await _notificationRemoteDataSource.createHabitNotification(notification, currentUser.id);
+              await _notificationLocalRepository.markNotificationAsSynced(notification.id);
+            } catch (e) {
+              // Log error for this specific notification but continue
+              print('Failed to sync notification ${notification.id}: $e');
+            }
+          }
+        },
+      );
+    } catch (e) {
+      print('Failed to sync pending notifications: $e');
+    }
+  }
+
   /// Verifica si hay datos pendientes de sincronización
   Future<bool> hasPendingData() async {
     try {
@@ -271,6 +317,7 @@ class SyncService {
       final progressPending = await _progressLocalRepository.getPendingProgress();
       final userPending = await _userLocalRepository.getPendingUser();
       final messagesPending = await _chatLocalRepository.getPendingMessages();
+      final notificationsPending = await _notificationLocalRepository.getUnsyncedNotifications();
 
       return habitsPending.fold(
         (failure) => false,
@@ -287,6 +334,10 @@ class SyncService {
       messagesPending.fold(
         (failure) => false,
         (messages) => messages.isNotEmpty,
+      ) ||
+      notificationsPending.fold(
+        (failure) => false,
+        (notifications) => notifications.isNotEmpty,
       );
     } catch (e) {
       return false;
@@ -349,7 +400,7 @@ class SyncService {
 
 /// Failure específico para errores de sincronización
 class SyncFailure extends Failure {
-  const SyncFailure(String message) : super(message);
+  const SyncFailure(super.message);
 
   @override
   List<Object> get props => [message];
@@ -357,7 +408,7 @@ class SyncFailure extends Failure {
 
 /// Failure específico para errores de red
 class NetworkFailure extends Failure {
-  const NetworkFailure(String message) : super(message);
+  const NetworkFailure(super.message);
 
   @override
   List<Object> get props => [message];

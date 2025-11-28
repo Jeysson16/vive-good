@@ -36,14 +36,14 @@ class NewHabitScreen extends StatefulWidget {
   final UserHabit? userHabitToEdit; // Datos del hábito a editar
 
   const NewHabitScreen({
-    Key? key,
+    super.key,
     this.prefilledHabitName,
     this.prefilledCategoryId,
     this.prefilledDescription,
     this.habitId,
     this.isEditMode = false,
     this.userHabitToEdit,
-  }) : super(key: key);
+  });
 
   @override
   State<NewHabitScreen> createState() => _NewHabitScreenState();
@@ -229,50 +229,48 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
           .eq('id', habitId)
           .single();
 
-      if (response != null) {
-        final habitData = response['habits'];
-        final categoryData = response['categories'];
+      final habitData = response['habits'];
+      final categoryData = response['categories'];
+      
+      // Poblar los campos con los datos del hábito
+      setState(() {
+        _habitNameController.text = habitData['name'] ?? '';
+        _descriptionController.text = habitData['description'] ?? '';
+        _selectedCategoryId = habitData['category_id'];
+        _selectedFrequency = response['frequency'] ?? 'Diario';
+        _selectedDifficulty = habitData['difficulty'] ?? 'Fácil';
+        _estimatedDuration = response['duration_minutes'] ?? 15;
+        _isPublic = habitData['is_public'] ?? false;
         
-        // Poblar los campos con los datos del hábito
-        setState(() {
-          _habitNameController.text = habitData['name'] ?? '';
-          _descriptionController.text = habitData['description'] ?? '';
-          _selectedCategoryId = habitData['category_id'];
-          _selectedFrequency = response['frequency'] ?? 'Diario';
-          _selectedDifficulty = habitData['difficulty'] ?? 'Fácil';
-          _estimatedDuration = response['duration_minutes'] ?? 15;
-          _isPublic = habitData['is_public'] ?? false;
-          
-          // Configurar fechas si existen
-          if (response['start_date'] != null) {
-            _startDate = DateTime.parse(response['start_date']);
-            _startDateController.text = '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}';
+        // Configurar fechas si existen
+        if (response['start_date'] != null) {
+          _startDate = DateTime.parse(response['start_date']);
+          _startDateController.text = '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}';
+        }
+        if (response['end_date'] != null) {
+          _endDate = DateTime.parse(response['end_date']);
+          _endDateController.text = '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}';
+        }
+        
+        // Configurar hora de recordatorio si existe
+        if (response['reminder_time'] != null) {
+          final timeString = response['reminder_time'] as String;
+          final timeParts = timeString.split(':');
+          if (timeParts.length >= 2) {
+            _selectedTime = TimeOfDay(
+              hour: int.parse(timeParts[0]),
+              minute: int.parse(timeParts[1]),
+            );
           }
-          if (response['end_date'] != null) {
-            _endDate = DateTime.parse(response['end_date']);
-            _endDateController.text = '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}';
-          }
-          
-          // Configurar hora de recordatorio si existe
-          if (response['reminder_time'] != null) {
-            final timeString = response['reminder_time'] as String;
-            final timeParts = timeString.split(':');
-            if (timeParts.length >= 2) {
-              _selectedTime = TimeOfDay(
-                hour: int.parse(timeParts[0]),
-                minute: int.parse(timeParts[1]),
-              );
-            }
-          }
-          
-          // Configurar días de la semana si existen
-          if (response['selected_days'] != null) {
-            final daysData = response['selected_days'] as List<dynamic>;
-            _selectedDays = List.generate(7, (index) => daysData.contains(index));
-          }
-        });
-      }
-    } catch (e) {
+        }
+        
+        // Configurar días de la semana si existen
+        if (response['selected_days'] != null) {
+          final daysData = response['selected_days'] as List<dynamic>;
+          _selectedDays = List.generate(7, (index) => daysData.contains(index));
+        }
+      });
+        } catch (e) {
       _showErrorSnackBar('Error al cargar datos del hábito: $e');
     } finally {
       setState(() {
@@ -500,7 +498,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       } else if (e.toString().contains('network') || e.toString().contains('connection')) {
         return 'Calendario no disponible. Problema de conexión.';
       } else {
-        return 'Calendario no disponible. Error: ${e.toString().length > 50 ? e.toString().substring(0, 50) + '...' : e.toString()}';
+        return 'Calendario no disponible. Error: ${e.toString().length > 50 ? '${e.toString().substring(0, 50)}...' : e.toString()}';
       }
     }
   }
@@ -593,7 +591,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       print('DEBUG: Sugerencias recibidas de Gemini AI');
 
       // Validar que la respuesta sea un Map válido
-      if (suggestions == null || suggestions is! Map<String, dynamic>) {
+      if (suggestions is! Map<String, dynamic>) {
         print('DEBUG: Error - Respuesta inválida de Gemini AI');
         throw Exception('Respuesta inválida de la IA: formato no reconocido');
       }
@@ -1238,9 +1236,10 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
       print('📅 [NOTIFICATIONS] Días de la semana para $_selectedFrequency: $daysOfWeek');
 
       // Usar la hora seleccionada o una por defecto (9:00 AM)
+      final now = DateTime.now();
       final reminderTime = _selectedTime != null 
-          ? DateTime(2024, 1, 1, _selectedTime!.hour, _selectedTime!.minute)
-          : DateTime(2024, 1, 1, 9, 0); // 9:00 AM por defecto
+          ? DateTime(now.year, now.month, now.day, _selectedTime!.hour, _selectedTime!.minute)
+          : DateTime(now.year, now.month, now.day, 9, 0); // 9:00 AM por defecto
 
       print('⏰ [NOTIFICATIONS] Hora de recordatorio: ${reminderTime.hour}:${reminderTime.minute.toString().padLeft(2, '0')}');
 
@@ -1514,8 +1513,8 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
                 _selectedCategoryId = selection.categoryId;
               });
             }
-            if (selection.description?.isNotEmpty == true) {
-              _descriptionController.text = selection.description!;
+            if (selection.description.isNotEmpty == true) {
+              _descriptionController.text = selection.description;
             }
           },
         ),
@@ -1543,7 +1542,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: validSelectedId,
+          initialValue: validSelectedId,
           decoration: InputDecoration(
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -1782,7 +1781,7 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
                   });
                 }
               : null,
-          activeColor: AppColors.primary,
+          activeThumbColor: AppColors.primary,
         ),
       ],
     );

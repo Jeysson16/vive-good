@@ -8,11 +8,11 @@ class AnimatedErrorWidget extends StatefulWidget {
   final VoidCallback? onDismiss;
 
   const AnimatedErrorWidget({
-    Key? key,
+    super.key,
     required this.message,
     this.onRetry,
     this.onDismiss,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedErrorWidget> createState() => _AnimatedErrorWidgetState();
@@ -242,14 +242,14 @@ class AnimatedStateWidget extends StatelessWidget {
   final Duration transitionDuration;
 
   const AnimatedStateWidget({
-    Key? key,
+    super.key,
     this.loadingWidget,
     this.successWidget,
     this.errorWidget,
     this.contentWidget,
     required this.state,
     this.transitionDuration = const Duration(milliseconds: 300),
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

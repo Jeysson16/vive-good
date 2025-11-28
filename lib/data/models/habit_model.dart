@@ -5,9 +5,9 @@ class HabitModel extends Habit {
     required super.id,
     required super.name,
     required super.description,
-    required super.categoryId,
-    required super.iconName,
-    required super.iconColor,
+    super.categoryId,
+    super.iconName,
+    super.iconColor,
     required super.createdAt,
     required super.updatedAt,
     super.isPublic = true,
@@ -16,14 +16,14 @@ class HabitModel extends Habit {
 
   factory HabitModel.fromJson(Map<String, dynamic> json) {
     return HabitModel(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String,
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
       categoryId: json['category_id']?.toString(),
       // Mapear iconName desde category_icon si está disponible, sino usar icon_name
-      iconName: json['category_icon'] as String? ?? json['icon_name'] as String?,
+      iconName: json['category_icon'] as String? ?? json['icon_name'] as String? ?? 'default',
       // Mapear iconColor desde category_color si está disponible, sino usar icon_color
-      iconColor: json['category_color'] as String? ?? json['icon_color'] as String?,
+      iconColor: json['category_color'] as String? ?? json['icon_color'] as String? ?? '#219540',
       // Para campos de fecha, usar valores por defecto si no están disponibles (caso del SP)
       createdAt: json['created_at'] != null 
           ? DateTime.parse(json['created_at'] as String)

@@ -1,7 +1,6 @@
 import 'package:dartz/dartz.dart';
 import '../../../core/error/failures.dart';
 import '../../../core/usecases/usecase.dart';
-import '../../../data/services/sync_service.dart';
 import '../../repositories/sync_repository.dart';
 import '../../entities/pending_operation.dart';
 

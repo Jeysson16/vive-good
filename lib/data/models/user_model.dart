@@ -27,12 +27,15 @@ class UserModel extends User {
   @override
   final bool hasCompletedOnboarding;
 
+  @override
   @HiveField(5)
   final String firstName;
 
+  @override
   @HiveField(6)
   final String lastName;
 
+  @override
   @HiveField(7)
   final String? role;
 

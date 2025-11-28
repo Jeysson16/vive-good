@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/risk_habits_service.dart';
 
 class RiskHabitsWidget extends StatefulWidget {

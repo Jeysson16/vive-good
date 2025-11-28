@@ -64,7 +64,7 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
       print('ProgressBloc: Calling upsert_user_progress...');
       await supabaseClient.rpc('upsert_user_progress', params: {
         'p_user_id': userId,
-        'p_user_name': 'Usuario',
+        'p_user_name': null, // Let the stored procedure get the real name
         'p_user_profile_image': '',
       });
       
@@ -411,13 +411,13 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
         
         switch (trendDirection) {
           case 'Subiendo':
-            weeklyChange = '+${completionRate}%';
+            weeklyChange = '+$completionRate%';
             break;
           case 'Bajando':
-            weeklyChange = '-${completionRate}%';
+            weeklyChange = '-$completionRate%';
             break;
           default:
-            weeklyChange = '${completionRate}%';
+            weeklyChange = '$completionRate%';
         }
       }
 
@@ -444,7 +444,7 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
         'most_productive_hour': mostProductiveHour,
         'needs_attention_category': needsAttentionCategory,
         'weekly_change': weeklyChange,
-        'habit_variety': monthlyData['total_habits'] ?? '0' + ' hábitos',
+        'habit_variety': monthlyData['total_habits'] ?? '0' ' hábitos',
         
         // Métricas derivadas de datos reales de hábitos (sin valores mockeados)
         'symptoms_knowledge_pct': monthlyData['consistency_score'] ?? '0%',
@@ -454,7 +454,7 @@ class ProgressRemoteDataSourceImpl implements ProgressRemoteDataSource {
         'riskiest_habit': 'Ninguno identificado',
         'healthy_adoption_pct': monthlyData['completion_rate'] ?? '0%',
         'best_adopted_category': bestCategory,
-        'conversation_insights': monthlyData['total_habits'] ?? '0' + ' hábitos activos',
+        'conversation_insights': monthlyData['total_habits'] ?? '0' ' hábitos activos',
         'key_discussion_topic': 'Desarrollo de hábitos saludables',
       };
 

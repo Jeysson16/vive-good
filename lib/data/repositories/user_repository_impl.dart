@@ -29,7 +29,7 @@ class UserRepositoryImpl implements UserRepository {
       final localUserResult = await userLocalRepository.getCurrentUser();
       
       // Verificar conectividad
-      final connectivityStatus = await connectivityService.currentStatus;
+      final connectivityStatus = connectivityService.currentStatus;
       
       if (connectivityStatus.isOnline) {
         try {
@@ -66,7 +66,7 @@ class UserRepositoryImpl implements UserRepository {
         (failure) => Left(failure),
         (_) async {
           // Verificar conectividad
-          final connectivityStatus = await connectivityService.currentStatus;
+          final connectivityStatus = connectivityService.currentStatus;
           
           if (connectivityStatus.isOnline) {
             try {
@@ -101,7 +101,7 @@ class UserRepositoryImpl implements UserRepository {
       });
       
       // Verificar conectividad
-      final connectivityStatus = await connectivityService.currentStatus;
+      final connectivityStatus = connectivityService.currentStatus;
       
       if (connectivityStatus.isOnline) {
         try {

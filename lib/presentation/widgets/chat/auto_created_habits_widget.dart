@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../domain/entities/habit.dart';
-import '../../blocs/habit/habit_bloc.dart';
 import '../../pages/habits/new_habit_screen.dart';
 
 class AutoCreatedHabitsWidget extends StatefulWidget {

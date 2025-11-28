@@ -6,11 +6,11 @@ class AnimatedLoadingWidget extends StatefulWidget {
   final Color? secondaryColor;
 
   const AnimatedLoadingWidget({
-    Key? key,
+    super.key,
     this.message,
     this.primaryColor,
     this.secondaryColor,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedLoadingWidget> createState() => _AnimatedLoadingWidgetState();

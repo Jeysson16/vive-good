@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:dartz/dartz.dart';
 import '../../core/error/failures.dart';
-import '../../domain/entities/habit.dart';
 import '../../domain/repositories/habit_repository.dart';
 
 /// Servicio para procesar respuestas estructuradas de Gemini

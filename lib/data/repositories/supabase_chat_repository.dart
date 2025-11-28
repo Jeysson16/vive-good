@@ -213,6 +213,7 @@ class SupabaseChatRepository implements ChatRepository {
     required String userId,
     List<ChatMessage>? conversationHistory,
     Map<String, dynamic>? userContext,
+    bool isInitialResponse = false,
   }) async {
     if (_geminiDatasource == null) {
       throw Exception('Gemini datasource no está configurado');
@@ -230,11 +231,12 @@ class SupabaseChatRepository implements ChatRepository {
       
       // 2. Obtener respuesta de Gemini
       print('🔥 DEBUG: Enviando mensaje a Gemini...');
-      final geminiResponse = await _geminiDatasource!.sendMessage(
+      final geminiResponse = await _geminiDatasource.sendMessage(
         message: message,
         sessionId: sessionId,
         userId: userId,
         conversationHistory: conversationHistory ?? [],
+        isInitialResponse: isInitialResponse,
       );
       
       // 3. Agregar información de síntomas registrados a la respuesta si hay alguno
@@ -245,7 +247,7 @@ class SupabaseChatRepository implements ChatRepository {
         print('🔥 DEBUG: Síntomas registrados automáticamente: ${registeredSymptoms.length}');
       }
       
-      // 4. Crear respuesta final con contenido actualizado
+      // 4. Crear respuesta final con contenido actualizado y conservar campos útiles
       final finalResponse = AssistantResponse(
         id: geminiResponse.id,
         sessionId: geminiResponse.sessionId,
@@ -257,6 +259,14 @@ class SupabaseChatRepository implements ChatRepository {
           'auto_registered_symptoms': registeredSymptoms.length,
           'symptoms_detected': registeredSymptoms.isNotEmpty,
         },
+        suggestions: geminiResponse.suggestions,
+        confidence: geminiResponse.confidence,
+        analysisData: geminiResponse.analysisData,
+        extractedHabits: geminiResponse.extractedHabits,
+        suggestedHabits: geminiResponse.suggestedHabits,
+        dlChatResponse: geminiResponse.dlChatResponse,
+        processedActions: geminiResponse.processedActions,
+        isInitialResponse: isInitialResponse,
       );
       
       print('🔥 DEBUG: SupabaseChatRepository.sendMessageToGemini completado');
@@ -278,7 +288,7 @@ class SupabaseChatRepository implements ChatRepository {
       throw Exception('Gemini datasource no está configurado');
     }
     try {
-      return await _geminiDatasource!.processVoiceMessage(
+      return await _geminiDatasource.processVoiceMessage(
         audioPath: audioPath,
         sessionId: sessionId,
         userId: userId,
@@ -310,7 +320,7 @@ class SupabaseChatRepository implements ChatRepository {
         final message = 'Síntomas reportados: $symptomsText';
         
         // Llamar al datasource de Gemini para procesar Deep Learning
-        final result = await _geminiDatasource!.processDeepLearningAnalysis(
+        final result = await _geminiDatasource.processDeepLearningAnalysis(
           message: message,
           userId: userId,
         );
@@ -353,7 +363,7 @@ class SupabaseChatRepository implements ChatRepository {
       throw Exception('Supabase datasource no está configurado');
     }
     try {
-      return await _supabaseDatasource!.getHabitRecommendations(userId, analysisResult);
+      return await _supabaseDatasource.getHabitRecommendations(userId, analysisResult);
     } catch (e) {
       throw Exception('Error al obtener recomendaciones: ${e.toString()}');
     }
@@ -380,7 +390,7 @@ class SupabaseChatRepository implements ChatRepository {
       throw Exception('Supabase datasource no está configurado');
     }
     try {
-      return await _supabaseDatasource!.getContextualSuggestions(userId, currentContext);
+      return await _supabaseDatasource.getContextualSuggestions(userId, currentContext);
     } catch (e) {
       throw Exception('Error al obtener sugerencias: ${e.toString()}');
     }
@@ -392,7 +402,7 @@ class SupabaseChatRepository implements ChatRepository {
       throw Exception('Supabase datasource no está configurado');
     }
     try {
-      return await _supabaseDatasource!.getAssistantConfig() ?? {
+      return await _supabaseDatasource.getAssistantConfig() ?? {
         'voice_enabled': true,
         'animation_enabled': true,
         'deep_learning_enabled': true,
@@ -413,7 +423,7 @@ class SupabaseChatRepository implements ChatRepository {
       throw Exception('Supabase datasource no está configurado');
     }
     try {
-      await _supabaseDatasource!.updateAssistantConfig(
+      await _supabaseDatasource.updateAssistantConfig(
         userId: userId,
         config: config,
       );
@@ -476,7 +486,7 @@ class SupabaseChatRepository implements ChatRepository {
       }
 
       // Generar título con Gemini
-      final generatedTitle = await _geminiDatasource!.generateConversationTitle(firstMessage);
+      final generatedTitle = await _geminiDatasource.generateConversationTitle(firstMessage);
       
       // Actualizar la sesión con el nuevo título
       return await updateSessionTitle(sessionId, generatedTitle);
@@ -499,7 +509,7 @@ class SupabaseChatRepository implements ChatRepository {
       throw Exception('Supabase datasource no está configurado');
     }
     try {
-      return await _supabaseDatasource!.sendMessageFeedback(
+      return await _supabaseDatasource.sendMessageFeedback(
         messageId: messageId,
         userId: userId,
         feedbackType: feedbackType,
@@ -519,7 +529,7 @@ class SupabaseChatRepository implements ChatRepository {
       throw Exception('Supabase datasource no está configurado');
     }
     try {
-      return await _supabaseDatasource!.getMessageFeedback(
+      return await _supabaseDatasource.getMessageFeedback(
         messageId: messageId,
         userId: userId,
       );
@@ -538,13 +548,73 @@ class SupabaseChatRepository implements ChatRepository {
       throw Exception('Supabase datasource no está configurado');
     }
     try {
-      return await _supabaseDatasource!.removeMessageFeedback(
+      return await _supabaseDatasource.removeMessageFeedback(
         messageId: messageId,
         userId: userId,
       );
     } catch (e) {
       print('❌ Error al eliminar feedback: $e');
       return false;
+    }
+  }
+  /// Envía mensaje con respuesta progresiva
+  Future<AssistantResponse> sendMessageWithProgressiveResponse({
+    required String message,
+    required String sessionId,
+    required String userId,
+    required Function(String content, String status) onProgressUpdate,
+    List<ChatMessage>? conversationHistory,
+    Map<String, dynamic>? userContext,
+  }) async {
+    if (_geminiDatasource == null) {
+      throw Exception('Gemini datasource no está configurado');
+    }
+    try {
+      print('��� DEBUG: SupabaseChatRepository.sendMessageWithProgressiveResponse iniciado');
+      print('��� DEBUG: Mensaje del usuario: "$message"');
+      
+      // 1. Procesar síntomas automáticamente ANTES de enviar a Gemini
+      print('��� DEBUG: Procesando síntomas automáticamente...');
+      final registeredSymptoms = await AutomaticSymptomRegistrationService.processMessageForSymptoms(
+        message: message,
+        userId: userId,
+      );
+      
+      // 2. Obtener respuesta progresiva de Gemini
+      print('��� DEBUG: Enviando mensaje a Gemini con respuesta progresiva...');
+      final geminiResponse = await _geminiDatasource.sendMessage(
+        message: message,
+        sessionId: sessionId,
+        userId: userId,
+        conversationHistory: conversationHistory ?? [],
+      );
+      
+      // 3. Agregar información de síntomas registrados a la respuesta si hay alguno
+      String finalContent = geminiResponse.content;
+      Map<String, dynamic> finalMetadata = Map.from(geminiResponse.metadata ?? {});
+      
+      if (registeredSymptoms.isNotEmpty) {
+        final symptomsSummary = AutomaticSymptomRegistrationService.generateSymptomsRegistrationSummary(registeredSymptoms);
+        finalContent += '\n\n��� **Síntomas registrados automáticamente:**\n$symptomsSummary';
+        finalMetadata['registered_symptoms'] = registeredSymptoms;
+      }
+      
+      // 4. Crear respuesta final con contenido combinado
+      final finalResponse = AssistantResponse(
+        id: geminiResponse.id,
+        sessionId: geminiResponse.sessionId,
+        content: finalContent,
+        type: geminiResponse.type,
+        timestamp: geminiResponse.timestamp,
+        metadata: finalMetadata,
+      );
+      
+      print('��� DEBUG: SupabaseChatRepository.sendMessageWithProgressiveResponse completado');
+      return finalResponse;
+      
+    } catch (e) {
+      print('��� DEBUG: Error en SupabaseChatRepository.sendMessageWithProgressiveResponse: $e');
+      throw Exception('Error al enviar mensaje con respuesta progresiva: ${e.toString()}');
     }
   }
 }

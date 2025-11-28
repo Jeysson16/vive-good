@@ -1,8 +1,10 @@
-import 'package:vive_good_app/core/error/failures.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:developer' as developer;
+import 'dart:io';
+
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:vive_good_app/core/config/app_config.dart';
+import 'package:vive_good_app/core/error/failures.dart';
 
 abstract class GeminiAIDataSource {
   Future<Map<String, dynamic>> generateHabitSuggestions({
@@ -23,20 +25,17 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
   late final GenerativeModel _model;
 
   GeminiAIDataSourceImpl() {
-    // Try to get API key from environment first, then use fallback
-    const apiKey = String.fromEnvironment('GOOGLE_API_KEY');
-    String finalApiKey = apiKey;
-
-    // If environment variable is not set, use the configured API key
-    if (apiKey.isEmpty) {
-      finalApiKey = 'AIzaSyAJ0SdbXQTyxjQ9IpPjKD97rNzFB2zJios';
-    }
+    // Get API key from AppConfig (which reads from .env file)
+    String finalApiKey = AppConfig.geminiApiKey;
 
     if (finalApiKey.isEmpty) {
-      throw Exception('GOOGLE_API_KEY is not configured');
+      throw Exception('GOOGLE_API_KEY is not configured. Please check your .env file.');
     }
 
-    _model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: finalApiKey);
+    _model = GenerativeModel(
+      model: 'gemini-2.0-flash-lite',
+      apiKey: finalApiKey,
+    );
   }
 
   @override
@@ -46,12 +45,14 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
     String? description,
     String? userGoals,
   }) async {
-    developer.log('🤖 Iniciando generación de sugerencias para hábito: $habitName');
-    
+    developer.log(
+      '🤖 Iniciando generación de sugerencias para hábito: $habitName',
+    );
+
     try {
       // Validar conectividad a internet
       await _validateInternetConnection();
-      
+
       final prompt = _buildHabitSuggestionsPrompt(
         habitName: habitName,
         category: category,
@@ -61,14 +62,18 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
 
       developer.log('📝 Enviando prompt a Gemini AI...');
       final content = [Content.text(prompt)];
-      
+
       // Agregar timeout de 30 segundos
-      final response = await _model.generateContent(content).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw ServerFailure('Timeout: La IA no respondió en 30 segundos. Verifica tu conexión.');
-        },
-      );
+      final response = await _model
+          .generateContent(content)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw ServerFailure(
+                'Timeout: La IA no respondió en 30 segundos. Verifica tu conexión.',
+              );
+            },
+          );
 
       if (response.text == null || response.text!.isEmpty) {
         throw ServerFailure('No response from Gemini AI');
@@ -110,33 +115,52 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
         };
       }
     } catch (e) {
-      developer.log('❌ Error en generateHabitSuggestions: $e', name: 'GeminiAI');
-      
+      developer.log(
+        '❌ Error en generateHabitSuggestions: $e',
+        name: 'GeminiAI',
+      );
+
       // Manejo específico de errores de Gemini
       if (e is ServerException) {
         final errorMessage = e.message ?? e.toString();
-        
-        if (errorMessage.contains('quota') || errorMessage.contains('QUOTA_EXCEEDED')) {
-          throw ServerFailure('La cuota de la API de Gemini se ha agotado. Intenta más tarde o verifica tu plan de facturación.');
+
+        if (errorMessage.contains('quota') ||
+            errorMessage.contains('QUOTA_EXCEEDED')) {
+          throw ServerFailure(
+            'La cuota de la API de Gemini se ha agotado. Intenta más tarde o verifica tu plan de facturación.',
+          );
         } else if (errorMessage.contains('API_KEY_INVALID')) {
-          throw ServerFailure('La clave de API de Gemini es inválida. Verifica la configuración.');
+          throw ServerFailure(
+            'La clave de API de Gemini es inválida. Verifica la configuración.',
+          );
         } else if (errorMessage.contains('PERMISSION_DENIED')) {
-          throw ServerFailure('Sin permisos para usar la API de Gemini. Verifica tu cuenta.');
-        } else if (errorMessage.contains('not found') || errorMessage.contains('not supported')) {
-          throw ServerFailure('El modelo de Gemini no está disponible. Contacta al soporte.');
-        } else if (errorMessage.contains('UNAVAILABLE') || errorMessage.contains('503')) {
-          throw ServerFailure('El servicio de Gemini está temporalmente no disponible. Intenta en unos minutos.');
+          throw ServerFailure(
+            'Sin permisos para usar la API de Gemini. Verifica tu cuenta.',
+          );
+        } else if (errorMessage.contains('not found') ||
+            errorMessage.contains('not supported')) {
+          throw ServerFailure(
+            'El modelo de Gemini no está disponible. Contacta al soporte.',
+          );
+        } else if (errorMessage.contains('UNAVAILABLE') ||
+            errorMessage.contains('503')) {
+          throw ServerFailure(
+            'El servicio de Gemini está temporalmente no disponible. Intenta en unos minutos.',
+          );
         }
       }
-      
-      if (e.toString().contains('SocketException') || e.toString().contains('NetworkException')) {
-        throw ServerFailure('Error de conexión. Verifica tu internet e intenta de nuevo.');
+
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('NetworkException')) {
+        throw ServerFailure(
+          'Error de conexión. Verifica tu internet e intenta de nuevo.',
+        );
       }
-      
+
       if (e is ServerFailure) {
-        throw e; // Re-lanzar ServerFailure ya formateados
+        rethrow; // Re-lanzar ServerFailure ya formateados
       }
-      
+
       throw ServerFailure(
         'Error inesperado al generar sugerencias: ${e.toString()}',
       );
@@ -150,11 +174,11 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
     String? userPreferences,
   }) async {
     developer.log('🕐 Iniciando generación de horarios para: $habitName');
-    
+
     try {
       // Validar conectividad a internet
       await _validateInternetConnection();
-      
+
       final prompt = _buildScheduleSuggestionsPrompt(
         habitName: habitName,
         category: category,
@@ -163,14 +187,18 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
 
       developer.log('📝 Enviando prompt de horarios a Gemini AI...');
       final content = [Content.text(prompt)];
-      
+
       // Agregar timeout de 30 segundos
-      final response = await _model.generateContent(content).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw ServerFailure('Timeout: La IA no respondió en 30 segundos. Verifica tu conexión.');
-        },
-      );
+      final response = await _model
+          .generateContent(content)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              throw ServerFailure(
+                'Timeout: La IA no respondió en 30 segundos. Verifica tu conexión.',
+              );
+            },
+          );
 
       if (response.text == null || response.text!.isEmpty) {
         throw ServerFailure('No response from Gemini AI');
@@ -186,33 +214,52 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
 
       return lines;
     } catch (e) {
-      developer.log('❌ Error en generateScheduleSuggestions: $e', name: 'GeminiAI');
-      
+      developer.log(
+        '❌ Error en generateScheduleSuggestions: $e',
+        name: 'GeminiAI',
+      );
+
       // Manejo específico de errores de Gemini
       if (e is ServerException) {
         final errorMessage = e.message ?? e.toString();
-        
-        if (errorMessage.contains('quota') || errorMessage.contains('QUOTA_EXCEEDED')) {
-          throw ServerFailure('La cuota de la API de Gemini se ha agotado. Intenta más tarde o verifica tu plan de facturación.');
+
+        if (errorMessage.contains('quota') ||
+            errorMessage.contains('QUOTA_EXCEEDED')) {
+          throw ServerFailure(
+            'La cuota de la API de Gemini se ha agotado. Intenta más tarde o verifica tu plan de facturación.',
+          );
         } else if (errorMessage.contains('API_KEY_INVALID')) {
-          throw ServerFailure('La clave de API de Gemini es inválida. Verifica la configuración.');
+          throw ServerFailure(
+            'La clave de API de Gemini es inválida. Verifica la configuración.',
+          );
         } else if (errorMessage.contains('PERMISSION_DENIED')) {
-          throw ServerFailure('Sin permisos para usar la API de Gemini. Verifica tu cuenta.');
-        } else if (errorMessage.contains('not found') || errorMessage.contains('not supported')) {
-          throw ServerFailure('El modelo de Gemini no está disponible. Contacta al soporte.');
-        } else if (errorMessage.contains('UNAVAILABLE') || errorMessage.contains('503')) {
-          throw ServerFailure('El servicio de Gemini está temporalmente no disponible. Intenta en unos minutos.');
+          throw ServerFailure(
+            'Sin permisos para usar la API de Gemini. Verifica tu cuenta.',
+          );
+        } else if (errorMessage.contains('not found') ||
+            errorMessage.contains('not supported')) {
+          throw ServerFailure(
+            'El modelo de Gemini no está disponible. Contacta al soporte.',
+          );
+        } else if (errorMessage.contains('UNAVAILABLE') ||
+            errorMessage.contains('503')) {
+          throw ServerFailure(
+            'El servicio de Gemini está temporalmente no disponible. Intenta en unos minutos.',
+          );
         }
       }
-      
-      if (e.toString().contains('SocketException') || e.toString().contains('NetworkException')) {
-        throw ServerFailure('Error de conexión. Verifica tu internet e intenta de nuevo.');
+
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('NetworkException')) {
+        throw ServerFailure(
+          'Error de conexión. Verifica tu internet e intenta de nuevo.',
+        );
       }
-      
+
       if (e is ServerFailure) {
-        throw e; // Re-lanzar ServerFailure ya formateados
+        rethrow; // Re-lanzar ServerFailure ya formateados
       }
-      
+
       throw ServerFailure(
         'Error inesperado al generar horarios: ${e.toString()}',
       );
@@ -223,10 +270,10 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
   Future<void> _validateInternetConnection() async {
     try {
       developer.log('🌐 Verificando conectividad a internet...');
-      final result = await InternetAddress.lookup('google.com').timeout(
-        const Duration(seconds: 10),
-      );
-      
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 10));
+
       if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
         developer.log('✅ Conectividad a internet confirmada');
       } else {
@@ -234,7 +281,9 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
       }
     } catch (e) {
       developer.log('❌ Error de conectividad: $e');
-      throw ServerFailure('Sin conexión a internet. Verifica tu red e intenta de nuevo.');
+      throw ServerFailure(
+        'Sin conexión a internet. Verifica tu red e intenta de nuevo.',
+      );
     }
   }
 

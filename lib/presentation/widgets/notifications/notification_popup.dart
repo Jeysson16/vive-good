@@ -11,13 +11,13 @@ class NotificationPopup extends StatelessWidget {
   final VoidCallback? onDismissed;
 
   const NotificationPopup({
-    Key? key,
+    super.key,
     required this.notificationId,
     required this.habitName,
     required this.message,
     this.onCompleted,
     this.onDismissed,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

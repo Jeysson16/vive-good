@@ -165,7 +165,7 @@ class _RegisterHabitDialogState extends State<RegisterHabitDialog> {
 
               // Frecuencia
               DropdownButtonFormField<String>(
-                value: _selectedFrequency,
+                initialValue: _selectedFrequency,
                 decoration: const InputDecoration(
                   labelText: 'Frecuencia *',
                   border: OutlineInputBorder(),

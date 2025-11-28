@@ -61,7 +61,7 @@ class HabitStatisticsModel extends Equatable {
 
   Map<String, dynamic> toJson() {
     return {
-      'category_id': (categoryId?.isNotEmpty == true) ? categoryId : null,
+      'category_id': (categoryId.isNotEmpty == true) ? categoryId : null,
       'category_name': categoryName,
       'category_color': categoryColor,
       'category_icon': categoryIcon,

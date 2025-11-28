@@ -19,14 +19,18 @@ class SymptomsService {
         throw Exception('Usuario no autenticado');
       }
 
+      // Convertir severidad de string a integer para la base de datos
+      final severityInt = _convertSeverityToInt(severity);
+
       final symptomData = {
         'user_id': user.id,
         'symptom_name': symptomName,
-        'severity': severity,
+        'symptom_type': symptomName, // También llenar symptom_type para compatibilidad
+        'severity': severityInt,
         'description': description,
         'body_part': bodyPart,
         'occurred_at': (occurredAt ?? DateTime.now()).toIso8601String(),
-        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
       };
 
       final response = await _supabase
@@ -35,6 +39,9 @@ class SymptomsService {
           .select()
           .single();
 
+      // Convertir la respuesta para que severity sea string
+      response['severity'] = _convertSeverityToString(response['severity']);
+    
       return response;
     } catch (e) {
       throw Exception('Error al registrar síntoma: $e');
@@ -130,7 +137,16 @@ class SymptomsService {
         }
       }
 
-      return List<Map<String, dynamic>>.from(response);
+      final symptoms = List<Map<String, dynamic>>.from(response);
+      
+      // Convertir severidad de integer a string en cada síntoma
+      for (final symptom in symptoms) {
+        if (symptom['severity'] != null) {
+          symptom['severity'] = _convertSeverityToString(symptom['severity']);
+        }
+      }
+      
+      return symptoms;
     } catch (e) {
       throw Exception('Error al obtener síntomas: $e');
     }
@@ -167,8 +183,11 @@ class SymptomsService {
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      if (symptomName != null) updateData['symptom_name'] = symptomName;
-      if (severity != null) updateData['severity'] = severity;
+      if (symptomName != null) {
+        updateData['symptom_name'] = symptomName;
+        updateData['symptom_type'] = symptomName; // También actualizar symptom_type
+      }
+      if (severity != null) updateData['severity'] = _convertSeverityToInt(severity);
       if (description != null) updateData['description'] = description;
       if (bodyPart != null) updateData['body_part'] = bodyPart;
       if (occurredAt != null) updateData['occurred_at'] = occurredAt.toIso8601String();
@@ -180,6 +199,11 @@ class SymptomsService {
           .eq('user_id', user.id)
           .select()
           .single();
+
+      // Convertir la respuesta para que severity sea string
+      if (response['severity'] != null) {
+        response['severity'] = _convertSeverityToString(response['severity']);
+      }
 
       return response;
     } catch (e) {
@@ -277,5 +301,33 @@ class SymptomsService {
     } catch (e) {
       throw Exception('Error al obtener estadísticas de síntomas: $e');
     }
+  }
+
+  /// Convierte severidad de string a integer para la base de datos
+  static int _convertSeverityToInt(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'leve':
+        return 2;
+      case 'moderado':
+        return 5;
+      case 'fuerte':
+        return 7;
+      case 'severo':
+        return 9;
+      default:
+        return 2; // Default a leve
+    }
+  }
+
+  /// Convierte severidad de integer a string para la aplicación
+  static String _convertSeverityToString(dynamic severity) {
+    if (severity == null) return 'Leve';
+    
+    final severityInt = severity is int ? severity : int.tryParse(severity.toString()) ?? 2;
+    
+    if (severityInt <= 3) return 'Leve';
+    if (severityInt <= 6) return 'Moderado';
+    if (severityInt <= 8) return 'Fuerte';
+    return 'Severo';
   }
 }

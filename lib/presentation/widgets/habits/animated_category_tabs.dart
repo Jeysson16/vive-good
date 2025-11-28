@@ -12,11 +12,11 @@ class AnimatedCategoryTabs extends StatefulWidget {
   final Function(String?) onCategorySelected;
 
   const AnimatedCategoryTabs({
-    Key? key,
+    super.key,
     required this.categories,
     required this.selectedCategoryId,
     required this.onCategorySelected,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedCategoryTabs> createState() => _AnimatedCategoryTabsState();

@@ -34,7 +34,7 @@ class _EnhancedRegisterPageState extends State<EnhancedRegisterPage> {
 
   // Variables de estado
   bool _isPasswordVisible = false;
-  List<String> _selectedRiskFactors = [];
+  final List<String> _selectedRiskFactors = [];
 
   // Opciones de factores de riesgo
   final List<String> _riskFactorOptions = [

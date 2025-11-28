@@ -26,6 +26,12 @@ class NotificationRepositoryImpl implements NotificationRepository {
     String? message,
   ) async {
     try {
+      print('📅 [NOTIFICATION_REPO_IMPL] Programando notificación:');
+      print('   HabitNotificationId: $habitNotificationId');
+      print('   ScheduleId: ${schedule.id}');
+      print('   Mensaje: ${message ?? 'Recordatorio de Hábito'}');
+      print('   Fecha programada: ${schedule.scheduledDateTime}');
+      
       // Programar la notificación usando el servicio local
       final platformNotificationId = await notificationService.scheduleNotification(
         notificationId: schedule.id,
@@ -34,8 +40,10 @@ class NotificationRepositoryImpl implements NotificationRepository {
         scheduledTime: schedule.scheduledDateTime,
       );
 
+      print('✅ [NOTIFICATION_REPO_IMPL] Notificación programada con ID: $platformNotificationId');
       return Right(platformNotificationId.toString());
     } catch (e) {
+      print('❌ [NOTIFICATION_REPO_IMPL] Error al programar notificación: $e');
       return Left(ServerFailure('Error al programar notificación: ${e.toString()}'));
     }
   }

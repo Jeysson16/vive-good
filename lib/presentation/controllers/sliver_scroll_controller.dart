@@ -1,8 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import '../blocs/habit/habit_bloc.dart';
-import '../blocs/habit/habit_event.dart';
-import '../blocs/habit/habit_state.dart';
 import '../../domain/entities/category.dart';
 
 class SliverScrollController extends ChangeNotifier {

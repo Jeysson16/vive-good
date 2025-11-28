@@ -15,7 +15,7 @@ class AnimatedCategoryTabsWithLine extends StatefulWidget {
   final Function(String)? onProgrammaticCategoryChange;
 
   const AnimatedCategoryTabsWithLine({
-    Key? key,
+    super.key,
     required this.categories,
     required this.selectedCategoryId,
     required this.onCategorySelected,
@@ -27,7 +27,7 @@ class AnimatedCategoryTabsWithLine extends StatefulWidget {
     this.textColor = const Color(0xFF111827),
     this.inactiveTextColor = const Color(0xFF6B7280),
     this.onProgrammaticCategoryChange,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedCategoryTabsWithLine> createState() =>
@@ -41,8 +41,8 @@ class _AnimatedCategoryTabsWithLineState
   late AnimationController _lineAnimationController;
   late Animation<double> _lineAnimation;
 
-  List<GlobalKey> _tabKeys = [];
-  List<double> _tabOffsets = [];
+  final List<GlobalKey> _tabKeys = [];
+  final List<double> _tabOffsets = [];
   double _lineOffset = 0;
   double _lineWidth = 0;
 

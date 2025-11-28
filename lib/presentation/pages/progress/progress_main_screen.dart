@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../blocs/auth/auth_bloc.dart' as app_auth;
+import '../../blocs/auth/auth_state.dart' as app_auth_state;
 import '../../blocs/category_evolution/category_evolution_bloc.dart';
 import '../../blocs/habit_breakdown/habit_breakdown_bloc.dart';
 import '../../blocs/habit_breakdown/habit_breakdown_event.dart';
 import '../../blocs/habit_statistics/habit_statistics_bloc.dart';
+import '../../blocs/profile/profile_bloc.dart';
+import '../../blocs/profile/profile_state.dart';
 import '../../blocs/progress/progress_bloc.dart';
 import '../../blocs/progress/progress_event.dart';
 import '../../blocs/progress/progress_state.dart';
-import '../../blocs/profile/profile_bloc.dart';
-import '../../blocs/profile/profile_event.dart';
-import '../../blocs/profile/profile_state.dart';
-import '../../widgets/connectivity_indicator.dart';
 import 'monthly_evolution_screen.dart';
 
 class ProgressMainScreen extends StatefulWidget {
@@ -23,7 +23,6 @@ class ProgressMainScreen extends StatefulWidget {
 }
 
 class _ProgressMainScreenState extends State<ProgressMainScreen> {
-  bool _showMonthlyEvolution = false;
   // Carrusel de insights: controlador y página actual
   final PageController _insightsController = PageController(
     viewportFraction: 0.92,
@@ -47,7 +46,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
   void _loadInitialData() {
     final userId = _getCurrentUserId();
     print('🔍 ProgressMainScreen: _loadInitialData called, userId: $userId');
-    
+
     if (userId != null) {
       final now = DateTime.now();
 
@@ -55,12 +54,16 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       if (_lastProgressDataLoad == null ||
           now.difference(_lastProgressDataLoad!) > _cacheValidDuration ||
           !_isReturningFromEvolution) {
-        print('🔍 ProgressMainScreen: Dispatching LoadUserProgress event for userId: $userId');
+        print(
+          '🔍 ProgressMainScreen: Dispatching LoadUserProgress event for userId: $userId',
+        );
         // Load main progress data immediately
         context.read<ProgressBloc>().add(LoadUserProgress(userId: userId));
         _lastProgressDataLoad = now;
       } else {
-        print('🔍 ProgressMainScreen: Skipping LoadUserProgress due to cache validation');
+        print(
+          '🔍 ProgressMainScreen: Skipping LoadUserProgress due to cache validation',
+        );
       }
 
       // Preload monthly data for faster access later
@@ -97,24 +100,23 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
         context.read<ProgressBloc>().add(LoadMonthlyProgress(userId: userId));
         _lastMonthlyDataLoad = now;
       } else {
-        print('🔍 ProgressMainScreen: Skipping LoadMonthlyProgress due to cache validation');
+        print(
+          '🔍 ProgressMainScreen: Skipping LoadMonthlyProgress due to cache validation',
+        );
       }
 
-      // Only load habit breakdown data if user explicitly navigates to monthly view
-      // This reduces initial load time for the breakdown charts
-      if (_showMonthlyEvolution) {
-        // Check if habit breakdown data needs to be loaded (cache validation)
-        if (_lastHabitBreakdownLoad == null ||
-            now.difference(_lastHabitBreakdownLoad!) > _cacheValidDuration) {
-          context.read<HabitBreakdownBloc>().add(
-            LoadMonthlyHabitsBreakdown(
-              userId: userId,
-              year: now.year,
-              month: now.month,
-            ),
-          );
-          _lastHabitBreakdownLoad = now;
-        }
+      // Load habit breakdown data for monthly view
+      // Check if habit breakdown data needs to be loaded (cache validation)
+      if (_lastHabitBreakdownLoad == null ||
+          now.difference(_lastHabitBreakdownLoad!) > _cacheValidDuration) {
+        context.read<HabitBreakdownBloc>().add(
+          LoadMonthlyHabitsBreakdown(
+            userId: userId,
+            year: now.year,
+            month: now.month,
+          ),
+        );
+        _lastHabitBreakdownLoad = now;
       }
     }
   }
@@ -122,7 +124,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
   // Helper method to get current user ID
   String? _getCurrentUserId() {
     final currentUser = Supabase.instance.client.auth.currentUser;
-    if (currentUser?.id?.isNotEmpty == true) {
+    if (currentUser?.id.isNotEmpty == true) {
       return currentUser!.id;
     }
     return null;
@@ -140,22 +142,11 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     );
   }
 
-  void _toggleView() {
-    setState(() {
-      _showMonthlyEvolution = !_showMonthlyEvolution;
-    });
-
-    // Load data when switching to monthly evolution view
-    if (_showMonthlyEvolution) {
-      final userId = _getCurrentUserId();
-      if (userId != null) {
-        context.read<ProgressBloc>().add(LoadUserProgress(userId: userId));
-        // Use cached preload method for monthly data
-        _preloadMonthlyData();
-      } else {
-        _handleUserIdError();
-      }
-    }
+  void _navigateToMonthlyEvolution() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MonthlyEvolutionScreen()),
+    );
   }
 
   @override
@@ -164,9 +155,13 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       listeners: [
         BlocListener<ProfileBloc, ProfileState>(
           listener: (context, state) {
-            print('ProgressMainScreen - ProfileBloc estado: ${state.runtimeType}');
+            print(
+              'ProgressMainScreen - ProfileBloc estado: ${state.runtimeType}',
+            );
             if (state is ProfileUpdated || state is ProfileImageUpdated) {
-              print('ProgressMainScreen - Perfil actualizado, recargando datos de progreso');
+              print(
+                'ProgressMainScreen - Perfil actualizado, recargando datos de progreso',
+              );
               // Recargar los datos de progreso cuando el perfil se actualiza
               _loadInitialData();
             }
@@ -178,11 +173,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
         body: Column(
           children: [
             // Main content
-            Expanded(
-              child: _showMonthlyEvolution
-                  ? _buildMonthlyEvolutionView()
-                  : _buildMainProgressView(),
-            ),
+            Expanded(child: _buildMainProgressView()),
           ],
         ),
       ),
@@ -193,126 +184,6 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
   void dispose() {
     _insightsController.dispose();
     super.dispose();
-  }
-
-  Widget _buildMonthlyEvolutionView() {
-    return Column(
-      children: [
-        // Custom app bar for monthly evolution
-        Container(
-          padding: const EdgeInsets.only(
-            top: 40,
-            left: 16,
-            right: 16,
-            bottom: 16,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 4,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.black),
-                onPressed: _toggleView,
-              ),
-              const Expanded(
-                child: Text(
-                  'Evolución Mensual',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(width: 48), // Balance for back button
-            ],
-          ),
-        ),
-        // Monthly evolution content
-        Expanded(
-          child: BlocBuilder<ProgressBloc, ProgressState>(
-            builder: (context, state) {
-              if (state is ProgressLoading) {
-                return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF4CAF50)),
-                );
-              }
-
-              if (state is ProgressError) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Error al cargar datos',
-                        style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        state.message,
-                        style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: () {
-                          final userId = _getCurrentUserId();
-                          if (userId != null) {
-                            context.read<ProgressBloc>().add(
-                              LoadUserProgress(userId: userId),
-                            );
-                          } else {
-                            _handleUserIdError();
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4CAF50),
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('Reintentar'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              if (state is ProgressLoaded) {
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildMonthlyOverview(state),
-                      const SizedBox(height: 24),
-                      _buildMonthlyChart(state),
-                      const SizedBox(height: 24),
-                      _buildHabitsBreakdown(state),
-                    ],
-                  ),
-                );
-              }
-
-              return const Center(child: Text('No hay datos disponibles'));
-            },
-          ),
-        ),
-      ],
-    );
   }
 
   Widget _buildMainProgressView() {
@@ -498,9 +369,20 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                         const SizedBox(height: 24),
 
                         // Header with greeting and profile
-                        _buildHeader(
-                          progress.userName ?? 'Usuario',
-                          progress.userProfileImage,
+                        Builder(
+                          builder: (context) {
+                            String headerName = progress.userName;
+                            final authState = context
+                                .read<app_auth.AuthBloc>()
+                                .state;
+                            if (authState is app_auth_state.AuthAuthenticated) {
+                              headerName = authState.user.name;
+                            }
+                            return _buildHeader(
+                              headerName.isNotEmpty ? headerName : 'Usuario',
+                              progress.userProfileImage,
+                            );
+                          },
                         ),
                         const SizedBox(height: 16),
 
@@ -538,7 +420,9 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
 
                         // Monthly evolution button
                         _buildMonthlyEvolutionButton(),
-                        const SizedBox(height: 60), // Space for bottom navigation
+                        const SizedBox(
+                          height: 60,
+                        ), // Space for bottom navigation
                       ],
                     ),
                   ),
@@ -548,7 +432,10 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                       left: 0,
                       right: 0,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 10,
+                          horizontal: 16,
+                        ),
                         color: Colors.white.withOpacity(0.85),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -556,10 +443,21 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                             SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4CAF50))),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF4CAF50),
+                                ),
+                              ),
                             ),
                             SizedBox(width: 8),
-                            Text('Actualizando...', style: TextStyle(color: Color(0xFF4CAF50), fontWeight: FontWeight.w600)),
+                            Text(
+                              'Actualizando...',
+                              style: TextStyle(
+                                color: Color(0xFF4CAF50),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -670,8 +568,8 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
         if (state is ProgressLoaded && state.dailyProgress != null) {
           dailyProgress = state.dailyProgress!;
         } else if (state is ProgressRefreshing &&
-            (state as ProgressRefreshing).dailyProgress != null) {
-          dailyProgress = (state as ProgressRefreshing).dailyProgress!;
+            (state).dailyProgress != null) {
+          dailyProgress = (state).dailyProgress!;
         }
 
         return Container(
@@ -875,9 +773,8 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     if (state is ProgressLoaded && state.dailyProgress != null) {
       // Get daily progress from the loaded state
       dailyProgressMap = state.dailyProgress!;
-    } else if (state is ProgressRefreshing &&
-        (state as ProgressRefreshing).dailyProgress != null) {
-      dailyProgressMap = (state as ProgressRefreshing).dailyProgress!;
+    } else if (state is ProgressRefreshing && (state).dailyProgress != null) {
+      dailyProgressMap = (state).dailyProgress!;
     }
     final dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -901,7 +798,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
             child: _buildMetricCard(
               'Hábitos cumplidos\nesta semana',
               '${progress.weeklyCompletedHabits ?? 0}',
-              'Actividades\npendientes',
+              'Actividades\ncumplidas',
               const Color(0xFF4CAF50),
             ),
           ),
@@ -1020,7 +917,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                       const SizedBox(width: 8),
                       const Flexible(
                         child: Text(
-                          'Pendientes',
+                          'Alimentación',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w400,
@@ -1180,13 +1077,12 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       // Obtener el progreso del día actual
       todayProgress = state.dailyProgress![todayName] ?? 0.0;
       completedToday = (todayProgress * suggestedHabits).round();
-    } else if (state is ProgressRefreshing &&
-        (state as ProgressRefreshing).dailyProgress != null) {
+    } else if (state is ProgressRefreshing && (state).dailyProgress != null) {
       final now = DateTime.now();
       final dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
       final todayIndex = (now.weekday - 1) % 7;
       final todayName = dayNames[todayIndex];
-      todayProgress = (state as ProgressRefreshing).dailyProgress![todayName] ?? 0.0;
+      todayProgress = (state).dailyProgress![todayName] ?? 0.0;
       completedToday = (todayProgress * suggestedHabits).round();
     }
 
@@ -1328,9 +1224,12 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       completionRate = (weeklyCompleted / possibleActions).clamp(0.0, 1.0);
     } else {
       // Fallback al porcentaje del backend si no hay datos de acciones
-      completionRate = (progress.weeklyProgressPercentage ?? 0.0).clamp(0.0, 1.0);
+      completionRate = (progress.weeklyProgressPercentage ?? 0.0).clamp(
+        0.0,
+        1.0,
+      );
     }
-    
+
     final progressPercentage = ((completionRate * 100).isFinite
         ? (completionRate * 100).round()
         : 0);
@@ -1688,10 +1587,12 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     final state = context.read<ProgressBloc>().state;
     print('🔍 UI: Getting monthly indicator for key: $key');
     print('🔍 UI: State type: ${state.runtimeType}');
-    
+
     if (state is ProgressLoaded && state.monthlyIndicators != null) {
       final value = state.monthlyIndicators![key];
-      print('🔍 UI: Monthly indicators available: ${state.monthlyIndicators!.keys.length} keys');
+      print(
+        '🔍 UI: Monthly indicators available: ${state.monthlyIndicators!.keys.length} keys',
+      );
       print('🔍 UI: Value for $key: $value');
       return value;
     } else {
@@ -1799,7 +1700,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
                 ],
               ],
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -1852,12 +1753,14 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     if (state is ProgressLoaded) {
       // Si tenemos datos mensuales reales, usarlos
       if (state.monthlyProgress != null && state.monthlyProgress!.isNotEmpty) {
-        final monthlyAverage = state.monthlyProgress!
-            .map((p) => p.weeklyProgressPercentage)
-            .fold(0.0, (a, b) => a + b) / state.monthlyProgress!.length;
+        final monthlyAverage =
+            state.monthlyProgress!
+                .map((p) => p.weeklyProgressPercentage)
+                .fold(0.0, (a, b) => a + b) /
+            state.monthlyProgress!.length;
         return (monthlyAverage * 100).clamp(0.0, 100.0).round();
       }
-      
+
       // Fallback: estimar basado en el progreso semanal actual
       // Asumiendo que el mes tiene 4 semanas y estamos en progreso
       final weeklyPercentage = state.progress.weeklyProgressPercentage;
@@ -1865,7 +1768,7 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
       final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
       final dayOfMonth = now.day;
       final monthProgress = (dayOfMonth / daysInMonth) * weeklyPercentage;
-      
+
       return (monthProgress * 100).clamp(0.0, 100.0).round();
     }
     return 0;
@@ -1876,19 +1779,24 @@ class _ProgressMainScreenState extends State<ProgressMainScreen> {
     final state = context.read<ProgressBloc>().state;
     if (state is ProgressLoaded && state.dailyProgress != null) {
       final dailyProgress = state.dailyProgress!;
-      final progressValues = dailyProgress.values.where((v) => v > 0.0).toList();
-      
+      final progressValues = dailyProgress.values
+          .where((v) => v > 0.0)
+          .toList();
+
       if (progressValues.isNotEmpty) {
-        final average = progressValues.fold(0.0, (a, b) => a + b) / progressValues.length;
+        final average =
+            progressValues.fold(0.0, (a, b) => a + b) / progressValues.length;
         return (average * 100).clamp(0.0, 100.0).round();
       }
     }
-    
+
     // Fallback al progreso semanal del backend
     if (state is ProgressLoaded) {
-      return ((state.progress.weeklyProgressPercentage ?? 0.0) * 100).clamp(0.0, 100.0).round();
+      return ((state.progress.weeklyProgressPercentage ?? 0.0) * 100)
+          .clamp(0.0, 100.0)
+          .round();
     }
-    
+
     return 0;
   }
 

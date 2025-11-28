@@ -1,6 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/error/failures.dart';
-import '../../../core/usecases/usecase.dart';
 import '../../../core/cache/monthly_data_cache.dart';
 import '../../../domain/usecases/get_user_progress.dart';
 import '../../../domain/usecases/get_daily_week_progress.dart';

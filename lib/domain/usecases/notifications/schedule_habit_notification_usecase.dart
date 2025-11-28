@@ -1,6 +1,5 @@
 import 'package:dartz/dartz.dart';
 import 'package:vive_good_app/core/error/failures.dart';
-import 'package:vive_good_app/domain/entities/habit_notification.dart';
 import 'package:vive_good_app/domain/entities/notification_schedule.dart';
 import 'package:vive_good_app/domain/repositories/notification_repository.dart';
 

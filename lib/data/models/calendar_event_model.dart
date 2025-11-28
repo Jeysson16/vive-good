@@ -117,6 +117,7 @@ class CalendarEventModel extends CalendarEvent {
     }
   }
 
+  @override
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -185,6 +186,7 @@ class CalendarEventModel extends CalendarEvent {
     );
   }
 
+  @override
   CalendarEventModel copyWith({
     String? id,
     String? userId,

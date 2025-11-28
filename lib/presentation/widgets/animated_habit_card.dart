@@ -14,13 +14,13 @@ class AnimatedHabitCard extends StatefulWidget {
   final Function(bool)? onToggle;
 
   const AnimatedHabitCard({
-    Key? key,
+    super.key,
     required this.userHabit,
     required this.index,
     this.animation,
     this.onEdit,
     this.onToggle,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedHabitCard> createState() => _AnimatedHabitCardState();

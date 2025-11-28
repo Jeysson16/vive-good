@@ -1,5 +1,4 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_local_notifications_platform_interface/flutter_local_notifications_platform_interface.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -58,57 +57,82 @@ class NotificationService {
 
   /// Solicita permisos de notificación
   Future<bool> requestPermissions() async {
-    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-        _notifications.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    try {
+      print('🔔 [NOTIFICATION_SERVICE] Solicitando permisos de notificación...');
+      
+      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+          _notifications.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
 
-    if (androidImplementation != null) {
-      final bool? granted = await androidImplementation
-          .requestNotificationsPermission();
-      return granted ?? false;
+      if (androidImplementation != null) {
+        print('🤖 [NOTIFICATION_SERVICE] Solicitando permisos en Android...');
+        final bool? granted = await androidImplementation
+            .requestNotificationsPermission();
+        final result = granted ?? false;
+        print('🤖 [NOTIFICATION_SERVICE] Permisos Android: ${result ? "CONCEDIDOS" : "DENEGADOS"}');
+        return result;
+      }
+
+      final IOSFlutterLocalNotificationsPlugin? iosImplementation =
+          _notifications.resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>();
+
+      if (iosImplementation != null) {
+        print('🍎 [NOTIFICATION_SERVICE] Solicitando permisos en iOS...');
+        final bool? granted = await iosImplementation
+            .requestPermissions(
+              alert: true,
+              badge: true,
+              sound: true,
+            );
+        final result = granted ?? false;
+        print('🍎 [NOTIFICATION_SERVICE] Permisos iOS: ${result ? "CONCEDIDOS" : "DENEGADOS"}');
+        return result;
+      }
+
+      print('❌ [NOTIFICATION_SERVICE] Plataforma no soportada para permisos');
+      return false;
+    } catch (e) {
+      print('❌ [NOTIFICATION_SERVICE] Error al solicitar permisos: $e');
+      return false;
     }
-
-    final IOSFlutterLocalNotificationsPlugin? iosImplementation =
-        _notifications.resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>();
-
-    if (iosImplementation != null) {
-      final bool? granted = await iosImplementation
-          .requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
-      return granted ?? false;
-    }
-
-    return false;
   }
 
   /// Verifica permisos de notificación
   Future<bool> checkPermissions() async {
-    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-        _notifications.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+    try {
+      print('🔍 [NOTIFICATION_SERVICE] Verificando permisos de notificación...');
+      
+      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+          _notifications.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
 
-    if (androidImplementation != null) {
-      final bool? granted = await androidImplementation
-          .areNotificationsEnabled();
-      return granted ?? false;
+      if (androidImplementation != null) {
+        final bool? granted = await androidImplementation
+            .areNotificationsEnabled();
+        final result = granted ?? false;
+        print('🤖 [NOTIFICATION_SERVICE] Estado permisos Android: ${result ? "HABILITADOS" : "DESHABILITADOS"}');
+        return result;
+      }
+
+      final IOSFlutterLocalNotificationsPlugin? iosImplementation =
+          _notifications.resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>();
+
+      if (iosImplementation != null) {
+        final bool granted = await iosImplementation
+            .checkPermissions()
+            .then((permissions) => permissions?.isEnabled ?? false);
+        print('🍎 [NOTIFICATION_SERVICE] Estado permisos iOS: ${granted ? "HABILITADOS" : "DESHABILITADOS"}');
+        return granted;
+      }
+
+      print('❌ [NOTIFICATION_SERVICE] Plataforma no soportada para verificar permisos');
+      return false;
+    } catch (e) {
+      print('❌ [NOTIFICATION_SERVICE] Error al verificar permisos: $e');
+      return false;
     }
-
-    final IOSFlutterLocalNotificationsPlugin? iosImplementation =
-        _notifications.resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>();
-
-    if (iosImplementation != null) {
-      final bool granted = await iosImplementation
-          .checkPermissions()
-          .then((permissions) => permissions?.isEnabled ?? false);
-      return granted;
-    }
-
-    return false;
   }
 
   // ===== HABIT NOTIFICATIONS =====
@@ -122,52 +146,66 @@ class NotificationService {
     String? payload,
     String? sound,
   }) async {
-    if (!_isInitialized) await initialize();
+    try {
+      print('📅 [NOTIFICATION_SERVICE] Programando notificación: $title para $scheduledTime');
+      
+      if (!_isInitialized) {
+        print('🔄 [NOTIFICATION_SERVICE] Inicializando servicio...');
+        await initialize();
+      }
 
-    // No programar notificaciones para tiempos pasados
-    if (scheduledTime.isBefore(DateTime.now())) {
-      throw Exception('No se puede programar una notificación para el pasado');
+      // No programar notificaciones para tiempos pasados
+      if (scheduledTime.isBefore(DateTime.now())) {
+        final error = 'No se puede programar una notificación para el pasado: $scheduledTime';
+        print('❌ [NOTIFICATION_SERVICE] $error');
+        throw Exception(error);
+      }
+
+      final platformNotificationId = notificationId.hashCode;
+      print('🆔 [NOTIFICATION_SERVICE] ID de plataforma: $platformNotificationId');
+
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+        'notifications',
+        'Notificaciones de Hábitos',
+        channelDescription: 'Recordatorios para completar hábitos diarios',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+        enableVibration: true,
+        playSound: true,
+      );
+
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        categoryIdentifier: 'habit_reminder',
+      );
+
+      const NotificationDetails notificationDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await _notifications.zonedSchedule(
+        platformNotificationId,
+        title,
+        body,
+        tz.TZDateTime.from(scheduledTime, tz.local),
+        notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload ?? notificationId,
+      );
+
+      print('✅ [NOTIFICATION_SERVICE] Notificación programada exitosamente');
+      return platformNotificationId;
+    } catch (e) {
+      print('❌ [NOTIFICATION_SERVICE] Error al programar notificación: $e');
+      rethrow;
     }
-
-    final platformNotificationId = notificationId.hashCode;
-
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-      'habit_notifications',
-      'Notificaciones de Hábitos',
-      channelDescription: 'Recordatorios para completar hábitos diarios',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      enableVibration: true,
-      playSound: true,
-    );
-
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      categoryIdentifier: 'habit_reminder',
-    );
-
-    const NotificationDetails notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _notifications.zonedSchedule(
-      platformNotificationId,
-      title,
-      body,
-      tz.TZDateTime.from(scheduledTime, tz.local),
-      notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: payload ?? notificationId,
-    );
-
-    return platformNotificationId;
   }
 
   /// Programa notificaciones recurrentes para hábitos
@@ -425,7 +463,7 @@ class NotificationService {
     await _supabase
         .from('notifications')
         .delete()
-        .eq('event_id', eventId);
+        .eq('related_id', eventId);
   }
 
   /// Cancela todas las notificaciones de un evento recurrente
@@ -522,14 +560,14 @@ class NotificationService {
       }
 
       if (startDate != null) {
-        query = query.gte('scheduled_at', startDate.toIso8601String());
+        query = query.gte('scheduled_for', startDate.toIso8601String());
       }
 
       if (endDate != null) {
-        query = query.lte('scheduled_at', endDate.toIso8601String());
+        query = query.lte('scheduled_for', endDate.toIso8601String());
       }
 
-      final response = await query.order('scheduled_at', ascending: false);
+      final response = await query.order('scheduled_for', ascending: false);
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       throw ServerException('Error al obtener notificaciones de la base de datos: $e');
@@ -651,16 +689,17 @@ class NotificationService {
       await _supabase.from('notifications').insert({
         'id': notificationId,
         'user_id': userId,
-        'event_id': notificationId.split('_')[0],
+        'related_id': notificationId.split('_')[0],
         'title': title,
         'body': body,
-        'scheduled_at': scheduledAt.toIso8601String(),
+        'type': 'calendar_event',
+        'scheduled_for': scheduledAt.toIso8601String(),
         'is_read': false,
         'created_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
       // Log error but don't throw to avoid breaking notification scheduling
-      // Error al guardar notificación en base de datos
+      print('Error al guardar notificación en base de datos: $e');
     }
   }
 }

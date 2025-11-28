@@ -8,10 +8,10 @@ class PendingChangesIndicator extends StatelessWidget {
   final bool showBadge;
 
   const PendingChangesIndicator({
-    Key? key,
+    super.key,
     required this.child,
     this.showBadge = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +66,7 @@ class PendingChangesIndicator extends StatelessWidget {
 }
 
 class PendingChangesBottomSheet extends StatelessWidget {
-  const PendingChangesBottomSheet({Key? key}) : super(key: key);
+  const PendingChangesBottomSheet({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +250,7 @@ class PendingChangesBottomSheet extends StatelessWidget {
 }
 
 class PendingChangesFloatingButton extends StatelessWidget {
-  const PendingChangesFloatingButton({Key? key}) : super(key: key);
+  const PendingChangesFloatingButton({super.key});
 
   @override
   Widget build(BuildContext context) {

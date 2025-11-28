@@ -5,10 +5,10 @@ class AnimatedSuccessWidget extends StatefulWidget {
   final VoidCallback? onDismiss;
   
   const AnimatedSuccessWidget({
-    Key? key,
+    super.key,
     this.message = '¡Éxito!',
     this.onDismiss,
-  }) : super(key: key);
+  });
   
   @override
   State<AnimatedSuccessWidget> createState() => _AnimatedSuccessWidgetState();

@@ -20,6 +20,7 @@ class AssistantResponseModel extends AssistantResponse {
     super.suggestedHabits,
     super.dlChatResponse,
     super.processedActions,
+    super.isInitialResponse,
   });
 
   factory AssistantResponseModel.fromJson(Map<String, dynamic> json) {
@@ -60,6 +61,7 @@ class AssistantResponseModel extends AssistantResponse {
       processedActions: json['processed_actions'] != null
           ? Map<String, dynamic>.from(json['processed_actions'])
           : null,
+      isInitialResponse: json['is_initial_response'] ?? false,
     );
   }
 
@@ -83,6 +85,7 @@ class AssistantResponseModel extends AssistantResponse {
       'suggested_habits': suggestedHabits,
       'dl_chat_response': dlChatResponse,
       'processed_actions': processedActions,
+      'is_initial_response': isInitialResponse,
     };
   }
 
@@ -124,6 +127,7 @@ class AssistantResponseModel extends AssistantResponse {
       processedActions: data['processed_actions'] != null
           ? Map<String, dynamic>.from(data['processed_actions'])
           : null,
+      isInitialResponse: data['is_initial_response'] ?? false,
     );
   }
 
@@ -171,6 +175,7 @@ class AssistantResponseModel extends AssistantResponse {
     }
   }
 
+  @override
   AssistantResponseModel copyWith({
     String? id,
     String? sessionId,
@@ -190,6 +195,7 @@ class AssistantResponseModel extends AssistantResponse {
     List<Map<String, dynamic>>? suggestedHabits,
     Map<String, dynamic>? dlChatResponse,
     Map<String, dynamic>? processedActions,
+    bool? isInitialResponse,
   }) {
     return AssistantResponseModel(
       id: id ?? this.id,
@@ -210,6 +216,7 @@ class AssistantResponseModel extends AssistantResponse {
       suggestedHabits: suggestedHabits ?? this.suggestedHabits,
       dlChatResponse: dlChatResponse ?? this.dlChatResponse,
       processedActions: processedActions ?? this.processedActions,
+      isInitialResponse: isInitialResponse ?? this.isInitialResponse,
     );
   }
 }

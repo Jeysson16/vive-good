@@ -115,10 +115,10 @@ class EventCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (event.description?.isNotEmpty == true) ...[
+                if (event.description.isNotEmpty == true) ...[
                   const SizedBox(height: 8),
                   Text(
-                    event.description!,
+                    event.description,
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[600],
@@ -153,12 +153,11 @@ class EventCard extends StatelessWidget {
                       const SizedBox(width: 16),
                     ],
                     // Recurrence indicator
-                    if (event.recurrenceType != null &&
-                        event.recurrenceType != 'none') ...[
+                    if (event.recurrenceType != 'none') ...[
                       Icon(Icons.repeat, size: 16, color: Colors.grey[500]),
                       const SizedBox(width: 4),
                       Text(
-                        _getRecurrenceText(event.recurrenceType!),
+                        _getRecurrenceText(event.recurrenceType),
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],

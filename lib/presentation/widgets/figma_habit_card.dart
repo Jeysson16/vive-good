@@ -14,7 +14,7 @@ class FigmaHabitCard extends StatelessWidget {
   final bool isSelected;
 
   const FigmaHabitCard({
-    Key? key,
+    super.key,
     required this.habit,
     this.onEdit,
     this.onViewProgress,
@@ -22,7 +22,7 @@ class FigmaHabitCard extends StatelessWidget {
     this.onTap,
     this.isCompleted = false,
     this.isSelected = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -124,6 +124,9 @@ class FigmaHabitCard extends StatelessWidget {
                 ? TextDecoration.lineThrough
                 : TextDecoration.none,
           ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          softWrap: true,
         ),
         const SizedBox(height: 8),
         Container(

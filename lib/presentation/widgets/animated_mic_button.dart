@@ -5,10 +5,10 @@ class AnimatedMicButton extends StatefulWidget {
   final bool isListening;
   
   const AnimatedMicButton({
-    Key? key,
+    super.key,
     required this.onPressed,
     this.isListening = false,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedMicButton> createState() => _AnimatedMicButtonState();
@@ -142,7 +142,7 @@ class _AnimatedMicButtonState extends State<AnimatedMicButton>
         builder: (context, child) {
           return Transform.scale(
             scale: _scaleAnimation.value,
-            child: Container(
+            child: SizedBox(
               width: 64,
               height: 64,
               child: Stack(

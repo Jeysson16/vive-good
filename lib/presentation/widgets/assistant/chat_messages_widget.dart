@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../domain/entities/chat/chat_message.dart';
-import 'assistant_avatar_widget.dart';
 
 class ChatMessagesWidget extends StatefulWidget {
   final List<ChatMessage> messages;

@@ -16,7 +16,7 @@ class CompactHabitItem extends StatelessWidget {
   final Function(UserHabit)? onDelete;
 
   const CompactHabitItem({
-    Key? key,
+    super.key,
     required this.userHabit,
     required this.habit,
     required this.category,
@@ -27,7 +27,7 @@ class CompactHabitItem extends StatelessWidget {
     this.onEdit,
     this.onViewProgress,
     this.onDelete,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -130,10 +130,10 @@ class CompactHabitItem extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (habit.description?.isNotEmpty == true) ...[
+                      if (habit.description.isNotEmpty == true) ...[
                         const SizedBox(height: 2),
                         Text(
-                          habit.description!,
+                          habit.description,
                           style: const TextStyle(
                             fontSize: 12,
                             color: Color(0xFF6B7280),

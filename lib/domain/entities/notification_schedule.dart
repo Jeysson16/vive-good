@@ -55,14 +55,68 @@ class NotificationSchedule extends Equatable {
     );
   }
 
-  /// Convierte el tiempo programado en un objeto DateTime para hoy
+  /// Convierte el tiempo programado en un objeto DateTime para el próximo día de la semana especificado
   DateTime get scheduledDateTime {
     final now = DateTime.now();
     final timeParts = scheduledTime.split(':');
     final hour = int.parse(timeParts[0]);
     final minute = int.parse(timeParts[1]);
     
+    // Si es 'daily' o un número, programar para hoy o el próximo día
+    if (dayOfWeek == 'daily' || int.tryParse(dayOfWeek) != null) {
+      final targetDay = int.tryParse(dayOfWeek);
+      if (targetDay != null) {
+        // dayOfWeek es un número (1=Lunes, 7=Domingo)
+        return _getNextDateForDayOfWeek(now, targetDay, hour, minute);
+      } else {
+        // Es 'daily', programar para hoy si no ha pasado la hora, sino mañana
+        final todayAtTime = DateTime(now.year, now.month, now.day, hour, minute);
+        if (todayAtTime.isAfter(now)) {
+          return todayAtTime;
+        } else {
+          return todayAtTime.add(const Duration(days: 1));
+        }
+      }
+    }
+    
+    // Si es un nombre de día, convertir a número
+    final dayMap = {
+      'monday': 1,
+      'tuesday': 2,
+      'wednesday': 3,
+      'thursday': 4,
+      'friday': 5,
+      'saturday': 6,
+      'sunday': 7,
+    };
+    
+    final targetDay = dayMap[dayOfWeek.toLowerCase()];
+    if (targetDay != null) {
+      return _getNextDateForDayOfWeek(now, targetDay, hour, minute);
+    }
+    
+    // Fallback: programar para hoy
     return DateTime(now.year, now.month, now.day, hour, minute);
+  }
+  
+  /// Calcula la próxima fecha para un día de la semana específico
+  DateTime _getNextDateForDayOfWeek(DateTime now, int targetDayOfWeek, int hour, int minute) {
+    final currentDayOfWeek = now.weekday;
+    int daysUntilTarget = (targetDayOfWeek - currentDayOfWeek) % 7;
+    
+    // Si es el mismo día, verificar si ya pasó la hora
+    if (daysUntilTarget == 0) {
+      final todayAtTime = DateTime(now.year, now.month, now.day, hour, minute);
+      if (todayAtTime.isAfter(now)) {
+        return todayAtTime;
+      } else {
+        // Ya pasó la hora hoy, programar para la próxima semana
+        daysUntilTarget = 7;
+      }
+    }
+    
+    final targetDate = now.add(Duration(days: daysUntilTarget));
+    return DateTime(targetDate.year, targetDate.month, targetDate.day, hour, minute);
   }
 
   /// Verifica si el horario es para hoy según el día de la semana

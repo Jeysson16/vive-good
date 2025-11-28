@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart';
 import '../../../domain/entities/user_habit.dart';
 import '../../../domain/entities/habit.dart';
 import '../../../domain/entities/habit_log.dart';
 import '../../../domain/entities/category.dart';
-import '../../blocs/habit/habit_bloc.dart';
-import '../../blocs/habit/habit_state.dart';
-import '../../blocs/main_page/main_page_bloc.dart';
 import '../../controllers/sliver_scroll_controller.dart';
 import '../common/responsive_dimensions.dart';
 import 'habit_item.dart';

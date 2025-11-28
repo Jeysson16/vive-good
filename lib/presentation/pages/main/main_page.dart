@@ -36,7 +36,7 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   int _selectedIndex = 0;
-  Set<String> _selectedHabits = {};
+  final Set<String> _selectedHabits = {};
   Set<String> _bulkAnimatingHabits = {};
   bool _showBottomTab = false;
   String? _selectedCategoryId;
@@ -139,7 +139,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       print('🔍 [DEBUG] MainPage - Dashboard not loaded, loading data...');
       _loadUserHabits();
     } else {
-      print('🔍 [DEBUG] MainPage - Dashboard already loaded with ${(dashboardState as DashboardLoaded).userHabits.length} habits');
+      print('🔍 [DEBUG] MainPage - Dashboard already loaded with ${(dashboardState).userHabits.length} habits');
     }
   }
 

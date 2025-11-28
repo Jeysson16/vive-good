@@ -1,5 +1,4 @@
 import 'package:vive_good_app/domain/entities/user_habit.dart' as entities;
-import 'package:vive_good_app/domain/entities/habit.dart';
 
 class UserHabitModel {
   final String id;

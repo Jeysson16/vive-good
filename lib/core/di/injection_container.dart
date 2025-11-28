@@ -4,8 +4,10 @@ import 'package:http/http.dart' as http;
 import 'package:internet_connection_checker/internet_connection_checker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vive_good_app/core/config/app_config.dart';
 // Notification imports
 import 'package:vive_good_app/data/repositories/local/notification_local_repository.dart';
+import 'package:vive_good_app/data/datasources/remote/notification_remote_datasource.dart';
 import 'package:vive_good_app/data/models/local/habit_notification_local_model.dart';
 import 'package:vive_good_app/data/models/local/notification_log_local_model.dart';
 import 'package:vive_good_app/data/models/local/notification_schedule_local_model.dart';
@@ -22,9 +24,28 @@ import 'package:vive_good_app/domain/usecases/notifications/manage_habit_notific
 import 'package:vive_good_app/domain/usecases/notifications/reschedule_notifications_usecase.dart';
 import 'package:vive_good_app/presentation/blocs/notification/notification_bloc.dart';
 
+// Admin imports
+import '../../data/datasources/admin_remote_datasource.dart';
+import '../../data/repositories/admin_repository_impl.dart';
+import '../../domain/repositories/admin_repository.dart';
+import '../../domain/usecases/admin/get_admin_dashboard_stats_usecase.dart';
+import '../../domain/usecases/admin/get_user_evaluations_usecase.dart';
+import '../../domain/usecases/admin/get_tech_acceptance_indicators_usecase.dart';
+import '../../domain/usecases/admin/get_consolidated_report_usecase.dart';
+import '../../domain/usecases/admin/check_admin_permissions_usecase.dart';
+import '../../domain/usecases/admin/export_to_excel_usecase.dart';
+
+// Roles imports
+import '../../data/datasources/roles_remote_datasource.dart';
+import '../../data/repositories/roles_repository_impl.dart';
+import '../../domain/repositories/roles_repository.dart';
+import '../../domain/usecases/roles/get_all_roles_usecase.dart';
+import '../../domain/usecases/roles/create_role_usecase.dart';
+import '../../domain/usecases/roles/update_role_usecase.dart';
+import '../../domain/usecases/roles/delete_role_usecase.dart';
+
 import '../../core/network/network_info.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
-import '../../data/datasources/auth_custom_remote_datasource.dart';
 import '../../data/datasources/chat_remote_datasource.dart';
 import '../../data/datasources/habit_local_datasource.dart';
 import '../../data/datasources/habit_remote_datasource.dart';
@@ -294,6 +315,11 @@ Future<void> init() async {
     () => NotificationLocalRepository(databaseService: sl()),
   );
 
+  // Remote data sources
+  sl.registerLazySingleton<NotificationRemoteDataSource>(
+    () => NotificationRemoteDataSourceImpl(supabaseClient: sl()),
+  );
+
   // Services
   sl.registerLazySingleton<NotificationService>(() => NotificationService());
 
@@ -490,28 +516,37 @@ Future<void> init() async {
       progressLocalRepository: sl(),
       userLocalRepository: sl(),
       chatLocalRepository: sl(),
+      notificationLocalRepository: sl(),
       pendingOperationsRepository: sl(),
       habitRemoteDataSource: sl(),
       progressRemoteDataSource: sl(),
       userRemoteDataSource: sl(),
       chatRemoteDataSource: sl(),
+      notificationRemoteDataSource: sl(),
     ),
   );
 
   //! Core
   sl.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl(sl()));
 
-  //! External
+  // External
   sl.registerLazySingleton(() => http.Client());
   sl.registerLazySingleton(() => InternetConnectionChecker.createInstance());
   final sharedPreferences = await SharedPreferences.getInstance();
   sl.registerLazySingleton(() => sharedPreferences);
 
-  // Initialize Supabase
+  // Initialize AppConfig
+  await AppConfig.initialize();
+
+  // Validate configuration
+  if (!AppConfig.isSupabaseConfigured) {
+    throw Exception('Supabase configuration is missing. Please check your .env file.');
+  }
+
+  // Initialize Supabase with environment variables
   await Supabase.initialize(
-    url: 'https://numrwrjuslomfbsnllbe.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51bXJ3cmp1c2xvbWZic25sbGJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc4MjE4MTksImV4cCI6MjA3MzM5NzgxOX0.chEXoTra7OoRtqsET0lcBtUnhsPup8Fmvv5d2tMyy20',
+    url: AppConfig.supabaseUrl,
+    anonKey: AppConfig.supabaseAnonKey,
   );
   sl.registerLazySingleton(() => Supabase.instance.client);
 
@@ -555,4 +590,40 @@ Future<void> init() async {
 
   // Register DatabaseHelper
   sl.registerLazySingleton<DatabaseHelper>(() => DatabaseHelper());
+
+  //! Features - Admin
+  // Use cases
+  sl.registerLazySingleton(() => GetAdminDashboardStatsUseCase(sl()));
+  sl.registerLazySingleton(() => GetUserEvaluationsUseCase(sl()));
+  sl.registerLazySingleton(() => GetTechAcceptanceIndicatorsUseCase(sl()));
+  sl.registerLazySingleton(() => GetConsolidatedReportUseCase(sl()));
+  sl.registerLazySingleton(() => CheckAdminPermissionsUseCase(sl()));
+  sl.registerLazySingleton(() => ExportToExcelUseCase(sl()));
+
+  // Repository
+  sl.registerLazySingleton<AdminRepository>(
+    () => AdminRepositoryImpl(remoteDataSource: sl()),
+  );
+
+  // Data sources
+  sl.registerLazySingleton<AdminRemoteDataSource>(
+    () => AdminRemoteDataSourceImpl(supabaseClient: sl()),
+  );
+
+  //! Features - Roles
+  // Use cases
+  sl.registerLazySingleton(() => GetAllRolesUseCase(sl()));
+  sl.registerLazySingleton(() => CreateRoleUseCase(sl()));
+  sl.registerLazySingleton(() => UpdateRoleUseCase(sl()));
+  sl.registerLazySingleton(() => DeleteRoleUseCase(sl()));
+
+  // Repository
+  sl.registerLazySingleton<RolesRepository>(
+    () => RolesRepositoryImpl(remoteDataSource: sl()),
+  );
+
+  // Data sources
+  sl.registerLazySingleton<RolesRemoteDataSource>(
+    () => RolesRemoteDataSourceImpl(supabaseClient: sl()),
+  );
 }

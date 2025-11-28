@@ -1,8 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vive_good_app/data/models/chat/chat_message_model.dart';
 import 'package:vive_good_app/data/models/chat/chat_session_model.dart';
-import '../../../domain/entities/chat_session.dart';
-import '../../../domain/entities/chat/chat_message.dart';
 
 class SupabaseAssistantDatasource {
   final SupabaseClient _supabaseClient;

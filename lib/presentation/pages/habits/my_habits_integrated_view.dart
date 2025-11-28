@@ -25,8 +25,7 @@ class MyHabitsIntegratedView extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onHabitCreated;
 
-  const MyHabitsIntegratedView({Key? key, this.onBack, this.onHabitCreated})
-    : super(key: key);
+  const MyHabitsIntegratedView({super.key, this.onBack, this.onHabitCreated});
 
   @override
   State<MyHabitsIntegratedView> createState() => _MyHabitsIntegratedViewState();
@@ -40,7 +39,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   bool isSuggestionsExpanded = false;
   bool _isLoading = false;
   bool _hasUserInteracted = false;
-  Set<String> _selectedHabits = <String>{};
+  final Set<String> _selectedHabits = <String>{};
   late AnimationController _suggestionsAnimationController;
   late Animation<double> _suggestionsAnimation;
   late PageController _pageController;
@@ -58,6 +57,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   @override
   void initState() {
     print('🔍 INICIALIZANDO MIS HÁBITOS - initState() llamado');
+    print('🔍 [DEBUG] initState - currentUser: ${Supabase.instance.client.auth.currentUser?.id}');
     super.initState();
     _suggestionsAnimationController = AnimationController(
       duration: const Duration(milliseconds: 300),
@@ -112,14 +112,17 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
 
     try {
       final userId = await _tryGetUserIdFromSupabase();
+      print('🔍 [DEBUG] _loadData - userId obtenido: $userId');
       if (userId != null) {
         // Use RefreshUserHabits to force reload after habit creation
         context.read<HabitBloc>().add(RefreshUserHabits(userId: userId));
         context.read<HabitBloc>().add(LoadCategories());
         // Cargar sugerencias una sola vez
+        print('🔍 [DEBUG] _loadData - llamando a _initializeSuggestionCategory');
         await _initializeSuggestionCategory();
-      } else {}
-    } catch (e) {
+      } else {
+        print('🔍 [DEBUG] _loadData - userId es null, no se cargarán sugerencias');
+      }
     } finally {
       setState(() {
         _isLoading = false;
@@ -141,10 +144,13 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     // Try to get user ID directly from Supabase
     try {
       final supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
+      print('🔍 [DEBUG] _tryGetUserIdFromSupabase - supabaseUserId: $supabaseUserId');
       if (supabaseUserId != null && supabaseUserId.isNotEmpty) {
         // Return user ID without loading data here - data loading is handled in _loadData
+        print('🔍 [DEBUG] _tryGetUserIdFromSupabase - retornando userId válido');
         return supabaseUserId;
       } else {
+        print('🔍 [DEBUG] _tryGetUserIdFromSupabase - userId es null o vacío');
         // Show error state
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -155,6 +161,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
         return null;
       }
     } catch (e) {
+      print('🔍 [DEBUG] _tryGetUserIdFromSupabase - error: $e');
       return null;
     }
   }
@@ -202,7 +209,9 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
 
     // Cargar TODAS las sugerencias de Supabase una sola vez
     final supabaseUserId = Supabase.instance.client.auth.currentUser?.id;
+    print('🔍 [DEBUG] _initializeSuggestionCategory - supabaseUserId: $supabaseUserId');
     if (supabaseUserId != null) {
+      print('🔍 [DEBUG] _initializeSuggestionCategory - agregando evento LoadHabitSuggestions');
       context.read<HabitBloc>().add(
         LoadHabitSuggestions(
           userId: supabaseUserId,
@@ -210,6 +219,14 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
           limit: 100, // Límite más alto para obtener todas las sugerencias
         ),
       );
+
+      setState(() {
+        isSuggestionsExpanded = true;
+        _hasUserInteracted = true;
+      });
+      _suggestionsAnimationController.forward();
+    } else {
+      print('🔍 [DEBUG] _initializeSuggestionCategory - supabaseUserId es null, no se cargarán sugerencias');
     }
 
     // Asegurar que el PageController esté en la posición correcta
@@ -225,6 +242,27 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
   @override
   Widget build(BuildContext context) {
     print('🔍 CONSTRUYENDO MIS HÁBITOS - build() llamado');
+    print('🔍 [DEBUG] build - isSuggestionsExpanded: $isSuggestionsExpanded');
+    final currentUser = Supabase.instance.client.auth.currentUser?.id;
+    print('🔍 [DEBUG] build - currentUser: $currentUser');
+    
+    // Si hay usuario autenticado y no se han cargado sugerencias, cargarlas
+    if (currentUser != null && !_hasUserInteracted) {
+      print('🔍 [DEBUG] build - Usuario autenticado pero sin sugerencias, forzando carga');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<HabitBloc>().add(
+          LoadHabitSuggestions(
+            userId: currentUser,
+            categoryId: null,
+            limit: 10,
+          ),
+        );
+        setState(() {
+          isSuggestionsExpanded = true;
+          _hasUserInteracted = true;
+        });
+      });
+    }
     return BlocProvider(
       create: (context) =>
           CategoryScrollBloc()..add(InitializeCategoryScroll()),
@@ -1258,6 +1296,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     }
 
     final allSuggestions = habitState.habitSuggestions;
+    print('DEBUG FeaturedSuggestion - total suggestions: ' + allSuggestions.length.toString());
 
     if (allSuggestions.isEmpty) {
       return Container(
@@ -1291,7 +1330,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
           return const SizedBox(height: 100);
         }
 
-        return Container(
+        return SizedBox(
           height: 110,
           child: PageView.builder(
             controller: _suggestionsPageController,
@@ -1479,7 +1518,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
       );
     } else {
       // Mostrar indicadores con scroll visual cuando hay muchos puntos
-      return Container(
+      return SizedBox(
         height: 20,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1693,7 +1732,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     
     // Si tenemos la categoría, usar su icono de la base de datos
     if (category?.iconName != null) {
-      final iconData = _getIconData(category!.iconName!);
+      final iconData = _getIconData(category!.iconName);
       print('🔍 DEBUG _getIconForCategory - usando icono de BD: ${category.iconName} -> $iconData');
       return iconData;
     }
@@ -1725,7 +1764,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     
     // Si tenemos la categoría, usar su color de la base de datos
     if (category?.color != null) {
-      final color = _getIconColor(category!.color!);
+      final color = _getIconColor(category!.color);
       print('🔍 DEBUG _getColorForCategory - usando color de BD: ${category.color} -> $color');
       return color;
     }

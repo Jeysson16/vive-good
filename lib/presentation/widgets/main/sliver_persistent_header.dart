@@ -49,7 +49,7 @@ class SliverPersistentHeaderWidget extends SliverPersistentHeaderDelegate {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           indicatorPadding: const EdgeInsets.symmetric(horizontal: 8),
           splashFactory: NoSplash.splashFactory,
-          overlayColor: MaterialStateProperty.all(Colors.transparent),
+          overlayColor: WidgetStateProperty.all(Colors.transparent),
           onTap: (index) {
             // Animate tab change
             controller.animateToTab(index);

@@ -19,6 +19,7 @@ class SplashPage extends StatelessWidget {
         hasCompletedOnboarding: di.sl(),
         getCurrentUser: di.sl(),
         saveUser: di.sl(),
+        checkAdminPermissions: di.sl(),
         habitBloc: context.read<HabitBloc>(),
         dashboardBloc: context.read<DashboardBloc>(),
         authBloc: context.read<AuthBloc>(),
@@ -136,13 +137,22 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
 
     return BlocListener<SplashBloc, SplashState>(
       listener: (context, state) {
+        print('🎭 [SPLASH_PAGE] Estado recibido en BlocListener: ${state.runtimeType}');
+        
         if (state is SplashNavigateToOnboarding) {
+          print('🔄 [SPLASH_PAGE] Navegando a onboarding: ${AppRoutes.onboarding}');
           context.go(AppRoutes.onboarding);
         } else if (state is SplashNavigateToWelcome) {
+          print('🔄 [SPLASH_PAGE] Navegando a welcome: ${AppRoutes.welcome}');
           context.go(AppRoutes.welcome);
         } else if (state is SplashNavigateToMain) {
+          print('🔄 [SPLASH_PAGE] Navegando a main: ${AppRoutes.main}');
           context.go(AppRoutes.main);
+        } else if (state is SplashNavigateToAdmin) {
+          print('🔄 [SPLASH_PAGE] Navegando a admin: ${AppRoutes.admin}');
+          context.go(AppRoutes.admin);
         } else if (state is SplashError) {
+          print('❌ [SPLASH_PAGE] Error en splash: ${state.message}');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(state.message), backgroundColor: Colors.red),
           );
@@ -169,7 +179,7 @@ class _SplashViewState extends State<SplashView> with TickerProviderStateMixin {
                           scale: _logoScaleAnimation.value,
                           child: Opacity(
                             opacity: _logoOpacityAnimation.value,
-                            child: Container(
+                            child: SizedBox(
                               width: isSmallScreen
                                   ? 100
                                   : (isLargeScreen ? 150 : 124),

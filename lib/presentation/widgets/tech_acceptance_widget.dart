@@ -7,10 +7,10 @@ class TechAcceptanceWidget extends StatefulWidget {
   final bool showInProfile;
   
   const TechAcceptanceWidget({
-    Key? key,
+    super.key,
     this.onCompleted,
     this.showInProfile = false,
-  }) : super(key: key);
+  });
 
   @override
   State<TechAcceptanceWidget> createState() => _TechAcceptanceWidgetState();

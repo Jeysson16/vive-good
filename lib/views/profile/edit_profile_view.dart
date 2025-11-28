@@ -476,7 +476,7 @@ class _EditProfileViewState extends State<EditProfileView> {
               _autoSuggestionsEnabled = value;
             });
           },
-          activeColor: const Color(0xFF4CAF50),
+          activeThumbColor: const Color(0xFF4CAF50),
           contentPadding: EdgeInsets.zero,
         ),
 

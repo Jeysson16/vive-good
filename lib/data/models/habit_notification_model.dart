@@ -116,6 +116,7 @@ class HabitNotificationModel extends HabitNotification {
     };
   }
 
+  @override
   HabitNotificationModel copyWith({
     String? id,
     String? userHabitId,

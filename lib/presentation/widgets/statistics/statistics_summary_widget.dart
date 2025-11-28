@@ -5,9 +5,9 @@ class StatisticsSummaryWidget extends StatelessWidget {
   final List<HabitStatistics> statistics;
 
   const StatisticsSummaryWidget({
-    Key? key,
+    super.key,
     required this.statistics,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -260,7 +260,7 @@ class StatisticsSummaryWidget extends StatelessWidget {
             Text(
               '${stat.completionPercentage.toStringAsFixed(0)}%',
               style: const TextStyle(
-                color: const Color(0xFF4CAF50),
+                color: Color(0xFF4CAF50),
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),

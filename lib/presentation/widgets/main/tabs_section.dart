@@ -39,7 +39,7 @@ class TabsSection extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               indicatorPadding: const EdgeInsets.symmetric(horizontal: 8),
               splashFactory: NoSplash.splashFactory,
-              overlayColor: MaterialStateProperty.all(Colors.transparent),
+              overlayColor: WidgetStateProperty.all(Colors.transparent),
               tabs: _buildTabs(state.filteredCategories),
             ),
           );

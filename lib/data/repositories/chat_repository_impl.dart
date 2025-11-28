@@ -141,6 +141,7 @@ class ChatRepositoryImpl implements ChatRepository {
     required String userId,
     List<ChatMessage>? conversationHistory,
     Map<String, dynamic>? userContext,
+    bool isInitialResponse = false,
   }) async {
     try {
       print('🔥 DEBUG: ChatRepositoryImpl.sendMessageToGemini llamado');

@@ -312,9 +312,9 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                       fontSize: 12,
                     ),
                   ),
-                if (event.description != null && event.description!.isNotEmpty)
+                if (event.description.isNotEmpty)
                   Text(
-                    event.description!,
+                    event.description,
                     style: TextStyle(
                       color: Colors.grey[600],
                       fontSize: 12,

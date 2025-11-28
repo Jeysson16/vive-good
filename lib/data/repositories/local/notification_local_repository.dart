@@ -1,5 +1,6 @@
 import 'package:dartz/dartz.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/error/failures.dart';
 import '../../../domain/entities/habit_notification.dart';
 import '../../../domain/entities/notification_schedule.dart';
@@ -23,15 +24,77 @@ class NotificationLocalRepository {
   Future<Either<Failure, HabitNotification>> createHabitNotification(
       HabitNotification notification) async {
     try {
-      final notificationModel = HabitNotificationLocalModel.fromEntity(notification);
+      print('🔔 [NOTIFICATION_REPO] Iniciando creación de notificación: ${notification.id}');
+      print('🔔 [NOTIFICATION_REPO] UserHabitId: ${notification.userHabitId}');
+      print('🔔 [NOTIFICATION_REPO] Título: ${notification.title}');
       
-      await _databaseService.insertWithTimestamp(
-        'habit_notifications', 
-        notificationModel.toMap()
+      // Asegurar que la tabla notifications existe
+      print('🔔 [NOTIFICATION_REPO] Verificando tabla notifications...');
+      await _databaseService.ensureNotificationsTableExists();
+      
+      final notificationModel = HabitNotificationLocalModel.fromEntity(notification);
+      final notificationMap = notificationModel.toMap();
+      
+      print('🔔 [NOTIFICATION_REPO] Datos del modelo antes de user_id:');
+      notificationMap.forEach((key, value) {
+        print('   $key: $value');
+      });
+      
+      // Obtener el user_id del usuario autenticado de Supabase
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser == null) {
+        print('❌ [NOTIFICATION_REPO] Usuario no autenticado');
+        return Left(CacheFailure('Usuario no autenticado'));
+      }
+      notificationMap['user_id'] = currentUser.id;
+      print('🔔 [NOTIFICATION_REPO] User ID agregado: ${currentUser.id}');
+      
+      print('🔔 [NOTIFICATION_REPO] Datos finales para INSERT:');
+      notificationMap.forEach((key, value) {
+        print('   $key: $value');
+      });
+      
+      print('🔔 [NOTIFICATION_REPO] Ejecutando INSERT...');
+      final insertResult = await _databaseService.insertWithTimestamp(
+        'notifications', 
+        notificationMap
       );
+      print('✅ [NOTIFICATION_REPO] INSERT exitoso con ID: $insertResult');
+      
+      // Verificar que se insertó correctamente
+      final db = await _databaseService.database;
+      final count = await db.rawQuery('SELECT COUNT(*) as count FROM notifications WHERE id = ?', [notification.id]);
+      print('🔔 [NOTIFICATION_REPO] Verificación: ${count.first['count']} registros encontrados');
+      
+      // También verificar en Supabase si es posible
+      try {
+        print('🔔 [NOTIFICATION_REPO] Intentando insertar en Supabase...');
+        await Supabase.instance.client.from('notifications').insert({
+          'id': notification.id,
+          'user_id': currentUser.id,
+          'title': notification.title,
+          'body': notification.message,
+          'type': 'habit_reminder',
+          'related_id': notification.userHabitId,
+          'data': null,
+          'is_read': false,
+          'read_at': null,
+          'scheduled_for': null,
+          'sent_at': null,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+          'is_synced': true,
+          'needs_sync': false,
+          'last_sync_at': DateTime.now().toIso8601String(),
+        });
+        print('✅ [NOTIFICATION_REPO] INSERT en Supabase exitoso');
+      } catch (supabaseError) {
+        print('⚠️ [NOTIFICATION_REPO] Error en Supabase (continuando): $supabaseError');
+      }
       
       return Right(notification);
     } catch (e) {
+      print('❌ [NOTIFICATION_REPO] Error al crear notificación: $e');
       return Left(CacheFailure(e.toString()));
     }
   }
@@ -43,7 +106,7 @@ class NotificationLocalRepository {
       final notificationModel = HabitNotificationLocalModel.fromEntity(notification);
       
       await _databaseService.updateWithTimestamp(
-        'habit_notifications',
+        'notifications',
         notificationModel.toMap(),
         'id = ?',
         [notification.id],
@@ -61,7 +124,7 @@ class NotificationLocalRepository {
       final db = await _databaseService.database;
       
       await db.delete(
-        'habit_notifications',
+        'notifications',
         where: 'id = ?',
         whereArgs: [notificationId],
       );
@@ -79,9 +142,9 @@ class NotificationLocalRepository {
       final db = await _databaseService.database;
       
       final maps = await db.query(
-        'habit_notifications',
-        where: 'user_habit_id = ?',
-        whereArgs: [userHabitId],
+        'notifications',
+        where: 'related_id = ? AND type = ?',
+        whereArgs: [userHabitId, 'habit_reminder'],
         orderBy: 'created_at DESC',
       );
 
@@ -101,7 +164,9 @@ class NotificationLocalRepository {
       final db = await _databaseService.database;
       
       final maps = await db.query(
-        'habit_notifications',
+        'notifications',
+        where: 'type = ?',
+        whereArgs: ['habit_reminder'],
         orderBy: 'created_at DESC',
       );
 
@@ -162,9 +227,9 @@ class NotificationLocalRepository {
       final now = DateTime.now();
       final maps = await db.rawQuery('''
         SELECT ns.* FROM notification_schedules ns
-        INNER JOIN habit_notifications hn ON ns.habit_notification_id = hn.id
+        INNER JOIN notifications n ON ns.habit_notification_id = n.id
         WHERE ns.is_active = 1 
-        AND hn.is_enabled = 1
+        AND n.type = 'habit_reminder'
         AND ns.scheduled_time <= ?
         ORDER BY ns.scheduled_time ASC
       ''', [now.millisecondsSinceEpoch]);
@@ -212,9 +277,9 @@ class NotificationLocalRepository {
       final now = DateTime.now();
       final result = await db.rawQuery('''
         SELECT COUNT(*) as count FROM notification_schedules ns
-        INNER JOIN habit_notifications hn ON ns.habit_notification_id = hn.id
+        INNER JOIN notifications n ON ns.habit_notification_id = n.id
         WHERE ns.is_active = 1 
-        AND hn.is_enabled = 1
+        AND n.type = 'habit_reminder'
         AND ns.scheduled_time <= ?
       ''', [now.millisecondsSinceEpoch]);
 
@@ -375,7 +440,7 @@ class NotificationLocalRepository {
   /// Obtiene notificaciones no sincronizadas
   Future<Either<Failure, List<HabitNotification>>> getUnsyncedNotifications() async {
     try {
-      final maps = await _databaseService.getUnsyncedRecords('habit_notifications');
+      final maps = await _databaseService.getUnsyncedRecords('notifications');
       
       final notifications = maps
           .map((map) => HabitNotificationLocalModel.fromMap(map).toEntity())
@@ -390,7 +455,7 @@ class NotificationLocalRepository {
   /// Marca una notificación como sincronizada
   Future<Either<Failure, void>> markNotificationAsSynced(String id) async {
     try {
-      await _databaseService.markAsSynced('habit_notifications', id);
+      await _databaseService.markAsSynced('notifications', id);
       return const Right(null);
     } catch (e) {
       return Left(CacheFailure(e.toString()));
@@ -410,7 +475,7 @@ class NotificationLocalRepository {
           );
           
           await txn.insert(
-            'habit_notifications',
+            'notifications',
             notificationModel.toMap(),
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
@@ -434,9 +499,8 @@ class NotificationLocalRepository {
           DELETE FROM notification_logs 
           WHERE notification_schedule_id IN (
             SELECT ns.id FROM notification_schedules ns
-            INNER JOIN habit_notifications hn ON ns.habit_notification_id = hn.id
-            INNER JOIN habits h ON hn.user_habit_id = h.id
-            WHERE h.user_id = ?
+            INNER JOIN notifications n ON ns.habit_notification_id = n.id
+            WHERE n.user_id = ?
           )
         ''', [userId]);
         
@@ -444,18 +508,15 @@ class NotificationLocalRepository {
         await txn.rawDelete('''
           DELETE FROM notification_schedules 
           WHERE habit_notification_id IN (
-            SELECT hn.id FROM habit_notifications hn
-            INNER JOIN habits h ON hn.user_habit_id = h.id
-            WHERE h.user_id = ?
+            SELECT n.id FROM notifications n
+            WHERE n.user_id = ? AND n.type = 'habit_reminder'
           )
         ''', [userId]);
         
         // Eliminar notificaciones de hábitos
         await txn.rawDelete('''
-          DELETE FROM habit_notifications 
-          WHERE user_habit_id IN (
-            SELECT id FROM habits WHERE user_id = ?
-          )
+          DELETE FROM notifications 
+          WHERE user_id = ? AND type = 'habit_reminder'
         ''', [userId]);
         
         // Eliminar configuración de notificaciones

@@ -97,6 +97,11 @@ dependencies:
   # Charts
   fl_chart: ^0.68.0
   
+  # Excel export for admin module
+  excel: ^4.0.6
+  path_provider: ^2.1.4
+  open_filex: ^4.5.0
+  
   # Image picker
   image_picker: ^1.0.7
   

@@ -2,7 +2,6 @@ import 'package:dartz/dartz.dart';
 import '../../core/error/failures.dart';
 import '../../domain/repositories/sync_repository.dart';
 import '../../domain/entities/pending_operation.dart';
-import '../../domain/entities/sync_operation.dart';
 import '../services/sync_service.dart';
 
 class SyncRepositoryImpl implements SyncRepository {

@@ -200,6 +200,12 @@ class VoiceService {
                 
                 if (voiceMap.isNotEmpty && voiceMap.containsKey('name')) {
                   await _flutterTts.setVoice(voiceMap);
+                  final locale = voiceMap['locale'];
+                  if (locale != null && locale.isNotEmpty) {
+                    try {
+                      await _flutterTts.setLanguage(locale);
+                    } catch (_) {}
+                  }
                   print('TTS: Successfully set Spanish voice: ${voiceMap['name']} (${voiceMap['locale'] ?? 'unknown locale'})');
                   break; // Exit loop on success
                 } else {
@@ -223,9 +229,12 @@ class VoiceService {
         print('TTS: Continuing with default voice settings');
       }
       
-      await _flutterTts.setSpeechRate(0.5);
-      await _flutterTts.setVolume(1.0);
-      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setSpeechRate(0.46);
+      await _flutterTts.setVolume(0.85);
+      await _flutterTts.setPitch(0.98);
+      try {
+        await _flutterTts.awaitSpeakCompletion(true);
+      } catch (_) {}
       
       // Set up TTS callbacks
       _flutterTts.setStartHandler(() {
@@ -262,10 +271,11 @@ class VoiceService {
     print('DEBUG: Starting speech recognition...');
     
     try {
+      final locale = await _preferredSpeechLocale();
       await _speechToText.listen(
         onResult: (result) {
           _lastWords = result.recognizedWords;
-          print('DEBUG: Speech result - Words: "${_lastWords}", Final: ${result.finalResult}, Confidence: ${result.confidence}');
+          print('DEBUG: Speech result - Words: "$_lastWords", Final: ${result.finalResult}, Confidence: ${result.confidence}');
           
           // Enviar resultados parciales para transcripción en tiempo real
           if (!result.finalResult) {
@@ -282,7 +292,7 @@ class VoiceService {
         listenFor: const Duration(minutes: 5), // Tiempo máximo extendido
         pauseFor: const Duration(seconds: 30), // Pausa mucho más larga antes de auto-stop
         partialResults: true, // Habilitar resultados parciales
-        localeId: 'es_PE', // Peruvian Spanish locale
+        localeId: locale,
         cancelOnError: false, // No cancelar por errores menores
         listenMode: ListenMode.dictation, // Modo dictado para escucha continua
         onSoundLevelChange: (level) {
@@ -319,6 +329,12 @@ class VoiceService {
     
     try {
       print('DEBUG TTS: Stopping any ongoing speech...');
+      if (isListening) {
+        try { await stopListening(); } catch (_) {}
+      }
+      if (_isRecording) {
+        try { await stopRecording(); } catch (_) {}
+      }
       await _flutterTts.stop(); // Stop any ongoing speech
       print('DEBUG TTS: Starting to speak text: "$text"');
       await _flutterTts.speak(text);
@@ -326,6 +342,21 @@ class VoiceService {
     } catch (e) {
       print('DEBUG TTS: Error speaking text: $e');
       print('DEBUG TTS: Error stack trace: ${StackTrace.current}');
+    }
+  }
+
+  Future<String> _preferredSpeechLocale() async {
+    try {
+      final locales = await _speechToText.locales();
+      final spanish = locales.where((l) => l.localeId.toLowerCase().startsWith('es')).toList();
+      if (spanish.isEmpty) return 'es_ES';
+      final preferred = spanish.firstWhere(
+        (l) => l.localeId.toLowerCase().contains('pe'),
+        orElse: () => spanish.first,
+      );
+      return preferred.localeId;
+    } catch (_) {
+      return 'es_ES';
     }
   }
   

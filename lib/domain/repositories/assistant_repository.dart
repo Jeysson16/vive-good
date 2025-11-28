@@ -25,6 +25,7 @@ abstract class AssistantRepository {
     required String userId,
     List<ChatMessage>? conversationHistory,
     Map<String, dynamic>? userContext,
+    bool isInitialResponse = false,
   });
 
   Future<AssistantResponse> processVoiceMessage({

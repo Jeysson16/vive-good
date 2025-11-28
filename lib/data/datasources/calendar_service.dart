@@ -117,28 +117,26 @@ class CalendarServiceImpl implements CalendarService {
         // Reschedule if notification is still enabled
         if (updates['notification_enabled'] == true) {
           final updatedEventData = await _calendarDataSource.getCalendarEventById(eventId);
-          if (updatedEventData != null) {
-            final updatedEvent = CalendarEventModel.fromJson(updatedEventData);
-            final event = CalendarEvent(
-              id: updatedEvent.id,
-              userId: updatedEvent.userId,
-              habitId: updatedEvent.habitId,
-              title: updatedEvent.title,
-              description: updatedEvent.description,
-              eventType: updatedEvent.eventType,
-              startDate: updatedEvent.startDate,
-              startTime: updatedEvent.startTime,
-              endTime: updatedEvent.endTime,
-              recurrenceType: updatedEvent.recurrenceType,
-              notificationEnabled: updatedEvent.notificationEnabled,
-              notificationMinutes: updatedEvent.notificationMinutes,
-              isCompleted: updatedEvent.isCompleted,
-              createdAt: updatedEvent.createdAt,
-              updatedAt: updatedEvent.updatedAt,
-            );
-            await scheduleEventNotifications(event);
-          }
-        }
+          final updatedEvent = CalendarEventModel.fromJson(updatedEventData);
+          final event = CalendarEvent(
+            id: updatedEvent.id,
+            userId: updatedEvent.userId,
+            habitId: updatedEvent.habitId,
+            title: updatedEvent.title,
+            description: updatedEvent.description,
+            eventType: updatedEvent.eventType,
+            startDate: updatedEvent.startDate,
+            startTime: updatedEvent.startTime,
+            endTime: updatedEvent.endTime,
+            recurrenceType: updatedEvent.recurrenceType,
+            notificationEnabled: updatedEvent.notificationEnabled,
+            notificationMinutes: updatedEvent.notificationMinutes,
+            isCompleted: updatedEvent.isCompleted,
+            createdAt: updatedEvent.createdAt,
+            updatedAt: updatedEvent.updatedAt,
+          );
+          await scheduleEventNotifications(event);
+                }
       }
     } catch (e) {
       throw Exception('Failed to update calendar event: $e');
@@ -237,7 +235,7 @@ class CalendarServiceImpl implements CalendarService {
       while (currentDate.isBefore(endDate) || currentDate.isAtSameMomentAs(endDate)) {
         bool shouldSchedule = false;
         
-        switch (event.recurrenceType?.toLowerCase()) {
+        switch (event.recurrenceType.toLowerCase()) {
           case 'diario':
             shouldSchedule = true;
             break;
@@ -283,7 +281,7 @@ class CalendarServiceImpl implements CalendarService {
         }
         
         // Move to next occurrence
-        switch (event.recurrenceType?.toLowerCase()) {
+        switch (event.recurrenceType.toLowerCase()) {
           case 'diario':
             currentDate = currentDate.add(const Duration(days: 1));
             break;

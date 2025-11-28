@@ -281,7 +281,9 @@ class DatabaseMigrationService {
 
   static String _determineRiskLevel(String content) {
     if (content.contains('picante') || content.contains('grasa') || 
-        content.contains('alcohol') || content.contains('café')) return 'alto';
+        content.contains('alcohol') || content.contains('café')) {
+      return 'alto';
+    }
     if (content.contains('a veces') || content.contains('poco')) return 'medio';
     return 'bajo';
   }
@@ -296,9 +298,13 @@ class DatabaseMigrationService {
 
   static String _determineSentiment(String content) {
     if (content.contains('bien') || content.contains('bueno') || 
-        content.contains('gracias') || content.contains('útil')) return 'positivo';
+        content.contains('gracias') || content.contains('útil')) {
+      return 'positivo';
+    }
     if (content.contains('mal') || content.contains('problema') || 
-        content.contains('difícil')) return 'negativo';
+        content.contains('difícil')) {
+      return 'negativo';
+    }
     return 'neutral';
   }
 

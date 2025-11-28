@@ -9,11 +9,11 @@ class OfflineMessage extends StatelessWidget {
   final VoidCallback? onSyncPressed;
 
   const OfflineMessage({
-    Key? key,
+    super.key,
     this.customMessage,
     this.showSyncButton = true,
     this.onSyncPressed,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

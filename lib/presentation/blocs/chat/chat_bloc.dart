@@ -282,7 +282,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         try {
           // Verificar si el repositorio es SupabaseChatRepository
           if (_chatRepository is SupabaseChatRepository) {
-            final supabaseRepo = _chatRepository as SupabaseChatRepository;
+            final supabaseRepo = _chatRepository;
             await supabaseRepo.generateAndUpdateSessionTitle(event.sessionId, event.content);
             
             // Recargar las sesiones para mostrar el nuevo título

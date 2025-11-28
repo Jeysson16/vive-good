@@ -97,6 +97,7 @@ class HabitScheduleModel extends HabitSchedule {
     );
   }
 
+  @override
   HabitScheduleModel copyWith({
     String? id,
     String? userId,

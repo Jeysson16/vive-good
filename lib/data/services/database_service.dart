@@ -125,15 +125,20 @@ class DatabaseService {
       )
     ''');
 
-    // Tabla de notificaciones de hábitos
+    // Tabla de notificaciones
     await db.execute('''
-      CREATE TABLE habit_notifications (
+      CREATE TABLE notifications (
         id TEXT PRIMARY KEY,
-        user_habit_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
         title TEXT NOT NULL,
-        message TEXT,
-        is_enabled INTEGER DEFAULT 1,
-        notification_sound TEXT,
+        body TEXT,
+        type TEXT NOT NULL,
+        related_id TEXT,
+        data TEXT,
+        is_read INTEGER DEFAULT 0,
+        read_at TEXT,
+        scheduled_for TEXT,
+        sent_at TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         is_synced INTEGER DEFAULT 0,
@@ -150,7 +155,7 @@ class DatabaseService {
     await db.execute('CREATE INDEX idx_chat_messages_session_id ON chat_messages(session_id)');
     await db.execute('CREATE INDEX idx_pending_operations_type ON pending_operations(operation_type)');
     await db.execute('CREATE INDEX idx_pending_operations_table ON pending_operations(table_name)');
-    await db.execute('CREATE INDEX idx_habit_notifications_user_habit_id ON habit_notifications(user_habit_id)');
+    await db.execute('CREATE INDEX idx_notifications_user_id ON notifications(user_id)');
     
     // Insertar metadatos iniciales
     await db.insert('app_metadata', {
@@ -192,16 +197,21 @@ class DatabaseService {
     }
     
     if (oldVersion < 3) {
-      // Migración para versión 3: Crear tabla habit_notifications
+      // Migración para versión 3: Crear tabla notifications
       try {
         await db.execute('''
-          CREATE TABLE habit_notifications (
+          CREATE TABLE notifications (
             id TEXT PRIMARY KEY,
-            user_habit_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
             title TEXT NOT NULL,
-            message TEXT,
-            is_enabled INTEGER DEFAULT 1,
-            notification_sound TEXT,
+            body TEXT,
+            type TEXT NOT NULL,
+            related_id TEXT,
+            data TEXT,
+            is_read INTEGER DEFAULT 0,
+            read_at TEXT,
+            scheduled_for TEXT,
+            sent_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             is_synced INTEGER DEFAULT 0,
@@ -210,10 +220,10 @@ class DatabaseService {
           )
         ''');
         
-        await db.execute('CREATE INDEX idx_habit_notifications_user_habit_id ON habit_notifications(user_habit_id)');
+        await db.execute('CREATE INDEX idx_notifications_user_id ON notifications(user_id)');
       } catch (e) {
         // La tabla ya existe, continuar
-        print('Error creating habit_notifications table: $e');
+        print('Error creating notifications table: $e');
       }
     }
   }
@@ -298,18 +308,95 @@ class DatabaseService {
     );
   }
 
+  /// Verifica si una tabla existe en la base de datos
+  Future<bool> tableExists(String tableName) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+      [tableName],
+    );
+    return result.isNotEmpty;
+  }
+
+  /// Fuerza la creación de la tabla notifications si no existe
+  Future<void> ensureNotificationsTableExists() async {
+    final db = await database;
+    
+    try {
+      // Verificar si la tabla existe
+      final exists = await tableExists('notifications');
+      if (!exists) {
+        print('Tabla notifications no existe, creándola...');
+        
+        // Crear la tabla notifications
+        await db.execute('''
+          CREATE TABLE notifications (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT,
+            type TEXT NOT NULL,
+            related_id TEXT,
+            data TEXT,
+            is_read INTEGER DEFAULT 0,
+            read_at TEXT,
+            scheduled_for TEXT,
+            sent_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            is_synced INTEGER DEFAULT 0,
+            needs_sync INTEGER DEFAULT 0,
+            last_sync_at TEXT
+          )
+        ''');
+        
+        // Crear el índice
+        await db.execute('CREATE INDEX idx_notifications_user_id ON notifications(user_id)');
+        
+        print('Tabla notifications creada exitosamente');
+      } else {
+        print('Tabla notifications ya existe');
+      }
+    } catch (e) {
+      print('Error al verificar/crear tabla notifications: $e');
+      rethrow;
+    }
+  }
+
   /// Limpia todos los datos (útil para logout)
   Future<void> clearAllData() async {
     final db = await database;
     
-    await db.transaction((txn) async {
-      await txn.delete('users');
-      await txn.delete('habits');
-      await txn.delete('progress');
-      await txn.delete('chat_messages');
-      await txn.delete('pending_operations');
-      // No limpiar app_metadata para mantener configuraciones
-    });
+    // Limpiar todas las tablas
+    await db.delete('habits');
+    await db.delete('progress');
+    await db.delete('chat_messages');
+    await db.delete('pending_operations');
+    await db.delete('notifications');
+    
+    // Resetear metadatos de sincronización
+    await setMetadata('last_full_sync', '');
+  }
+
+  /// Fuerza la recreación de la base de datos (útil para resolver problemas de esquema)
+  Future<void> recreateDatabase() async {
+    try {
+      // Cerrar la conexión actual
+      if (_database != null) {
+        await _database!.close();
+        _database = null;
+      }
+      
+      // Eliminar el archivo de la base de datos
+      final databasesPath = await getDatabasesPath();
+      final path = join(databasesPath, _databaseName);
+      await deleteDatabase(path);
+      
+      print('Base de datos eliminada y será recreada en el próximo acceso');
+    } catch (e) {
+      print('Error al recrear la base de datos: $e');
+      rethrow;
+    }
   }
 
   /// Obtiene estadísticas de la base de datos

@@ -194,8 +194,4 @@ class SyncStatusProvider extends ChangeNotifier {
     return Icons.sync;
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
 }

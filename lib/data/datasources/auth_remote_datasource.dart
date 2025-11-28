@@ -173,14 +173,12 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
           .eq('name', 'user')
           .single();
       
-      if (roleResponse != null) {
-        // Asignar rol por defecto
-        await supabaseClient.from('user_roles').insert({
-          'user_id': userId,
-          'role_id': roleResponse['id'],
-        });
-      }
-      
+      // Asignar rol por defecto
+      await supabaseClient.from('user_roles').insert({
+        'user_id': userId,
+        'role_id': roleResponse['id'],
+      });
+          
     } catch (e) {
       throw Exception('Error al crear perfil del usuario: $e');
     }
@@ -216,10 +214,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       final response = Map<String, dynamic>.from(profileResponse);
       response['user_roles'] = rolesResponse;
 
-      if (response != null) {
-      } else {
-      }
-      
+          
       return response;
     } catch (e) {
       throw Exception('Error al obtener perfil del usuario: $e');

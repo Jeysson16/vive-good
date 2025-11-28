@@ -1,6 +1,4 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../domain/entities/calendar_event.dart';
-import '../../domain/entities/user_habit.dart';
 import '../../core/errors/exceptions.dart';
 import 'calendar_service.dart';
 

@@ -4,8 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/usecases/usecase.dart';
 import '../../../domain/entities/user_habit.dart';
 import '../../../domain/entities/habit.dart';
-import '../../../domain/entities/category.dart';
-import '../../../domain/entities/habit_log.dart';
 import '../../../domain/usecases/habit/get_dashboard_habits_usecase.dart';
 import '../../../domain/usecases/habit/get_categories_usecase.dart';
 

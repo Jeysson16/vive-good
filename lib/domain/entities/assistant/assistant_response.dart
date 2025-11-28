@@ -28,6 +28,7 @@ class AssistantResponse {
   final List<Map<String, dynamic>>? suggestedHabits;
   final Map<String, dynamic>? dlChatResponse;
   final Map<String, dynamic>? processedActions;
+  final bool isInitialResponse;
 
   const AssistantResponse({
     required this.id,
@@ -48,6 +49,7 @@ class AssistantResponse {
     this.suggestedHabits,
     this.dlChatResponse,
     this.processedActions,
+    this.isInitialResponse = false,
   });
 
   AssistantResponse copyWith({
@@ -69,6 +71,7 @@ class AssistantResponse {
     List<Map<String, dynamic>>? suggestedHabits,
     Map<String, dynamic>? dlChatResponse,
     Map<String, dynamic>? processedActions,
+    bool? isInitialResponse,
   }) {
     return AssistantResponse(
       id: id ?? this.id,
@@ -89,6 +92,7 @@ class AssistantResponse {
       suggestedHabits: suggestedHabits ?? this.suggestedHabits,
       dlChatResponse: dlChatResponse ?? this.dlChatResponse,
       processedActions: processedActions ?? this.processedActions,
+      isInitialResponse: isInitialResponse ?? this.isInitialResponse,
     );
   }
 
@@ -101,6 +105,7 @@ class AssistantResponse {
       type: _mapResponseTypeToMessageType(type),
       createdAt: timestamp,
       updatedAt: timestamp,
+      metadata: metadata,
     );
   }
 

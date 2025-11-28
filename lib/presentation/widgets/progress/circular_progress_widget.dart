@@ -11,7 +11,7 @@ class CircularProgressWidget extends StatefulWidget {
   final TextStyle? textStyle;
 
   const CircularProgressWidget({
-    Key? key,
+    super.key,
     required this.percentage,
     this.size = 100,
     this.primaryColor = const Color(0xFF4CAF50),
@@ -19,7 +19,7 @@ class CircularProgressWidget extends StatefulWidget {
     this.strokeWidth = 8,
     this.showPercentage = true,
     this.textStyle,
-  }) : super(key: key);
+  });
 
   @override
   State<CircularProgressWidget> createState() => _CircularProgressWidgetState();

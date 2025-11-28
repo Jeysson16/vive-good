@@ -92,11 +92,6 @@ class CalendarService {
             },
           );
 
-      if (habitsResponse == null) {
-        print('⚠️ [CALENDAR] No se recibió respuesta de hábitos activos');
-        return [];
-      }
-
       final rawHabits = habitsResponse as List;
       print('📅 [CALENDAR] Hábitos encontrados (sin filtrar por hora): ${rawHabits.length}');
       
@@ -178,11 +173,11 @@ class CalendarService {
             : null;
 
         if (scheduledTime == null) {
-          print('📅 [CALENDAR] Saltando hábito ${habitName} - sin hora programada');
+          print('📅 [CALENDAR] Saltando hábito $habitName - sin hora programada');
           continue;
         }
 
-        print('📅 [CALENDAR] Generando eventos para ${habitName} (${frequency})');
+        print('📅 [CALENDAR] Generando eventos para $habitName ($frequency)');
 
         // Generar eventos basándose en la frecuencia
         final eventDates = _generateEventDates(
@@ -193,7 +188,7 @@ class CalendarService {
           endDate,
         );
 
-        print('📅 [CALENDAR] Fechas generadas para ${habitName}: ${eventDates.length}');
+        print('📅 [CALENDAR] Fechas generadas para $habitName: ${eventDates.length}');
         
         for (final eventDate in eventDates) {
           final eventDateStr = eventDate.toIso8601String().split('T')[0];
@@ -203,7 +198,7 @@ class CalendarService {
           
           // Crear el evento
           final event = CalendarEvent(
-            id: '${userHabitId}_${eventDateStr}', // ID único basado en hábito y fecha
+            id: '${userHabitId}_$eventDateStr', // ID único basado en hábito y fecha
             userId: userId,
             habitId: habitId,
             title: habitName,
@@ -252,8 +247,6 @@ class CalendarService {
               throw TimeoutException('Timeout obteniendo eventos manuales', const Duration(seconds: 10));
             },
           );
-
-      if (response == null) return [];
 
       print('📅 [CALENDAR] Eventos manuales encontrados: ${response.length}');
       
@@ -616,7 +609,7 @@ class CalendarService {
       final allEvents = await getCalendarEvents(userId);
       
       var filteredEvents = allEvents.where((event) => 
-          event.recurrenceType != null && event.recurrenceType != 'none');
+          event.recurrenceType != 'none');
 
       if (startDate != null) {
         filteredEvents = filteredEvents.where((event) => 
@@ -645,7 +638,7 @@ class CalendarService {
       
       final filteredEvents = allEvents.where((event) => 
           event.title.toLowerCase().contains(searchTerm.toLowerCase()) ||
-          (event.description?.toLowerCase().contains(searchTerm.toLowerCase()) ?? false)
+          (event.description.toLowerCase().contains(searchTerm.toLowerCase()) ?? false)
       ).toList();
 
       filteredEvents.sort((a, b) => a.startDate.compareTo(b.startDate));

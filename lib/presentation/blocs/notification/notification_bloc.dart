@@ -1,12 +1,7 @@
-import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/usecases/usecase.dart';
 
-import '../../../domain/entities/habit_notification.dart';
-import '../../../domain/entities/notification_log.dart' as log;
-import '../../../domain/entities/notification_schedule.dart';
-import '../../../domain/entities/notification_settings.dart';
 import '../../../domain/usecases/notifications/cancel_habit_notification_usecase.dart';
 import '../../../domain/usecases/notifications/check_notification_permissions_usecase.dart';
 import '../../../domain/usecases/notifications/get_notification_settings_usecase.dart';

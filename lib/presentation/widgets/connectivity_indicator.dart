@@ -9,11 +9,11 @@ class ConnectivityIndicator extends StatelessWidget {
   final Duration animationDuration;
 
   const ConnectivityIndicator({
-    Key? key,
+    super.key,
     this.showWhenOnline = false,
     this.margin,
     this.animationDuration = const Duration(milliseconds: 300),
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -113,11 +113,11 @@ class ConnectivityIcon extends StatelessWidget {
   final Color? offlineColor;
 
   const ConnectivityIcon({
-    Key? key,
+    super.key,
     this.size = 20,
     this.onlineColor,
     this.offlineColor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -160,11 +160,11 @@ class OfflineBanner extends StatelessWidget {
   final bool showRetryButton;
 
   const OfflineBanner({
-    Key? key,
+    super.key,
     this.message = 'Sin conexión a internet. Trabajando en modo offline.',
     this.onRetry,
     this.showRetryButton = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -248,11 +248,11 @@ class SyncStatusIndicator extends StatelessWidget {
   final VoidCallback? onTap;
 
   const SyncStatusIndicator({
-    Key? key,
+    super.key,
     required this.isSyncing,
     required this.hasPendingChanges,
     this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

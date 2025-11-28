@@ -17,6 +17,8 @@ class SplashNavigateToWelcome extends SplashState {}
 
 class SplashNavigateToMain extends SplashState {}
 
+class SplashNavigateToAdmin extends SplashState {}
+
 class SplashError extends SplashState {
   final String message;
 

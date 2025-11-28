@@ -1,14 +1,12 @@
 import '../../domain/entities/chat/chat_session.dart';
 import '../../domain/entities/chat/chat_message.dart';
 import '../../domain/entities/assistant/assistant_response.dart';
-import '../../domain/entities/assistant/voice_animation_state.dart';
 import '../../domain/repositories/assistant_repository.dart';
 import '../datasources/assistant/supabase_assistant_datasource.dart';
 import '../datasources/assistant/gemini_assistant_datasource.dart';
 import '../datasources/assistant/deep_learning_datasource.dart';
 import '../models/chat/chat_session_model.dart';
 import '../models/chat/chat_message_model.dart';
-import '../models/assistant/assistant_response_model.dart';
 
 class AssistantRepositoryImpl implements AssistantRepository {
   final SupabaseAssistantDatasource _supabaseDatasource;
@@ -143,6 +141,7 @@ class AssistantRepositoryImpl implements AssistantRepository {
     required String userId,
     List<ChatMessage>? conversationHistory,
     Map<String, dynamic>? userContext,
+    bool isInitialResponse = false,
   }) async {
     try {
       print('🔥 DEBUG REPOSITORY: ===== INICIANDO sendMessageToGemini =====');
@@ -156,6 +155,7 @@ class AssistantRepositoryImpl implements AssistantRepository {
         sessionId: sessionId,
         userId: userId,
         conversationHistory: conversationHistory ?? [],
+        isInitialResponse: isInitialResponse,
       );
       print('🔥 DEBUG REPOSITORY: Respuesta recibida de Gemini datasource');
       print('🔥 DEBUG REPOSITORY: Contenido de respuesta: "${response.content}"');

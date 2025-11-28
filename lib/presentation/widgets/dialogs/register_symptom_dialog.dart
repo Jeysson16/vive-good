@@ -165,7 +165,7 @@ class _RegisterSymptomDialogState extends State<RegisterSymptomDialog> {
 
               // Severidad
               DropdownButtonFormField<String>(
-                value: _selectedSeverity,
+                initialValue: _selectedSeverity,
                 decoration: const InputDecoration(
                   labelText: 'Severidad *',
                   border: OutlineInputBorder(),
@@ -186,7 +186,7 @@ class _RegisterSymptomDialogState extends State<RegisterSymptomDialog> {
 
               // Parte del cuerpo
               DropdownButtonFormField<String>(
-                value: _selectedBodyPart,
+                initialValue: _selectedBodyPart,
                 decoration: const InputDecoration(
                   labelText: 'Parte del cuerpo',
                   border: OutlineInputBorder(),

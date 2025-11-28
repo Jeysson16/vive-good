@@ -15,6 +15,9 @@ import '../../presentation/pages/progress/progress_main_screen.dart';
 import '../../views/profile/edit_profile_view.dart';
 import '../../models/user_profile.dart';
 import '../../presentation/blocs/profile/profile_bloc.dart';
+import '../../presentation/pages/admin/admin_main_page.dart';
+import '../../presentation/pages/admin/roles_management_page.dart';
+import '../../presentation/pages/admin/categories_management_page.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -28,6 +31,9 @@ class AppRoutes {
   static const String assistant = '/assistant';
   static const String progress = '/progress';
   static const String editProfile = '/edit-profile';
+  static const String admin = '/admin';
+  static const String adminRoles = '/admin/roles';
+  static const String adminCategories = '/admin/categories';
 
   static final GoRouter router = GoRouter(
     initialLocation: splash,
@@ -69,6 +75,18 @@ class AppRoutes {
             child: EditProfileView(profile: profile),
           );
         },
+      ),
+      GoRoute(
+        path: admin,
+        builder: (context, state) => const AdminMainPage(),
+      ),
+      GoRoute(
+        path: adminRoles,
+        builder: (context, state) => const RolesManagementPage(),
+      ),
+      GoRoute(
+        path: adminCategories,
+        builder: (context, state) => const CategoriesManagementPage(),
       ),
     ],
     errorBuilder: (context, state) =>

@@ -24,7 +24,7 @@ class SynchronizedHabitsList extends StatefulWidget {
   final Function(UserHabit)? onDelete;
 
   const SynchronizedHabitsList({
-    Key? key,
+    super.key,
     required this.userHabits,
     required this.habits,
     required this.categories,
@@ -34,7 +34,7 @@ class SynchronizedHabitsList extends StatefulWidget {
     this.onEdit,
     this.onViewProgress,
     this.onDelete,
-  }) : super(key: key);
+  });
 
   @override
   State<SynchronizedHabitsList> createState() => _SynchronizedHabitsListState();
@@ -424,7 +424,7 @@ class _SynchronizedHabitsListState extends State<SynchronizedHabitsList>
                   }
 
                   return habitItem;
-                }).toList(),
+                }),
               ],
             ),
           );

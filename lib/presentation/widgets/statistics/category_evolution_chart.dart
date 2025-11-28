@@ -9,10 +9,10 @@ class CategoryEvolutionChart extends StatelessWidget {
   final bool showDetails;
 
   const CategoryEvolutionChart({
-    Key? key,
+    super.key,
     required this.evolution,
     this.showDetails = true,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

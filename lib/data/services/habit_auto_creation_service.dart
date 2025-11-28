@@ -1,6 +1,5 @@
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/habit.dart';
-import '../../domain/entities/user_habit.dart';
 import '../../domain/repositories/habit_repository.dart';
 import '../../domain/entities/assistant/assistant_response.dart';
 import 'habit_extraction_service.dart';

@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:uuid/uuid.dart';
 import 'package:vive_good_app/domain/entities/category.dart';
 
 import '../../../core/usecases/usecase.dart';
@@ -484,6 +484,7 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
     LoadHabitSuggestions event,
     Emitter<HabitState> emit,
   ) async {
+    print('DEBUG HabitBloc _onLoadHabitSuggestions - userId=' + event.userId + ', categoryId=' + (event.categoryId ?? 'null') + ', limit=' + ((event.limit ?? 10).toString()));
     String? currentCategoryId;
     if (state is HabitLoaded) {
       final currentState = state as HabitLoaded;
@@ -503,6 +504,7 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
 
     result.fold(
       (failure) {
+        print('DEBUG HabitBloc _onLoadHabitSuggestions - failure: ' + failure.toString());
 
         if (state is HabitLoaded) {
           final currentState = state as HabitLoaded;
@@ -517,6 +519,7 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
         }
       },
       (suggestions) {
+        print('DEBUG HabitBloc _onLoadHabitSuggestions - suggestions count: ' + suggestions.length.toString());
 
         if (state is HabitLoaded) {
           final currentState = state as HabitLoaded;
@@ -692,9 +695,14 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
     Emitter<HabitState> emit,
   ) async {
     try {
+      print('🔔 [HABIT_BLOC] Iniciando configuración de notificaciones');
+      print('🔔 [HABIT_BLOC] UserHabitId: ${event.userHabitId}');
+      print('🔔 [HABIT_BLOC] Días de la semana: ${event.daysOfWeek}');
+      print('🔔 [HABIT_BLOC] Hora de recordatorio: ${event.reminderTime}');
+      
       // Create a habit notification
       final notification = HabitNotification(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: const Uuid().v4(),
         userHabitId: event.userHabitId,
         title: 'Recordatorio de hábito',
         message: '¡Es hora de completar tu hábito!',
@@ -703,28 +711,42 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
         updatedAt: DateTime.now(),
       );
 
+      print('🔔 [HABIT_BLOC] Creando notificación con ID: ${notification.id}');
       final createResult = await createHabitNotificationUseCase(notification);
       
       await createResult.fold(
         (failure) async {
+          print('❌ [HABIT_BLOC] Error al crear notificación: ${failure.message}');
           emit(HabitError('Error al crear notificación: ${failure.message}'));
         },
         (createdNotification) async {
+          print('✅ [HABIT_BLOC] Notificación creada exitosamente: ${createdNotification.id}');
+          
           // Schedule notifications for each day of the week
+          print('🔔 [HABIT_BLOC] Programando notificaciones para ${event.daysOfWeek.length} días');
           for (final dayOfWeek in event.daysOfWeek) {
             final scheduleParams = ScheduleNotificationParams(
               scheduleId: '${createdNotification.id}_$dayOfWeek',
               habitNotificationId: createdNotification.id,
               dayOfWeek: dayOfWeek.toString(),
-              scheduledTime: event.reminderTime.toString(),
+              scheduledTime: '${event.reminderTime.hour.toString().padLeft(2, '0')}:${event.reminderTime.minute.toString().padLeft(2, '0')}:00',
               platformNotificationId: DateTime.now().millisecondsSinceEpoch,
             );
 
-            await scheduleHabitNotificationUseCase(scheduleParams);
+            print('🔔 [HABIT_BLOC] Programando para día $dayOfWeek con ID: ${scheduleParams.scheduleId}');
+            final scheduleResult = await scheduleHabitNotificationUseCase(scheduleParams);
+            
+            scheduleResult.fold(
+              (failure) => print('❌ [HABIT_BLOC] Error al programar día $dayOfWeek: ${failure.message}'),
+              (success) => print('✅ [HABIT_BLOC] Día $dayOfWeek programado exitosamente: $success'),
+            );
           }
+          
+          print('✅ [HABIT_BLOC] Configuración de notificaciones completada');
         },
       );
     } catch (e) {
+      print('❌ [HABIT_BLOC] Error general al configurar notificaciones: $e');
       emit(HabitError('Error al configurar notificaciones: ${e.toString()}'));
     }
   }
