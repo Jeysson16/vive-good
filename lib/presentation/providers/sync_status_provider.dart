@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:vive_good_app/data/services/sync_service.dart';
 import 'package:vive_good_app/data/services/pending_operations_service.dart';

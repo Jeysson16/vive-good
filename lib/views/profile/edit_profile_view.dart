@@ -6,7 +6,6 @@ import '../../models/user_profile.dart';
 import '../../presentation/blocs/profile/profile_bloc.dart';
 import '../../presentation/blocs/profile/profile_event.dart';
 import '../../presentation/blocs/profile/profile_state.dart';
-import '../../widgets/common/loading_widget.dart';
 
 /// Vista de edición del perfil del usuario
 class EditProfileView extends StatefulWidget {

@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:vive_good_app/core/theme/app_text_styles.dart';
 import '../../../domain/entities/user_habit.dart';
 import '../../../widgets/common/loading_widget.dart';
-import '../../blocs/habit/habit_bloc.dart';
-import '../../blocs/habit/habit_event.dart';
-import '../../blocs/habit/habit_state.dart';
-import 'dart:math' as math;
 
 class HabitProgressScreen extends StatefulWidget {
   final UserHabit userHabit;

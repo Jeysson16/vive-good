@@ -72,34 +72,87 @@ class _TypewriterTextWidgetState extends State<TypewriterTextWidget>
   void didUpdateWidget(TypewriterTextWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     
-    // Si el texto cambió, reiniciar la animación
+    // Si el texto cambió
     if (oldWidget.text != widget.text) {
-      _resetTypewriter();
-      if (widget.autoStart) {
-        _startTypewriter();
+      // Verificar si es una adición de texto (el nuevo empieza con el viejo)
+      // Usar trim() para evitar problemas con espacios en blanco al final
+      final oldText = oldWidget.text;
+      final newText = widget.text;
+      
+      // Comprobar si es una continuación directa o si es una continuación con cambios de espacio
+      bool isContinuation = newText.startsWith(oldText) || 
+                           (oldText.trim().isNotEmpty && newText.trim().startsWith(oldText.trim()));
+
+      if (isContinuation) {
+        // Es una continuación: no resetear, solo asegurar que el timer siga/arranque
+        // para escribir lo que falta
+        if (_isComplete) {
+          // Si ya había terminado, reanudar desde donde estaba
+          _isComplete = false;
+          // Reactivar cursor
+          _cursorController.repeat(reverse: true);
+          // Reiniciar timer para escribir el resto
+          _startTypewriter(resume: true);
+        } else {
+          // Si no había terminado, el timer actual continuará y encontrará el nuevo totalChars
+          // Solo necesitamos actualizar el estado si el timer no estaba corriendo (pausado)
+           if (_timer == null || !_timer!.isActive) {
+             _startTypewriter(resume: true);
+           }
+        }
+      } else {
+        // Es un texto diferente: reiniciar completamente
+        _resetTypewriter();
+        if (widget.autoStart) {
+          _startTypewriter();
+        }
       }
     }
   }
 
-  void _startTypewriter() {
+  void _startTypewriter({bool resume = false}) {
     _timer?.cancel();
-    _currentIndex = 0;
-    _displayedText = '';
-    _isComplete = false;
+    
+    if (!resume) {
+      _currentIndex = 0;
+      _displayedText = '';
+      _isComplete = false;
+    }
     
     final Characters allChars = widget.text.characters;
     final int totalChars = allChars.length;
 
+    // Si resumimos, asegurarnos de que _currentIndex sea válido
+    if (resume && _currentIndex >= totalChars) {
+       _isComplete = true;
+       setState(() {
+         // Asegurar que se muestre todo el texto correctamente
+         _displayedText = widget.text;
+       });
+       _cursorController.stop();
+       _cursorController.value = 1.0;
+       widget.onComplete?.call();
+       return;
+    }
+
     _timer = Timer.periodic(widget.speed, (timer) {
       if (_currentIndex < totalChars) {
         setState(() {
+          // Usar string interpolation o join para evitar formato de Iterable (a, b, c)
           _displayedText = allChars.take(_currentIndex + 1).toString();
+          // Corrección: Characters.take() retorna un Iterable, toString() puede devolver (a, b)
+          // La forma correcta es convertirlo de nuevo a string
+          _displayedText = String.fromCharCodes(
+            allChars.take(_currentIndex + 1).expand((c) => c.runes)
+          );
           _currentIndex++;
         });
       } else {
         timer.cancel();
         setState(() {
           _isComplete = true;
+          // Asegurar texto final limpio
+          _displayedText = widget.text;
         });
         
         // Detener animación del cursor cuando termine

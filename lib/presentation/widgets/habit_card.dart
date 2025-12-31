@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:vive_good_app/domain/entities/habit.dart';
 import 'package:vive_good_app/domain/entities/user_habit.dart';
 import 'common/responsive_dimensions.dart';
 

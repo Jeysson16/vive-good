@@ -11,14 +11,10 @@ import '../../blocs/category_scroll/category_scroll_event.dart';
 import '../../blocs/habit/habit_bloc.dart';
 import '../../blocs/habit/habit_event.dart';
 import '../../blocs/habit/habit_state.dart';
-import '../../widgets/figma_habit_card.dart';
 import '../../widgets/main/habit_item.dart';
 import '../../widgets/habits/synchronized_habits_list.dart';
 import '../../widgets/responsive_dimensions.dart';
-import '../../widgets/connectivity_indicator.dart';
-import '../progress/progress_main_screen.dart';
 import '../progress/habit_progress_screen.dart';
-import '../main/main_page.dart';
 import 'new_habit_screen.dart';
 
 class MyHabitsIntegratedView extends StatefulWidget {
@@ -1296,7 +1292,7 @@ class _MyHabitsIntegratedViewState extends State<MyHabitsIntegratedView>
     }
 
     final allSuggestions = habitState.habitSuggestions;
-    print('DEBUG FeaturedSuggestion - total suggestions: ' + allSuggestions.length.toString());
+    print('DEBUG FeaturedSuggestion - total suggestions: ${allSuggestions.length}');
 
     if (allSuggestions.isEmpty) {
       return Container(

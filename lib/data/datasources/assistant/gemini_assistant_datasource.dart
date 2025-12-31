@@ -1,17 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+
+import '../../../core/config/app_config.dart';
 import '../../../domain/entities/assistant/assistant_response.dart';
 import '../../../domain/entities/chat/chat_message.dart';
-import 'deep_learning_datasource.dart';
 import '../../../domain/entities/deep_learning_analysis.dart';
 import '../../models/assistant/assistant_response_model.dart';
-import '../../services/habit_auto_creation_service.dart';
 import '../../services/gemini_response_processor_service.dart';
-import '../../../core/config/app_config.dart';
+import '../../services/habit_auto_creation_service.dart';
+import 'deep_learning_datasource.dart';
 
 class GeminiAssistantDatasource {
   final String _apiKey;
@@ -45,6 +46,7 @@ class GeminiAssistantDatasource {
       // Decidir qué tipo de respuesta generar basado en isInitialResponse
       String geminiResponse;
       bool geminiAvailable = true;
+      Map<String, dynamic>? deepLearningAnalysis;
 
       try {
         if (isInitialResponse) {
@@ -58,7 +60,7 @@ class GeminiAssistantDatasource {
         } else {
           // Para respuesta completa, primero obtener análisis de deep learning
           print('🔍 Obteniendo análisis de deep learning antes de Gemini...');
-          Map<String, dynamic>? deepLearningAnalysis;
+          // Map<String, dynamic>? deepLearningAnalysis; // YA DECLARADO ARRIBA
 
           try {
             if (_deepLearningDatasource != null) {
@@ -122,10 +124,32 @@ class GeminiAssistantDatasource {
       Map<String, dynamic> processedActions = {};
       List<Map<String, dynamic>> suggestedHabits = [];
 
+      // 1. Intentar obtener hábitos del análisis de Deep Learning (PRIORIDAD ALTA)
+      // Esto responde a la solicitud del usuario de usar la IA para los hábitos
+      if (!isInitialResponse && _deepLearningDatasource != null) {
+        try {
+          // Variable definida en el scope superior
+          if (deepLearningAnalysis != null) {
+            print(
+              '🔥 DEBUG: Extrayendo hábitos del análisis de Deep Learning...',
+            );
+            final dlHabits = _extractHabitsFromDLAnalysis(deepLearningAnalysis);
+            if (dlHabits.isNotEmpty) {
+              suggestedHabits.addAll(dlHabits);
+              print(
+                '✅ Se agregaron ${dlHabits.length} hábitos del Deep Learning',
+              );
+            }
+          }
+        } catch (e) {
+          print('⚠️ Error extrayendo hábitos de DL: $e');
+        }
+      }
+
       if (_responseProcessor != null) {
         try {
           print('🔥 DEBUG: Procesando respuesta estructurada de Gemini');
-          final processedResponse = await _responseProcessor
+          final processedResponse = await _responseProcessor!
               .processGeminiResponse(geminiResponse, userId);
 
           processedResponse.fold(
@@ -141,9 +165,19 @@ class GeminiAssistantDatasource {
 
               // Extraer hábitos sugeridos de las acciones procesadas
               if (processedActions.containsKey('new_habits')) {
-                suggestedHabits = List<Map<String, dynamic>>.from(
+                final geminiHabits = List<Map<String, dynamic>>.from(
                   processedActions['new_habits'] as List<dynamic>,
                 );
+
+                // Agregar solo si no están duplicados (por nombre)
+                for (final gHabit in geminiHabits) {
+                  final name = gHabit['name']?.toString().toLowerCase() ?? '';
+                  if (!suggestedHabits.any(
+                    (h) => (h['name']?.toString().toLowerCase() ?? '') == name,
+                  )) {
+                    suggestedHabits.add(gHabit);
+                  }
+                }
               }
             },
           );
@@ -155,36 +189,41 @@ class GeminiAssistantDatasource {
         // Fallback al procesamiento tradicional
         finalMessage = _formatGeminiResponse(geminiResponse);
 
-        // Crear objeto AssistantResponse temporal para creación de hábitos
-        final tempResponse = AssistantResponseModel(
-          id: _uuid.v4(),
-          sessionId: sessionId ?? '',
-          content: finalMessage,
-          type: ResponseType.text,
-          timestamp: DateTime.now(),
-        );
-
-        // Extraer hábitos sugeridos para mostrar en desplegable (sin crear automáticamente)
-        try {
-          print(
-            '🔥 DEBUG GEMINI: Iniciando extracción de hábitos sugeridos (método tradicional)',
+        // Solo usar extracción hardcodeada si NO hay hábitos de DL ni de Gemini estructurado
+        if (suggestedHabits.isEmpty) {
+          // Crear objeto AssistantResponse temporal para creación de hábitos
+          final tempResponse = AssistantResponseModel(
+            id: _uuid.v4(),
+            sessionId: sessionId ?? '',
+            content: finalMessage,
+            type: ResponseType.text,
+            timestamp: DateTime.now(),
           );
 
-          final extractedHabits = await _habitAutoCreationService
-              .extractSuggestedHabits(
-                assistantResponse: tempResponse,
-                userMessage: message,
-                userId: userId,
-              );
-          suggestedHabits = extractedHabits
-              .map((habit) => habit.toMap())
-              .toList();
+          // Extraer hábitos sugeridos para mostrar en desplegable (sin crear automáticamente)
+          try {
+            print(
+              '🔥 DEBUG GEMINI: Iniciando extracción de hábitos sugeridos (método tradicional - FALLBACK)',
+            );
 
-          print(
-            '🔥 DEBUG GEMINI: Se extrajeron ${suggestedHabits.length} hábitos sugeridos para desplegable',
-          );
-        } catch (e) {
-          print('🔥 ERROR GEMINI: Error extracting suggested habits: $e');
+            final extractedHabits = await _habitAutoCreationService
+                .extractSuggestedHabits(
+                  assistantResponse: tempResponse,
+                  userMessage: message,
+                  userId: userId,
+                );
+
+            // Solo agregar si realmente necesitamos fallback
+            suggestedHabits = extractedHabits
+                .map((habit) => habit.toMap())
+                .toList();
+
+            print(
+              '🔥 DEBUG GEMINI: Se extrajeron ${suggestedHabits.length} hábitos sugeridos (fallback)',
+            );
+          } catch (e) {
+            print('🔥 ERROR GEMINI: Error extracting suggested habits: $e');
+          }
         }
       }
 
@@ -196,7 +235,8 @@ class GeminiAssistantDatasource {
         timestamp: DateTime.now(),
         confidence: 0.8, // Confianza base de Gemini
         suggestions: [], // Se llenarán con Deep Learning en segundo plano
-        extractedHabits: _extractHabitsFromResponse(finalMessage),
+        extractedHabits:
+            [], // DESHABILITADO: No usar extracción hardcodeada en extractedHabits para evitar confusión
         analysisData: null, // Se llenará con Deep Learning en segundo plano
         suggestedHabits: suggestedHabits,
         dlChatResponse: null, // Se llenará con Deep Learning en segundo plano
@@ -246,8 +286,7 @@ class GeminiAssistantDatasource {
       if (_deepLearningDatasource != null) {
         // Verificar salud del servicio primero
         try {
-          dlServiceAvailable = await _deepLearningDatasource
-              .checkModelHealth();
+          dlServiceAvailable = await _deepLearningDatasource.checkModelHealth();
           print(
             '🔍 Estado del servicio Deep Learning: ${dlServiceAvailable ? "Disponible" : "No disponible"}',
           );
@@ -301,7 +340,7 @@ class GeminiAssistantDatasource {
             deepLearningAnalysis = _convertMedicalAnalysisToLegacy(
               medicalAnalysis,
             );
-                    } catch (e) {
+          } catch (e) {
             print('❌ Error en análisis médico: $e');
             // Continuar sin análisis pero registrar el error para métricas
             _logDeepLearningError('medical_analysis', e.toString());
@@ -363,9 +402,7 @@ Mantén un tono empático y profesional. Enfócate en estudiantes universitarios
 ''';
 
       final response = await _httpClient.post(
-        Uri.parse(
-          '$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey',
-        ),
+        Uri.parse('$_baseUrl/models/gemini-1.5-flash?key=$_apiKey'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'contents': [
@@ -493,9 +530,7 @@ Mantén un enfoque profesional y empático.
       }
 
       final response = await _httpClient.post(
-        Uri.parse(
-          '$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey',
-        ),
+        Uri.parse('$_baseUrl/models/gemini-1.5-flash?key=$_apiKey'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'contents': [
@@ -637,9 +672,7 @@ Contexto: "$currentContext"
 Formato: sugerencia1, sugerencia2, sugerencia3''';
 
       final response = await _httpClient.post(
-        Uri.parse(
-          '$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey',
-        ),
+        Uri.parse('$_baseUrl/models/gemini-1.5-flash?key=$_apiKey'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'contents': [
@@ -680,6 +713,80 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
     Map<String, dynamic>? deepLearningAnalysis,
   }) async {
     return 'Vive Good gastritis. "$message" - Consejos: máx 120 palabras.';
+  }
+
+  /// Extrae hábitos sugeridos del análisis de Deep Learning
+  List<Map<String, dynamic>> _extractHabitsFromDLAnalysis(
+    Map<String, dynamic> analysis,
+  ) {
+    final habits = <Map<String, dynamic>>[];
+
+    try {
+      if (analysis.containsKey('recommendations')) {
+        final recommendations =
+            analysis['recommendations'] as Map<String, dynamic>;
+
+        // Procesar recomendaciones dietéticas
+        if (recommendations.containsKey('dietary')) {
+          final dietary = recommendations['dietary'];
+          if (dietary is List) {
+            for (final item in dietary) {
+              habits.add({
+                'name': item.toString(),
+                'description':
+                    'Recomendación basada en análisis médico de síntomas',
+                'category': 'Alimentación',
+                'frequency': 'Diario',
+                'type': 'Adoptar',
+                'auto_generated': true,
+                'source': 'deep_learning_analysis',
+              });
+            }
+          }
+        }
+
+        // Procesar recomendaciones de estilo de vida
+        if (recommendations.containsKey('lifestyle')) {
+          final lifestyle = recommendations['lifestyle'];
+          if (lifestyle is List) {
+            for (final item in lifestyle) {
+              habits.add({
+                'name': item.toString(),
+                'description':
+                    'Recomendación basada en análisis de estilo de vida',
+                'category': 'Estilo de Vida',
+                'frequency': 'Diario',
+                'type': 'Adoptar',
+                'auto_generated': true,
+                'source': 'deep_learning_analysis',
+              });
+            }
+          }
+        }
+
+        // Procesar recomendaciones médicas (si existen)
+        if (recommendations.containsKey('medical')) {
+          final medical = recommendations['medical'];
+          if (medical is List) {
+            for (final item in medical) {
+              habits.add({
+                'name': item.toString(),
+                'description': 'Recomendación médica importante',
+                'category': 'Salud',
+                'frequency': 'Según necesidad',
+                'type': 'Adoptar',
+                'auto_generated': true,
+                'source': 'deep_learning_analysis',
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('⚠️ Error parseando hábitos de DL analysis: $e');
+    }
+
+    return habits;
   }
 
   /// Verifica si el texto contiene alguna palabra clave
@@ -791,7 +898,7 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
 
       // Log completo del request a Gemini
       print('🚀 ===== GEMINI REQUEST LOG COMPLETO =====');
-      print('🔗 URL: $_baseUrl/models/gemini-2.0-flash-lite:generateContent');
+      print('🔗 URL: $_baseUrl/models/gemini-1.5-flash');
       print('📝 PROMPT ENVIADO: "$quickPrompt"');
       print('⚙️ CONFIGURACIÓN:');
       final genConfig = requestBody['generationConfig'] as Map<String, dynamic>;
@@ -807,9 +914,7 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
 
       final response = await _httpClient
           .post(
-            Uri.parse(
-              '$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey',
-            ),
+            Uri.parse('$_baseUrl/models/gemini-1.5-flash?key=$_apiKey'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(requestBody),
           )
@@ -923,7 +1028,7 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
 
     // Log completo del request a Gemini (método principal)
     print('🚀 ===== GEMINI REQUEST LOG COMPLETO (MÉTODO PRINCIPAL) =====');
-    print('🔗 URL: $_baseUrl/models/gemini-2.0-flash-lite:generateContent');
+    print('🔗 URL: $_baseUrl/models/gemini-1.5-flash');
     print('📝 PROMPT ENVIADO (${prompt.length} caracteres):');
     print('--- INICIO PROMPT ---');
     print(prompt);
@@ -948,9 +1053,7 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
 
       final response = await _httpClient
           .post(
-            Uri.parse(
-              '$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey',
-            ),
+            Uri.parse('$_baseUrl/models/gemini-1.5-flash?key=$_apiKey'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(requestBody),
           )
@@ -1029,8 +1132,7 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
           {
             'status_code': response.statusCode,
             'response_body': response.body,
-            'api_endpoint':
-                '$_baseUrl/models/gemini-2.0-flash-lite:generateContent',
+            'api_endpoint': '$_baseUrl/models/gemini-1.5-flash',
             'has_api_key': _apiKey.isNotEmpty,
           },
         );
@@ -1907,10 +2009,10 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
       final lowerLine = trimmedLine.toLowerCase();
 
       // Detectar recomendaciones de comidas pequeñas y frecuentes
-      if (lowerLine.contains('comer:') && 
-          (lowerLine.contains('porciones pequeñas') || 
-           lowerLine.contains('comidas pequeñas') ||
-           lowerLine.contains('porciones más pequeñas'))) {
+      if (lowerLine.contains('comer:') &&
+          (lowerLine.contains('porciones pequeñas') ||
+              lowerLine.contains('comidas pequeñas') ||
+              lowerLine.contains('porciones más pequeñas'))) {
         habits.add({
           'name': 'Comidas pequeñas y frecuentes',
           'description': 'Comer porciones más pequeñas cada 2-3 horas',
@@ -1922,12 +2024,12 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
 
       // Detectar recomendaciones para evitar alimentos irritantes
       if ((lowerLine.contains('evitar:') || lowerLine.contains('evita')) &&
-          (lowerLine.contains('irritantes') || 
-           lowerLine.contains('picante') ||
-           lowerLine.contains('grasosas') ||
-           lowerLine.contains('cítricos') ||
-           lowerLine.contains('alcohol') ||
-           lowerLine.contains('cafeína'))) {
+          (lowerLine.contains('irritantes') ||
+              lowerLine.contains('picante') ||
+              lowerLine.contains('grasosas') ||
+              lowerLine.contains('cítricos') ||
+              lowerLine.contains('alcohol') ||
+              lowerLine.contains('cafeína'))) {
         habits.add({
           'name': 'Evitar alimentos irritantes',
           'description': 'Evitar comidas picantes, café, alcohol y cítricos',
@@ -1938,7 +2040,7 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
       }
 
       // Detectar recomendaciones de hidratación
-      if ((lowerLine.contains('tomar:') || lowerLine.contains('beber')) && 
+      if ((lowerLine.contains('tomar:') || lowerLine.contains('beber')) &&
           lowerLine.contains('agua')) {
         habits.add({
           'name': 'Mantener hidratación',
@@ -1950,12 +2052,13 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
       }
 
       // Detectar recomendaciones de descanso después de comer
-      if (lowerLine.contains('evitar acostarte') || 
+      if (lowerLine.contains('evitar acostarte') ||
           lowerLine.contains('no acostarse') ||
           lowerLine.contains('después de comer')) {
         habits.add({
           'name': 'Evitar acostarse después de comer',
-          'description': 'Esperar al menos 2-3 horas antes de acostarse después de comer',
+          'description':
+              'Esperar al menos 2-3 horas antes de acostarse después de comer',
           'category': 'descanso',
           'frequency': 'daily',
           'is_negative': true,
@@ -1964,7 +2067,8 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
     }
 
     // También buscar patrones en todo el contenido para mayor flexibilidad
-    if (lowerContent.contains('porciones pequeñas') && !habits.any((h) => h['name'] == 'Comidas pequeñas y frecuentes')) {
+    if (lowerContent.contains('porciones pequeñas') &&
+        !habits.any((h) => h['name'] == 'Comidas pequeñas y frecuentes')) {
       habits.add({
         'name': 'Comidas pequeñas y frecuentes',
         'description': 'Comer porciones más pequeñas cada 2-3 horas',
@@ -1974,7 +2078,8 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
       });
     }
 
-    if ((lowerContent.contains('evitar') && lowerContent.contains('irritantes')) && 
+    if ((lowerContent.contains('evitar') &&
+            lowerContent.contains('irritantes')) &&
         !habits.any((h) => h['name'] == 'Evitar alimentos irritantes')) {
       habits.add({
         'name': 'Evitar alimentos irritantes',
@@ -1985,7 +2090,8 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
       });
     }
 
-    if (lowerContent.contains('agua') && !habits.any((h) => h['name'] == 'Mantener hidratación')) {
+    if (lowerContent.contains('agua') &&
+        !habits.any((h) => h['name'] == 'Mantener hidratación')) {
       habits.add({
         'name': 'Mantener hidratación',
         'description': 'Beber suficiente agua durante el día',
@@ -2177,9 +2283,7 @@ Responde SOLO con el título, sin explicaciones adicionales.
 
       final response = await _httpClient
           .post(
-            Uri.parse(
-              '$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey',
-            ),
+            Uri.parse('$_baseUrl/models/gemini-1.5-flash?key=$_apiKey'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(requestBody),
           )

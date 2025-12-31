@@ -8,9 +8,7 @@ import '../../../services/habits_service.dart';
 import '../../blocs/habit/habit_bloc.dart';
 import '../../blocs/habit/habit_state.dart';
 import '../common/responsive_dimensions.dart';
-import '../main/habit_item.dart' as habit_item;
 import '../main/compact_habit_item.dart';
-import '../figma_habit_card.dart';
 
 class SynchronizedHabitsList extends StatefulWidget {
   final List<UserHabit> userHabits;

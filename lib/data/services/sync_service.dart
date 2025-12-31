@@ -15,9 +15,7 @@ import 'package:vive_good_app/data/datasources/chat_remote_datasource.dart';
 import 'package:vive_good_app/data/datasources/remote/notification_remote_datasource.dart';
 import 'package:vive_good_app/data/repositories/local/notification_local_repository.dart';
 import 'package:vive_good_app/data/models/habit_model.dart';
-import 'package:vive_good_app/data/models/local/progress_local_model.dart';
 import 'package:vive_good_app/data/models/user_model.dart';
-import 'package:vive_good_app/data/models/chat/chat_message_model.dart';
 import 'package:vive_good_app/domain/entities/pending_operation.dart';
 import 'package:vive_good_app/domain/entities/chat/chat_message.dart';
 

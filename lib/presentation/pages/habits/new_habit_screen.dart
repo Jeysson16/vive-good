@@ -12,12 +12,10 @@ import '../../../domain/entities/category.dart' as entities;
 import '../../../domain/entities/habit.dart';
 import '../../../data/datasources/gemini_ai_datasource.dart';
 import '../../../data/datasources/calendar_remote_datasource.dart';
-import '../../../data/models/calendar_event_model.dart';
 import '../../../data/datasources/calendar_service.dart';
 import '../../../data/datasources/notification_service.dart';
 import '../../../data/datasources/ai_advice_remote_datasource.dart';
 import '../../../data/models/ai_advice_model.dart';
-import '../../../domain/entities/ai_advice.dart';
 import '../../../domain/entities/user_habit.dart';
 import '../../blocs/dashboard/dashboard_bloc.dart';
 import '../../blocs/dashboard/dashboard_event.dart';
@@ -589,12 +587,6 @@ class _NewHabitScreenState extends State<NewHabitScreen> {
             'Mejorar bienestar y crear hábitos saludables considerando horarios disponibles',
       );
       print('DEBUG: Sugerencias recibidas de Gemini AI');
-
-      // Validar que la respuesta sea un Map válido
-      if (suggestions is! Map<String, dynamic>) {
-        print('DEBUG: Error - Respuesta inválida de Gemini AI');
-        throw Exception('Respuesta inválida de la IA: formato no reconocido');
-      }
 
       print('DEBUG: Aplicando sugerencias a los campos del formulario...');
       setState(() {

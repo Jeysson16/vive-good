@@ -29,13 +29,12 @@ class GeminiAIDataSourceImpl implements GeminiAIDataSource {
     String finalApiKey = AppConfig.geminiApiKey;
 
     if (finalApiKey.isEmpty) {
-      throw Exception('GOOGLE_API_KEY is not configured. Please check your .env file.');
+      throw Exception(
+        'GOOGLE_API_KEY is not configured. Please check your .env file.',
+      );
     }
 
-    _model = GenerativeModel(
-      model: 'gemini-2.0-flash-lite',
-      apiKey: finalApiKey,
-    );
+    _model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: finalApiKey);
   }
 
   @override

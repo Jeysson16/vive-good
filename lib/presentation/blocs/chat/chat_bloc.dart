@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:equatable/equatable.dart';
 import '../../../domain/entities/chat_session.dart';
 import '../../../domain/entities/chat/chat_message.dart';
 import '../../../domain/repositories/chat_repository.dart';

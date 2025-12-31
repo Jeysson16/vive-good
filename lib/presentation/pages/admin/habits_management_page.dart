@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/admin_provider.dart';
 import '../../../domain/entities/admin/admin_habit.dart';
-import '../../../domain/entities/admin/admin_category.dart';
 
 class HabitsManagementPage extends StatefulWidget {
   const HabitsManagementPage({super.key});

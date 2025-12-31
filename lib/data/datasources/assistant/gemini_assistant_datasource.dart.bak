@@ -385,7 +385,7 @@ Contexto: "$currentContext"
 Formato: sugerencia1, sugerencia2, sugerencia3''';
 
       final response = await _httpClient.post(
-        Uri.parse('$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey'),
+        Uri.parse('$_baseUrl/models/gemini-2.5-flash:generateContent?key=$_apiKey'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -870,7 +870,7 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
       print('🔑 API Key configured: ${_apiKey.isNotEmpty ? "Yes" : "No"}');
       
       final response = await _httpClient.post(
-        Uri.parse('$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey'),
+        Uri.parse('$_baseUrl/models/gemini-2.5-flash:generateContent?key=$_apiKey'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -892,7 +892,7 @@ Formato: sugerencia1, sugerencia2, sugerencia3''';
          _logError('gemini_api', 'generateContent', 'HTTP ${response.statusCode}', {
            'status_code': response.statusCode,
            'response_body': response.body,
-           'api_endpoint': '$_baseUrl/models/gemini-2.0-flash-lite:generateContent',
+           'api_endpoint': '$_baseUrl/models/gemini-2.5-flash:generateContent',
            'has_api_key': _apiKey.isNotEmpty,
          });
          
@@ -1830,7 +1830,7 @@ Responde SOLO con el título, sin explicaciones adicionales.
       };
 
       final response = await _httpClient.post(
-        Uri.parse('$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey'),
+        Uri.parse('$_baseUrl/models/gemini-2.5-flash:generateContent?key=$_apiKey'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -1912,7 +1912,7 @@ Responde SOLO con el título, sin explicaciones adicionales.
 
     try {
       final response = await _httpClient.post(
-        Uri.parse('$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey'),
+        Uri.parse('$_baseUrl/models/gemini-2.5-flash:generateContent?key=$_apiKey'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -2181,7 +2181,7 @@ Responde SOLO con el título, sin explicaciones adicionales.
 
     try {
       final response = await _httpClient.post(
-        Uri.parse('$_baseUrl/models/gemini-2.0-flash-lite:generateContent?key=$_apiKey'),
+        Uri.parse('$_baseUrl/models/gemini-2.5-flash:generateContent?key=$_apiKey'),
         headers: {
           'Content-Type': 'application/json',
         },

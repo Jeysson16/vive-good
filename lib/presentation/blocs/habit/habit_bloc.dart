@@ -484,7 +484,7 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
     LoadHabitSuggestions event,
     Emitter<HabitState> emit,
   ) async {
-    print('DEBUG HabitBloc _onLoadHabitSuggestions - userId=' + event.userId + ', categoryId=' + (event.categoryId ?? 'null') + ', limit=' + ((event.limit ?? 10).toString()));
+    print('DEBUG HabitBloc _onLoadHabitSuggestions - userId=${event.userId}, categoryId=${event.categoryId ?? 'null'}, limit=${event.limit ?? 10}');
     String? currentCategoryId;
     if (state is HabitLoaded) {
       final currentState = state as HabitLoaded;
@@ -504,7 +504,7 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
 
     result.fold(
       (failure) {
-        print('DEBUG HabitBloc _onLoadHabitSuggestions - failure: ' + failure.toString());
+        print('DEBUG HabitBloc _onLoadHabitSuggestions - failure: $failure');
 
         if (state is HabitLoaded) {
           final currentState = state as HabitLoaded;
@@ -519,7 +519,7 @@ class HabitBloc extends Bloc<HabitEvent, HabitState> {
         }
       },
       (suggestions) {
-        print('DEBUG HabitBloc _onLoadHabitSuggestions - suggestions count: ' + suggestions.length.toString());
+        print('DEBUG HabitBloc _onLoadHabitSuggestions - suggestions count: ${suggestions.length}');
 
         if (state is HabitLoaded) {
           final currentState = state as HabitLoaded;

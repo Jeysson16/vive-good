@@ -268,7 +268,7 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
     int? limit,
   }) async {
     try {
-      print('DEBUG getHabitSuggestions - params: userId=' + (userId ?? 'null') + ', categoryId=' + (categoryId ?? 'null') + ', limit=' + ((limit ?? 10).toString()));
+      print('DEBUG getHabitSuggestions - params: userId=${userId ?? 'null'}, categoryId=${categoryId ?? 'null'}, limit=${limit ?? 10}');
       // Llamar al stored procedure get_popular_habit_suggestions
       final response = await supabaseClient.rpc(
         'get_popular_habit_suggestions',
@@ -286,16 +286,16 @@ class HabitRemoteDataSourceImpl implements HabitRemoteDataSource {
       final list = (response as List)
           .map((json) {
             try {
-              print('DEBUG getHabitSuggestions - processing item: ' + json.toString());
+              print('DEBUG getHabitSuggestions - processing item: $json');
               return HabitModel.fromJson(json);
             } catch (e) {
               print('DEBUG getHabitSuggestions - error processing item: $e');
-              print('DEBUG getHabitSuggestions - problematic json: ' + json.toString());
-              throw e;
+              print('DEBUG getHabitSuggestions - problematic json: $json');
+              rethrow;
             }
           })
           .toList();
-      print('DEBUG getHabitSuggestions - received count: ' + list.length.toString());
+      print('DEBUG getHabitSuggestions - received count: ${list.length}');
       return list;
     } catch (e) {
       throw ServerException(e.toString());

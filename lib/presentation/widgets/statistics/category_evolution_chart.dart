@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:vive_good_app/domain/entities/category_evolution.dart';
-import 'package:vive_good_app/domain/entities/daily_progress.dart';
 
 class CategoryEvolutionChart extends StatelessWidget {
   final CategoryEvolution evolution;

@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:vive_good_app/presentation/blocs/notification/notification_bloc.dart';
 import 'package:vive_good_app/presentation/blocs/notification/notification_event.dart';
 import 'package:vive_good_app/presentation/blocs/notification/notification_state.dart';
-import 'package:vive_good_app/domain/entities/habit_notification.dart';
 import 'package:vive_good_app/core/di/injection_container.dart' as di;
 
 class HabitNotificationsPage extends StatefulWidget {

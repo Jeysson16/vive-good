@@ -433,6 +433,7 @@ class _AssistantPageState extends State<AssistantPage>
                     : <UserHabit>[];
 
                 return ChatMessageWidget(
+                  key: ValueKey(message.id),
                   message: message,
                   existingUserHabits: existingUserHabits,
                   onCreateHabit: (habitName, habitData) {

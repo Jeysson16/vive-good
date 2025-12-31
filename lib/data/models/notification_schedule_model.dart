@@ -1,5 +1,4 @@
 import 'package:hive/hive.dart';
-import 'package:equatable/equatable.dart';
 
 import '../../domain/entities/notification_schedule.dart';
 

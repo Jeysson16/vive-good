@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../domain/entities/chat/chat_message.dart';
+import '../../../domain/entities/user_habit.dart';
 import '../../blocs/chat/chat_bloc.dart';
 import '../../blocs/chat/chat_event.dart';
 import '../../blocs/chat/chat_state.dart';
-import '../../widgets/chat/chat_message_widget.dart';
-import '../../widgets/chat/typing_indicator_widget.dart';
-import '../../widgets/chat/regenerate_button_widget.dart';
 import '../../widgets/assistant/attached_habits_widget.dart';
-import '../../../domain/entities/chat/chat_message.dart';
-import '../../../domain/entities/user_habit.dart';
-import 'chat_history_page.dart';
+import '../../widgets/chat/chat_message_widget.dart';
+import '../../widgets/chat/regenerate_button_widget.dart';
+import '../../widgets/chat/typing_indicator_widget.dart';
 import '../../widgets/dialogs/register_symptom_dialog.dart';
-import '../habits/new_habit_screen.dart';
 import '../daily_progress_page.dart';
+import '../habits/new_habit_screen.dart';
+import 'chat_history_page.dart';
 import 'pending_activities_selection_page.dart';
 
 /// Página de conversación de chat siguiendo el diseño de Figma 2067_518
@@ -38,7 +39,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _messageFocusNode = FocusNode();
-  
+
   String? _currentSessionId;
   bool _isInitialized = false;
 
@@ -70,7 +71,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
         context.read<ChatBloc>().add(CreateNewSession(user.id));
       }
     }
-    
+
     setState(() {
       _isInitialized = true;
     });
@@ -80,10 +81,9 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
     final message = _messageController.text.trim();
     if (message.isEmpty || _currentSessionId == null) return;
 
-    context.read<ChatBloc>().add(SendUserMessage(
-      sessionId: _currentSessionId!,
-      content: message,
-    ));
+    context.read<ChatBloc>().add(
+      SendUserMessage(sessionId: _currentSessionId!, content: message),
+    );
 
     _messageController.clear();
     _scrollToBottom();
@@ -92,10 +92,9 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
   void _sendPredefinedMessage(String message) {
     if (_currentSessionId == null) return;
 
-    context.read<ChatBloc>().add(SendUserMessage(
-      sessionId: _currentSessionId!,
-      content: message,
-    ));
+    context.read<ChatBloc>().add(
+      SendUserMessage(sessionId: _currentSessionId!, content: message),
+    );
 
     _scrollToBottom();
   }
@@ -119,13 +118,15 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
       final userMessages = state.messages
           .where((m) => m.type == MessageType.user)
           .toList();
-      
+
       if (userMessages.isNotEmpty) {
         final lastUserMessage = userMessages.last;
-        context.read<ChatBloc>().add(RegenerateResponse(
-          sessionId: _currentSessionId!,
-          lastUserMessage: lastUserMessage.content,
-        ));
+        context.read<ChatBloc>().add(
+          RegenerateResponse(
+            sessionId: _currentSessionId!,
+            lastUserMessage: lastUserMessage.content,
+          ),
+        );
       }
     }
   }
@@ -146,14 +147,16 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
             if (state is EmptySession || state is ChatLoaded) {
               if (state is EmptySession) {
                 _currentSessionId = state.currentSession.id;
-                
+
                 // Enviar mensaje inicial si existe
                 if (widget.initialMessage != null && _isInitialized) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    context.read<ChatBloc>().add(SendUserMessage(
-                      sessionId: _currentSessionId!,
-                      content: widget.initialMessage!,
-                    ));
+                    context.read<ChatBloc>().add(
+                      SendUserMessage(
+                        sessionId: _currentSessionId!,
+                        content: widget.initialMessage!,
+                      ),
+                    );
                     // Marcar como enviado para evitar duplicados
                     setState(() {
                       _isInitialized = false;
@@ -171,7 +174,8 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
               return Column(
                 children: [
                   // Hábitos adjuntados (si existen)
-                  if (widget.attachedHabits != null && widget.attachedHabits!.isNotEmpty)
+                  if (widget.attachedHabits != null &&
+                      widget.attachedHabits!.isNotEmpty)
                     AttachedHabitsWidget(
                       attachedHabits: widget.attachedHabits!,
                       onRemoveAll: () {
@@ -193,7 +197,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                         final updatedHabits = widget.attachedHabits!
                             .where((h) => h.id != habit.id)
                             .toList();
-                        
+
                         if (updatedHabits.isEmpty) {
                           // Si no quedan hábitos, navegar sin hábitos adjuntados
                           Navigator.of(context).pushReplacement(
@@ -224,21 +228,19 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                         }
                       },
                     ),
-                  
+
                   // Área de mensajes
-                  Expanded(
-                    child: _buildMessagesArea(state),
-                  ),
-                  
+                  Expanded(child: _buildMessagesArea(state)),
+
                   // Botón de regenerar (si aplica)
                   _buildRegenerateButton(state),
-                  
+
                   // Campo de entrada de mensaje con padding ajustado
                   Padding(
                     padding: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).viewInsets.bottom > 0 
-                        ? 8 
-                        : MediaQuery.of(context).padding.bottom,
+                      bottom: MediaQuery.of(context).viewInsets.bottom > 0
+                          ? 8
+                          : MediaQuery.of(context).padding.bottom,
                     ),
                     child: _buildMessageInput(state),
                   ),
@@ -257,20 +259,13 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
       elevation: 1,
       shadowColor: Colors.black.withOpacity(0.1),
       leading: IconButton(
-        icon: const Icon(
-          Icons.arrow_back_ios,
-          color: Color(0xFF333333),
-        ),
+        icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF333333)),
         onPressed: () => Navigator.of(context).pop(),
       ),
       title: Row(
         children: [
           IconButton(
-            icon: const Icon(
-              Icons.history,
-              color: Color(0xFF4CAF50),
-              size: 24,
-            ),
+            icon: const Icon(Icons.history, color: Color(0xFF4CAF50), size: 24),
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -299,9 +294,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
           icon: Container(
             width: 24,
             height: 24,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-            ),
+            decoration: const BoxDecoration(shape: BoxShape.circle),
             child: ClipOval(
               child: Image.asset(
                 'assets/images/logo.png',
@@ -317,15 +310,14 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
             ),
           ),
           onPressed: () {
-            Navigator.of(context).pop(); // Volver al main page donde está el asistente
+            Navigator.of(
+              context,
+            ).pop(); // Volver al main page donde está el asistente
           },
           tooltip: 'Ir al Asistente',
         ),
         IconButton(
-          icon: const Icon(
-            Icons.more_vert,
-            color: Color(0xFF333333),
-          ),
+          icon: const Icon(Icons.more_vert, color: Color(0xFF333333)),
           onPressed: () {
             // TODO: Implementar menú de opciones
           },
@@ -348,11 +340,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 64,
-              color: Color(0xFFCCCCCC),
-            ),
+            Icon(Icons.chat_bubble_outline, size: 64, color: Color(0xFFCCCCCC)),
             SizedBox(height: 16),
             Text(
               'Inicia una conversación',
@@ -365,10 +353,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
             SizedBox(height: 8),
             Text(
               'Escribe un mensaje para comenzar',
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF999999),
-              ),
+              style: TextStyle(fontSize: 14, color: Color(0xFF999999)),
             ),
           ],
         ),
@@ -386,12 +371,12 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: ChatMessageWidget(
+                key: ValueKey(message.id),
                 message: message,
                 onEdit: (messageId, newContent) {
-                  context.read<ChatBloc>().add(EditMessage(
-                    messageId: messageId,
-                    newContent: newContent,
-                  ));
+                  context.read<ChatBloc>().add(
+                    EditMessage(messageId: messageId, newContent: newContent),
+                  );
                 },
                 onDelete: (messageId) {
                   context.read<ChatBloc>().add(DeleteMessage(messageId));
@@ -414,11 +399,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red,
-            ),
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
             Text(
               'Error',
@@ -434,10 +415,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
               child: Text(
                 state.message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF666666),
-                ),
+                style: const TextStyle(fontSize: 14, color: Color(0xFF666666)),
               ),
             ),
             const SizedBox(height: 16),
@@ -460,15 +438,13 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
   }
 
   Widget _buildRegenerateButton(ChatState state) {
-    if (state is ChatLoaded && 
-        state.messages.isNotEmpty && 
+    if (state is ChatLoaded &&
+        state.messages.isNotEmpty &&
         state.messages.last.type == MessageType.assistant &&
         !state.isAssistantTyping) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: RegenerateButtonWidget(
-          onPressed: _regenerateLastResponse,
-        ),
+        child: RegenerateButtonWidget(onPressed: _regenerateLastResponse),
       );
     }
 
@@ -494,19 +470,17 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
   }
 
   Widget _buildMessageInput(ChatState state) {
-    final isLoading = state is MessageSending || 
-                     state is SessionCreating ||
-                     (state is ChatLoaded && state.isAssistantTyping);
+    final isLoading =
+        state is MessageSending ||
+        state is SessionCreating ||
+        (state is ChatLoaded && state.isAssistantTyping);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
-          top: BorderSide(
-            color: const Color(0xFFE0E0E0),
-            width: 1,
-          ),
+          top: BorderSide(color: const Color(0xFFE0E0E0), width: 1),
         ),
       ),
       child: SafeArea(
@@ -514,17 +488,16 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
           children: [
             // Botón de acciones rápidas
             GestureDetector(
-              onTap: isLoading || _currentSessionId == null ? null : _showQuickActionsMenu,
+              onTap: isLoading || _currentSessionId == null
+                  ? null
+                  : _showQuickActionsMenu,
               child: Container(
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF5F5F5),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: const Color(0xFFE0E0E0),
-                    width: 1,
-                  ),
+                  border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
                 ),
                 child: const Icon(
                   Icons.add,
@@ -540,10 +513,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF5F5F5),
                   borderRadius: BorderRadius.circular(25),
-                  border: Border.all(
-                    color: const Color(0xFFE0E0E0),
-                    width: 1,
-                  ),
+                  border: Border.all(color: const Color(0xFFE0E0E0), width: 1),
                 ),
                 child: TextField(
                   controller: _messageController,
@@ -571,19 +541,22 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                 ),
               ),
             ),
-            
+
             const SizedBox(width: 8),
-            
+
             // Botón de envío
             GestureDetector(
-              onTap: isLoading || _currentSessionId == null ? null : _sendMessage,
+              onTap: isLoading || _currentSessionId == null
+                  ? null
+                  : _sendMessage,
               child: Container(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: _messageController.text.trim().isNotEmpty && 
-                         !isLoading && 
-                         _currentSessionId != null
+                  color:
+                      _messageController.text.trim().isNotEmpty &&
+                          !isLoading &&
+                          _currentSessionId != null
                       ? const Color(0xFF4CAF50)
                       : const Color(0xFFCCCCCC),
                   borderRadius: BorderRadius.circular(22),
@@ -594,14 +567,12 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
-                    : const Icon(
-                        Icons.send,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                    : const Icon(Icons.send, color: Colors.white, size: 20),
               ),
             ),
           ],
@@ -678,10 +649,11 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                         Navigator.pop(context);
                         final result = await Navigator.of(context).push<String>(
                           MaterialPageRoute(
-                            builder: (context) => const PendingActivitiesSelectionPage(),
+                            builder: (context) =>
+                                const PendingActivitiesSelectionPage(),
                           ),
                         );
-                        
+
                         if (result != null && result.isNotEmpty) {
                           // Enviar el mensaje directamente
                           _sendPredefinedMessage(result);
@@ -701,10 +673,10 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                         );
                       },
                     ),
-                    
+
                     // Separador
                     const Divider(height: 32),
-                    
+
                     // Acciones adicionales
                     _quickAction(
                       icon: Icons.history,
@@ -721,7 +693,9 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                       subtitle: 'Consejos basados en tu perfil',
                       onTap: () {
                         Navigator.pop(context);
-                        _sendPredefinedMessage('Dame sugerencias personalizadas para hoy');
+                        _sendPredefinedMessage(
+                          'Dame sugerencias personalizadas para hoy',
+                        );
                       },
                     ),
                   ],
@@ -774,7 +748,8 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
       if (file == null) return;
 
       final bucket = Supabase.instance.client.storage.from('chat_attachments');
-      final path = '${user.id}/${DateTime.now().millisecondsSinceEpoch}_${file.name}';
+      final path =
+          '${user.id}/${DateTime.now().millisecondsSinceEpoch}_${file.name}';
 
       // Subir como bytes para compatibilidad web/móvil sin usar dart:io
       final bytes = await file.readAsBytes();
@@ -782,16 +757,14 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
       final publicUrl = bucket.getPublicUrl(path);
 
       // Enviar mensaje con metadata del adjunto
-      context.read<ChatBloc>().add(SendMessage(
-        sessionId: _currentSessionId!,
-        content: 'Imagen adjunta',
-        type: MessageType.user,
-        metadata: {
-          'type': 'image',
-          'url': publicUrl,
-          'name': file.name,
-        },
-      ));
+      context.read<ChatBloc>().add(
+        SendMessage(
+          sessionId: _currentSessionId!,
+          content: 'Imagen adjunta',
+          type: MessageType.user,
+          metadata: {'type': 'image', 'url': publicUrl, 'name': file.name},
+        ),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

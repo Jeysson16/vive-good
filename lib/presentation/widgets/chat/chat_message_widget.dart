@@ -6,7 +6,6 @@ import '../../../domain/entities/habit.dart';
 import '../../../domain/entities/user_habit.dart';
 import '../../../domain/repositories/chat_repository.dart';
 import 'formatted_text_widget.dart';
-import 'auto_created_habits_widget.dart';
 import 'typewriter_text_widget.dart';
 
 import 'enhanced_habits_dropdown_widget.dart';
@@ -18,7 +17,6 @@ import '../../blocs/chat/chat_bloc.dart';
 import '../../blocs/chat/chat_event.dart';
 import '../../blocs/profile/profile_bloc.dart';
 import '../../blocs/profile/profile_state.dart';
-import '../profile/circular_profile_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Widget para mostrar mensajes de chat individuales
@@ -292,6 +290,7 @@ class _ChatMessageWidgetState extends State<ChatMessageWidget> {
         children: [
           _shouldShowTypewriter
               ? TypewriterTextWidget(
+                  key: ValueKey('typewriter_${widget.message.id}'),
                   text: widget.message.content,
                   style: const TextStyle(
                     fontSize: 16,

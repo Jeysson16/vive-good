@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:vive_good_app/domain/entities/user_habit.dart';
-import 'common/responsive_dimensions.dart';
 
 /// Widget de hábito con diseño basado en Frame 7 (2072_660) y Group 10084
 /// Apariencia visual mejorada para la pantalla "Mis hábitos"

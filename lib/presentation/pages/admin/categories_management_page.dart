@@ -265,7 +265,7 @@ class _CategoriesManagementPageState extends State<CategoriesManagementPage> {
                   ...[
                   SizedBox(height: isMobile ? 4 : 6),
                   Text(
-                    category.description!,
+                    category.description,
                     style: TextStyle(
                       fontSize: isMobile ? 13 : 14,
                       color: Colors.grey[600],
